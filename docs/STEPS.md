@@ -59,8 +59,18 @@ winget install Erlang.ErlangOTP --accept-package-agreements --accept-source-agre
 # → C:\Program Files\Elixir\ にインストールされる
 
 # 3. ユーザー PATH に追加（PowerShell）
-$currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
-$newPath = $currentPath + ";C:\Program Files\Erlang OTP\bin;C:\Program Files\Elixir\bin"
+$pathsToAdd = @(
+    "C:\Program Files\Erlang OTP\bin",
+    "C:\Program Files\Elixir\bin"
+)
+$userPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+$pathArray = $userPath.Split(';') | Where-Object { $_ }
+foreach ($p in $pathsToAdd) {
+    if ($pathArray -notcontains $p) {
+        $pathArray += $p
+    }
+}
+$newPath = $pathArray -join ';'
 [System.Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
 # ターミナルを再起動して PATH を反映させること
 
