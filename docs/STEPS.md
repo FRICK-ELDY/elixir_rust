@@ -194,7 +194,7 @@ cargo run
 ```toml
 [dependencies]
 winit = "0.30"
-wgpu = "22"
+wgpu = "28"
 pollster = "0.3"
 ```
 
@@ -521,7 +521,7 @@ defmodule Game.GameLoop do
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   def init(_opts) do
-    {:ok, world_ref} = {:ok, Game.NifBridge.create_world()}
+    world_ref = Game.NifBridge.create_world()
     Process.send_after(self(), :tick, @tick_ms)
     {:ok, %{world_ref: world_ref, last_tick: now_ms(), frame_count: 0}}
   end
@@ -567,10 +567,12 @@ defmodule Game.InputHandler do
   def handle_cast({:key_down, key}, state) do
     new_state = %{state | keys_held: MapSet.put(state.keys_held, key)}
     # GameLoop に移動ベクトルを通知
-    dx = if MapSet.member?(new_state.keys_held, :d), do: 1, else: 0
-      + if MapSet.member?(new_state.keys_held, :a), do: -1, else: 0
-    dy = if MapSet.member?(new_state.keys_held, :s), do: 1, else: 0
-      + if MapSet.member?(new_state.keys_held, :w), do: -1, else: 0
+    dx =
+      (if MapSet.member?(new_state.keys_held, :d), do: 1, else: 0) +
+      (if MapSet.member?(new_state.keys_held, :a), do: -1, else: 0)
+    dy =
+      (if MapSet.member?(new_state.keys_held, :s), do: 1, else: 0) +
+      (if MapSet.member?(new_state.keys_held, :w), do: -1, else: 0)
     GenServer.cast(Game.GameLoop, {:input, :move, {dx, dy}})
     {:noreply, new_state}
   end
