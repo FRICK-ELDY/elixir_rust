@@ -1,0 +1,24 @@
+[package]
+name = "game_native"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "game_native"
+crate-type = ["cdylib"]  # Rustler NIF 用（後のステップで使用）
+
+[[bin]]
+name = "game_window"
+path = "src/main.rs"
+
+[dependencies]
+winit = "0.30.12"
+pollster = "0.4"
+
+[profile.dev]
+opt-level = 1  # デバッグビルドでも最低限の最適化
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
