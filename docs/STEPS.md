@@ -126,15 +126,19 @@ cargo init --lib
 [package]
 name = "game_native"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 name = "game_native"
 crate-type = ["cdylib"]  # Rustler NIF 用（後のステップで使用）
 
+[[bin]]
+name = "game_window"
+path = "src/main.rs"
+
 [dependencies]
-winit = "0.30"
-pollster = "0.3"
+winit = "0.30.12"
+pollster = "0.4"
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化
@@ -171,7 +175,7 @@ impl ApplicationHandler for App {
                         .with_title("Elixir x Rust Survivor")
                         .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
                 )
-                .unwrap(),
+                .expect("ウィンドウの作成に失敗しました"),
         );
     }
 
@@ -179,17 +183,18 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
+                // Step 3 以降で描画コードを実装する
             }
             _ => {}
         }
     }
 }
 
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let event_loop = EventLoop::new()?;
     let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    event_loop.run_app(&mut app)?;
+    Ok(())
 }
 ```
 
@@ -197,7 +202,7 @@ fn main() {
 
 ```powershell
 cd native\game_native
-cargo run
+cargo run --bin game_window
 ```
 
 **チェックポイント**: 1280×720 のウィンドウが開き、閉じるボタンで終了できれば OK。
@@ -214,8 +219,8 @@ cargo run
 
 ```toml
 [dependencies]
-winit = "0.30"
-wgpu = "28"
+winit = "0.30.12"
+wgpu = "24"
 pollster = "0.3"
 ```
 
@@ -227,6 +232,9 @@ Instance → Surface → Adapter → Device + Queue → SurfaceConfiguration
 
 ```rust
 // native/game_native/src/renderer/mod.rs
+
+use std::sync::Arc;
+use winit::window::Window;
 
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
@@ -263,13 +271,35 @@ impl Renderer {
         Self { surface, device, queue, config }
     }
 
-    pub fn render(&mut self) {
-        let output = self.surface.get_current_texture().unwrap();
-        let view = output.texture.create_view(&Default::default());
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        if new_width == 0 || new_height == 0 {
+            return;
+        }
+        self.config.width = new_width;
+        self.config.height = new_height;
+        self.surface.configure(&self.device, &self.config);
+    }
 
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+    pub fn render(&mut self) {
+        let output = match self.surface.get_current_texture() {
+            Ok(t) => t,
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                self.surface.configure(&self.device, &self.config);
+                return;
+            }
+            Err(e) => {
+                eprintln!("Surface error: {e:?}");
+                return;
+            }
+        };
+
+        let view = output.texture.create_view(&Default::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
         {
             let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -280,7 +310,9 @@ impl Renderer {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                ..Default::default()
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
         }
 
@@ -288,6 +320,83 @@ impl Renderer {
         output.present();
     }
 }
+```
+
+### 3.3 main.rs の更新
+
+`native/game_native/src/main.rs` を以下の内容に更新する:
+
+```rust
+mod renderer;
+
+use std::sync::Arc;
+
+use renderer::Renderer;
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, EventLoop},
+    window::{Window, WindowId},
+};
+
+#[derive(Default)]
+struct App {
+    window: Option<Arc<Window>>,
+    renderer: Option<Renderer>,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("Elixir x Rust Survivor")
+                        .with_inner_size(winit::dpi::LogicalSize::new(1280u32, 720u32)),
+                )
+                .expect("ウィンドウの作成に失敗しました"),
+        );
+
+        let renderer = pollster::block_on(Renderer::new(window.clone()));
+
+        self.window = Some(window);
+        self.renderer = Some(renderer);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                if let Some(renderer) = self.renderer.as_mut() {
+                    renderer.resize(size.width, size.height);
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(renderer) = self.renderer.as_mut() {
+                    renderer.render();
+                }
+                if let Some(window) = self.window.as_ref() {
+                    window.request_redraw();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let event_loop = EventLoop::new()?;
+    let mut app = App::default();
+    event_loop.run_app(&mut app)?;
+    Ok(())
+}
+```
+
+### 3.4 ビルドと実行
+
+```powershell
+cd native\game_native
+cargo run --bin game_window
 ```
 
 **チェックポイント**: ウィンドウが濃い紫色で塗りつぶされれば OK。

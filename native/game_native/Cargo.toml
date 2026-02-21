@@ -13,7 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 winit = "0.30.12"
-pollster = "0.4"
+wgpu = "24"
+pollster = "0.3"
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化
