@@ -1,0 +1,6 @@
+# Rust ビルド設定（Windows 向け）
+# cargo build       → platform/windows/_build/debug/
+# cargo build --release → platform/windows/_build/release/
+
+[build]
+target-dir = "../../platform/windows/_build"
