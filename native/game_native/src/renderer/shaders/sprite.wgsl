@@ -1,5 +1,12 @@
+// group(0): テクスチャ・サンプラー
 @group(0) @binding(0) var sprite_texture: texture_2d<f32>;
 @group(0) @binding(1) var sprite_sampler: sampler;
+
+// group(1): 画面サイズ Uniform
+struct ScreenUniform {
+    half_size: vec2<f32>, // (width / 2, height / 2)
+};
+@group(1) @binding(0) var<uniform> screen: ScreenUniform;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,
@@ -20,10 +27,6 @@ struct VertexOutput {
     @location(1) color_tint: vec4<f32>,
 };
 
-// 画面サイズの半分（クリップ空間変換用）
-const HALF_W: f32 = 640.0;
-const HALF_H: f32 = 360.0;
-
 @vertex
 fn vs_main(in: VertexInput, inst: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
@@ -33,8 +36,8 @@ fn vs_main(in: VertexInput, inst: InstanceInput) -> VertexOutput {
 
     // クリップ座標（Y 軸は下が正なので反転）
     out.clip_position = vec4<f32>(
-        (world_pos.x - HALF_W) / HALF_W,
-        -(world_pos.y - HALF_H) / HALF_H,
+        (world_pos.x - screen.half_size.x) / screen.half_size.x,
+        -(world_pos.y - screen.half_size.y) / screen.half_size.y,
         0.0,
         1.0,
     );

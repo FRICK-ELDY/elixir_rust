@@ -506,7 +506,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 **目標**: GPU インスタンシングで 100 体のスプライトを 1 draw call で描画する。
 
-### 5.1 SpriteInstance 構造体
+### 5.1 SpriteInstance 構造体 + ScreenUniform 構造体
 
 `native/game_native/src/renderer/mod.rs` に追加する:
 
@@ -520,6 +520,14 @@ pub struct SpriteInstance {
     pub uv_size:    [f32; 2], // アトラス UV サイズ（0.0〜1.0）
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
+
+// 画面サイズを動的にシェーダーへ渡す Uniform（ウィンドウリサイズ対応）
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct ScreenUniform {
+    half_size: [f32; 2], // (width / 2, height / 2)
+    _pad: [f32; 2],      // 16 バイトアライメント
+}
 ```
 
 `Renderer` 構造体にもフィールドを追加する:
@@ -527,21 +535,31 @@ pub struct SpriteInstance {
 ```rust
 pub struct Renderer {
     // ... 既存フィールド ...
-    instance_buffer: wgpu::Buffer,
-    instance_count:  u32,
+    instance_buffer:    wgpu::Buffer,
+    instance_count:     u32,
+    screen_uniform_buf: wgpu::Buffer,   // group(1): 画面サイズ
+    screen_bind_group:  wgpu::BindGroup,
     // FPS 計測
-    frame_count:     u32,
-    fps_timer:       std::time::Instant,
+    frame_count:        u32,
+    fps_timer:          std::time::Instant,
 }
 ```
 
 ### 5.2 WGSL シェーダーのインスタンシング対応
 
-`native/game_native/src/renderer/shaders/sprite.wgsl` を更新する:
+`native/game_native/src/renderer/shaders/sprite.wgsl` を更新する。  
+画面サイズはシェーダー定数ではなく **Uniform Buffer（group(1)）** から受け取ることで、任意のウィンドウサイズに対応する:
 
 ```wgsl
+// group(0): テクスチャ・サンプラー
 @group(0) @binding(0) var sprite_texture: texture_2d<f32>;
 @group(0) @binding(1) var sprite_sampler: sampler;
+
+// group(1): 画面サイズ Uniform
+struct ScreenUniform {
+    half_size: vec2<f32>, // (width / 2, height / 2)
+};
+@group(1) @binding(0) var<uniform> screen: ScreenUniform;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,
@@ -562,16 +580,13 @@ struct VertexOutput {
     @location(1) color_tint: vec4<f32>,
 };
 
-const HALF_W: f32 = 640.0;
-const HALF_H: f32 = 360.0;
-
 @vertex
 fn vs_main(in: VertexInput, inst: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
     let world_pos = inst.i_position + in.position * inst.i_size;
     out.clip_position = vec4<f32>(
-        (world_pos.x - HALF_W) / HALF_W,
-        -(world_pos.y - HALF_H) / HALF_H,
+        (world_pos.x - screen.half_size.x) / screen.half_size.x,
+        -(world_pos.y - screen.half_size.y) / screen.half_size.y,
         0.0, 1.0,
     );
     out.uv = inst.i_uv_offset + in.position * inst.i_uv_size;
@@ -585,7 +600,57 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 ```
 
-### 5.3 パイプラインにインスタンスバッファレイアウトを追加
+### 5.3 ScreenUniform バッファ・バインドグループの作成
+
+`new()` 内で group(1) 用のバッファとバインドグループを作成する:
+
+```rust
+let screen_uniform = ScreenUniform {
+    half_size: [size.width as f32 / 2.0, size.height as f32 / 2.0],
+    _pad: [0.0; 2],
+};
+let screen_uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    label:    Some("Screen Uniform Buffer"),
+    contents: bytemuck::bytes_of(&screen_uniform),
+    usage:    wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+});
+
+let screen_bind_group_layout =
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label:   Some("Screen Bind Group Layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding:    0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty:         wgpu::BindingType::Buffer {
+                ty:                 wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size:   None,
+            },
+            count: None,
+        }],
+    });
+
+let screen_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    label:   Some("Screen Bind Group"),
+    layout:  &screen_bind_group_layout,
+    entries: &[wgpu::BindGroupEntry {
+        binding:  0,
+        resource: screen_uniform_buf.as_entire_binding(),
+    }],
+});
+```
+
+パイプラインレイアウトにも group(1) を追加する:
+
+```rust
+let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+    label:              Some("Sprite Pipeline Layout"),
+    bind_group_layouts: &[&texture_bind_group_layout, &screen_bind_group_layout],
+    // ...
+});
+```
+
+### 5.4 パイプラインにインスタンスバッファレイアウトを追加
 
 `create_render_pipeline` の `vertex.buffers` に slot 1 を追加する:
 
@@ -612,15 +677,21 @@ buffers: &[
 ],
 ```
 
-### 5.4 インスタンスバッファの作成
+### 5.5 インスタンスバッファの作成
 
-`new()` 内でインスタンスを 100 体（10×10 格子）生成する:
+グリッドの次元を定数で定義し、`INSTANCE_COUNT` はそこから導出する。  
+マジックナンバーを排除することで、グリッドサイズやスプライトサイズの変更が 1 箇所で済む:
 
 ```rust
-let instances: Vec<SpriteInstance> = (0..100)
+const SPRITE_SIZE: f32 = 64.0;
+const GRID_DIM: usize = 10;
+const INSTANCE_COUNT: usize = GRID_DIM * GRID_DIM; // 100
+
+// new() 内でインスタンスを GRID_DIM × GRID_DIM 格子に生成する
+let instances: Vec<SpriteInstance> = (0..INSTANCE_COUNT)
     .map(|i| SpriteInstance {
-        position:   [(i % 10) as f32 * 64.0, (i / 10) as f32 * 64.0],
-        size:       [64.0, 64.0],
+        position:   [(i % GRID_DIM) as f32 * SPRITE_SIZE, (i / GRID_DIM) as f32 * SPRITE_SIZE],
+        size:       [SPRITE_SIZE, SPRITE_SIZE],
         uv_offset:  [0.0, 0.0],
         uv_size:    [1.0, 1.0],
         color_tint: [1.0, 1.0, 1.0, 1.0],
@@ -634,7 +705,26 @@ let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescripto
 });
 ```
 
-### 5.5 draw_indexed でインスタンス描画 + FPS カウンタ
+### 5.6 resize() で Uniform バッファを更新
+
+ウィンドウサイズ変更時に `queue.write_buffer` で Uniform を更新する:
+
+```rust
+pub fn resize(&mut self, new_width: u32, new_height: u32) {
+    // ... サーフェス再設定 ...
+    let screen_uniform = ScreenUniform {
+        half_size: [new_width as f32 / 2.0, new_height as f32 / 2.0],
+        _pad: [0.0; 2],
+    };
+    self.queue.write_buffer(
+        &self.screen_uniform_buf,
+        0,
+        bytemuck::bytes_of(&screen_uniform),
+    );
+}
+```
+
+### 5.7 draw_indexed でインスタンス描画 + FPS カウンタ
 
 `render()` を更新する:
 
@@ -651,22 +741,24 @@ pub fn render(&mut self) {
 
     // ... サーフェス取得・エンコーダ作成 ...
 
+    pass.set_bind_group(0, &self.bind_group, &[]);
+    pass.set_bind_group(1, &self.screen_bind_group, &[]);  // 画面サイズ Uniform
     pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    pass.set_vertex_buffer(1, self.instance_buffer.slice(..));  // インスタンスバッファを slot 1 にセット
+    pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
     pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
     // 1 draw call で 100 体を描画
     pass.draw_indexed(0..INDICES.len() as u32, 0, 0..self.instance_count);
 }
 ```
 
-### 5.6 ビルドと実行
+### 5.8 ビルドと実行
 
 ```powershell
 cd native\game_native
 cargo run --bin game_window
 ```
 
-**チェックポイント**: 100 体のスプライトが 10×10 の格子状に表示され、コンソールに `FPS: 60.x` が出力されれば OK。
+**チェックポイント**: 100 体のスプライトが 10×10 の格子状に表示され、コンソールに `FPS: 60.x` が出力されれば OK。ウィンドウをリサイズしてもスプライトの比率が崩れないことを確認する。
 
 ---
 
