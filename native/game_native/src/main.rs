@@ -19,7 +19,7 @@ impl ApplicationHandler for App {
                         .with_title("Elixir x Rust Survivor")
                         .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
                 )
-                .unwrap(),
+                .expect("ウィンドウの作成に失敗しました"),
         );
     }
 
@@ -27,15 +27,16 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
+                // Step 3 以降で描画コードを実装する
             }
             _ => {}
         }
     }
 }
 
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let event_loop = EventLoop::new()?;
     let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    event_loop.run_app(&mut app)?;
+    Ok(())
 }
