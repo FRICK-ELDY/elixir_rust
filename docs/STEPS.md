@@ -138,7 +138,7 @@ path = "src/main.rs"
 
 [dependencies]
 winit = "0.30.12"
-pollster = "0.4"
+pollster = "0.3"
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化
@@ -215,13 +215,34 @@ cargo run --bin game_window
 
 ### 3.1 依存関係の追加
 
-`Cargo.toml` に追加:
+`Cargo.toml` に `wgpu = "24"` を追加する（全体):
 
 ```toml
+[package]
+name = "game_native"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "game_native"
+crate-type = ["cdylib"]  # Rustler NIF 用（後のステップで使用）
+
+[[bin]]
+name = "game_window"
+path = "src/main.rs"
+
 [dependencies]
 winit = "0.30.12"
 wgpu = "24"
 pollster = "0.3"
+
+[profile.dev]
+opt-level = 1  # デバッグビルドでも最低限の最適化
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
 ```
 
 ### 3.2 wgpu 初期化の流れ
@@ -246,7 +267,9 @@ pub struct Renderer {
 impl Renderer {
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance
+            .create_surface(window.clone())
+            .expect("サーフェスの作成に失敗しました");
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -255,17 +278,17 @@ impl Renderer {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .expect("アダプターの取得に失敗しました");
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default(), None)
             .await
-            .unwrap();
+            .expect("デバイスとキューの取得に失敗しました");
 
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
-            .unwrap();
+            .expect("サーフェス設定の取得に失敗しました");
         surface.configure(&device, &config);
 
         Self { surface, device, queue, config }
@@ -545,7 +568,7 @@ defmodule Game.MixProject do
     [
       app: :game,
       version: "0.1.0",
-      elixir: "~> 1.17",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       # Windows ビルド出力先の設定

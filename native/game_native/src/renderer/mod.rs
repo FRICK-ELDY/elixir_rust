@@ -11,7 +11,9 @@ pub struct Renderer {
 impl Renderer {
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance
+            .create_surface(window.clone())
+            .expect("サーフェスの作成に失敗しました");
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -20,17 +22,17 @@ impl Renderer {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .expect("アダプターの取得に失敗しました");
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default(), None)
             .await
-            .unwrap();
+            .expect("デバイスとキューの取得に失敗しました");
 
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
-            .unwrap();
+            .expect("サーフェス設定の取得に失敗しました");
         surface.configure(&device, &config);
 
         Self {
