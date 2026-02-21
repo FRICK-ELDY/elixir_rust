@@ -160,8 +160,25 @@ cd native/game_native && cargo test
 | 描画時間 | 4ms 以下/フレーム |
 | Elixir-Rust 転送量 | 約 50KB/フレーム（5000体 × 10 bytes） |
 
+## ビルド出力先
+
+| 環境 | コマンド | 出力先 |
+|---|---|---|
+| デバッグ | `mix compile` | `platform/windows/_build/debug/` |
+| リリース | `MIX_ENV=prod mix compile` | `platform/windows/_build/release/` |
+
+Rust クレートのビルド出力先は `native/game_native/.cargo/config.toml` で設定しています。
+
+```
+platform/windows/
+└── _build/
+    ├── debug/    ← mix compile（開発時）
+    └── release/  ← MIX_ENV=prod mix compile（本番時）
+```
+
 ## 関連ドキュメント
 
+- [実装ステップガイド](docs/STEPS.md) — Step 1〜15 の段階的な実装手順
 - [ゲーム仕様書](docs/SPEC.md) — ゲームデザイン・技術仕様・NIF API 定義
 - [Elixir 採用理由](docs/WHY_ELIXIR.md) — BEAM VM の強み・他言語との比較
 
