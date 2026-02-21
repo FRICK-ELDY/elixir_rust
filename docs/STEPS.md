@@ -508,50 +508,165 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 ### 5.1 SpriteInstance 構造体
 
+`native/game_native/src/renderer/mod.rs` に追加する:
+
 ```rust
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SpriteInstance {
-    pub position: [f32; 2],
-    pub size: [f32; 2],
-    pub uv_offset: [f32; 2],
-    pub uv_size: [f32; 2],
-    pub color_tint: [f32; 4],
+    pub position:   [f32; 2], // ワールド座標（左上）
+    pub size:       [f32; 2], // ピクセルサイズ
+    pub uv_offset:  [f32; 2], // アトラス UV オフセット（0.0〜1.0）
+    pub uv_size:    [f32; 2], // アトラス UV サイズ（0.0〜1.0）
+    pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 ```
 
-### 5.2 インスタンスバッファの作成
+`Renderer` 構造体にもフィールドを追加する:
+
+```rust
+pub struct Renderer {
+    // ... 既存フィールド ...
+    instance_buffer: wgpu::Buffer,
+    instance_count:  u32,
+    // FPS 計測
+    frame_count:     u32,
+    fps_timer:       std::time::Instant,
+}
+```
+
+### 5.2 WGSL シェーダーのインスタンシング対応
+
+`native/game_native/src/renderer/shaders/sprite.wgsl` を更新する:
+
+```wgsl
+@group(0) @binding(0) var sprite_texture: texture_2d<f32>;
+@group(0) @binding(1) var sprite_sampler: sampler;
+
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+};
+
+// インスタンスごとのデータ（@location(1)〜(5)）
+struct InstanceInput {
+    @location(1) i_position:   vec2<f32>,
+    @location(2) i_size:       vec2<f32>,
+    @location(3) i_uv_offset:  vec2<f32>,
+    @location(4) i_uv_size:    vec2<f32>,
+    @location(5) i_color_tint: vec4<f32>,
+};
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) uv:         vec2<f32>,
+    @location(1) color_tint: vec4<f32>,
+};
+
+const HALF_W: f32 = 640.0;
+const HALF_H: f32 = 360.0;
+
+@vertex
+fn vs_main(in: VertexInput, inst: InstanceInput) -> VertexOutput {
+    var out: VertexOutput;
+    let world_pos = inst.i_position + in.position * inst.i_size;
+    out.clip_position = vec4<f32>(
+        (world_pos.x - HALF_W) / HALF_W,
+        -(world_pos.y - HALF_H) / HALF_H,
+        0.0, 1.0,
+    );
+    out.uv = inst.i_uv_offset + in.position * inst.i_uv_size;
+    out.color_tint = inst.i_color_tint;
+    return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(sprite_texture, sprite_sampler, in.uv) * in.color_tint;
+}
+```
+
+### 5.3 パイプラインにインスタンスバッファレイアウトを追加
+
+`create_render_pipeline` の `vertex.buffers` に slot 1 を追加する:
+
+```rust
+buffers: &[
+    // slot 0: 頂点バッファ（Vertex ごとに進む）
+    wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+        step_mode:    wgpu::VertexStepMode::Vertex,
+        attributes:   &wgpu::vertex_attr_array![0 => Float32x2],
+    },
+    // slot 1: インスタンスバッファ（Instance ごとに進む）
+    wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<SpriteInstance>() as wgpu::BufferAddress,
+        step_mode:    wgpu::VertexStepMode::Instance,
+        attributes:   &wgpu::vertex_attr_array![
+            1 => Float32x2, // i_position
+            2 => Float32x2, // i_size
+            3 => Float32x2, // i_uv_offset
+            4 => Float32x2, // i_uv_size
+            5 => Float32x4, // i_color_tint
+        ],
+    },
+],
+```
+
+### 5.4 インスタンスバッファの作成
+
+`new()` 内でインスタンスを 100 体（10×10 格子）生成する:
 
 ```rust
 let instances: Vec<SpriteInstance> = (0..100)
     .map(|i| SpriteInstance {
-        position: [(i % 10) as f32 * 64.0, (i / 10) as f32 * 64.0],
-        size: [64.0, 64.0],
-        uv_offset: [0.0, 0.0],
-        uv_size: [1.0, 1.0],
+        position:   [(i % 10) as f32 * 64.0, (i / 10) as f32 * 64.0],
+        size:       [64.0, 64.0],
+        uv_offset:  [0.0, 0.0],
+        uv_size:    [1.0, 1.0],
         color_tint: [1.0, 1.0, 1.0, 1.0],
     })
     .collect();
 
 let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    label: Some("Instance Buffer"),
+    label:    Some("Instance Buffer"),
     contents: bytemuck::cast_slice(&instances),
-    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    usage:    wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
 });
 ```
 
-### 5.3 draw_indexed でインスタンス描画
+### 5.5 draw_indexed でインスタンス描画 + FPS カウンタ
+
+`render()` を更新する:
 
 ```rust
-render_pass.draw_indexed(
-    0..6,                    // インデックス数（四角形 2 三角形）
-    0,
-    0..instances.len() as u32,  // インスタンス数
-);
+pub fn render(&mut self) {
+    // FPS 計測（1 秒ごとにコンソール出力）
+    self.frame_count += 1;
+    let elapsed = self.fps_timer.elapsed();
+    if elapsed.as_secs_f32() >= 1.0 {
+        println!("FPS: {:.1}", self.frame_count as f32 / elapsed.as_secs_f32());
+        self.frame_count = 0;
+        self.fps_timer = std::time::Instant::now();
+    }
+
+    // ... サーフェス取得・エンコーダ作成 ...
+
+    pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    pass.set_vertex_buffer(1, self.instance_buffer.slice(..));  // インスタンスバッファを slot 1 にセット
+    pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+    // 1 draw call で 100 体を描画
+    pass.draw_indexed(0..INDICES.len() as u32, 0, 0..self.instance_count);
+}
 ```
 
-**チェックポイント**: 100 体のスプライトが格子状に表示されれば OK。  
-FPS カウンタを追加して 60fps 以上であることを確認する。
+### 5.6 ビルドと実行
+
+```powershell
+cd native\game_native
+cargo run --bin game_window
+```
+
+**チェックポイント**: 100 体のスプライトが 10×10 の格子状に表示され、コンソールに `FPS: 60.x` が出力されれば OK。
 
 ---
 
