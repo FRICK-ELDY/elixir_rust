@@ -52,7 +52,8 @@ winget install Erlang.ErlangOTP --accept-package-agreements --accept-source-agre
 # → C:\Program Files\Erlang OTP\ にインストールされる
 
 # 2. Elixir 公式インストーラ（OTP 28 対応版）をダウンロードして実行
-#    https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.exe
+#    Elixir のリリース一覧ページから、最新の `elixir-otp-28.exe` をダウンロードします:
+#    https://github.com/elixir-lang/elixir/releases
 #    ダウンロード後、サイレントインストール:
 & "elixir-otp-28.exe" /S
 # → C:\Program Files\Elixir\ にインストールされる
