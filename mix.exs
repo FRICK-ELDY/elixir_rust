@@ -5,7 +5,7 @@ defmodule Game.MixProject do
     [
       app: :game,
       version: "0.1.0",
-      elixir: "~> 1.17",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       build_path: build_path(),
       deps: deps(),

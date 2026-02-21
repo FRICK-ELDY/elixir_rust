@@ -47,15 +47,25 @@ cargo --version   # cargo 1.80.0 以上
 ### 1.2 Elixir / Erlang のインストール
 
 ```powershell
-# asdf（バージョン管理ツール）を使う場合
-# https://asdf-vm.com/guide/getting-started.html
+# 1. Erlang OTP を winget でインストール
+winget install Erlang.ErlangOTP --accept-package-agreements --accept-source-agreements
+# → C:\Program Files\Erlang OTP\ にインストールされる
 
-# または Elixir 公式インストーラ（Windows）
-# https://elixir-lang.org/install.html#windows
+# 2. Elixir 公式インストーラ（OTP 28 対応版）をダウンロードして実行
+#    https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.exe
+#    ダウンロード後、サイレントインストール:
+& "elixir-otp-28.exe" /S
+# → C:\Program Files\Elixir\ にインストールされる
+
+# 3. ユーザー PATH に追加（PowerShell）
+$currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+$newPath = $currentPath + ";C:\Program Files\Erlang OTP\bin;C:\Program Files\Elixir\bin"
+[System.Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+# ターミナルを再起動して PATH を反映させること
 
 # インストール確認
-elixir --version   # Elixir 1.17 以上
-erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().'  # OTP 27 以上
+elixir --version   # Elixir 1.19.5 以上
+erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().'  # OTP 28 以上
 ```
 
 ### 1.3 GPU ドライバ確認（wgpu 用）
