@@ -446,13 +446,21 @@ image = "0.25"
 
 ### 4.3 頂点・インデックスバッファ
 
+`bytemuck` で GPU バッファに渡すため、`#[repr(C)]` の構造体として定義する。
+
 ```rust
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 2],
+}
+
 // 四角形 1 枚（正規化座標 0.0〜1.0）
-const VERTICES: &[[f32; 2]] = &[
-    [0.0, 0.0],  // 左上
-    [1.0, 0.0],  // 右上
-    [1.0, 1.0],  // 右下
-    [0.0, 1.0],  // 左下
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.0] }, // 左上
+    Vertex { position: [1.0, 0.0] }, // 右上
+    Vertex { position: [1.0, 1.0] }, // 右下
+    Vertex { position: [0.0, 1.0] }, // 左下
 ];
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 ```
@@ -477,7 +485,7 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    // 画面中央に 64x64 px のスプライトを配置（仮）
+    // 画面中央に 64x64 px のスプライトを配置（640.0/360.0 は 1280x720 の半画面サイズ = clip 空間への変換係数）
     let world_pos = in.position * vec2<f32>(64.0, 64.0) - vec2<f32>(32.0, 32.0);
     out.clip_position = vec4<f32>(world_pos / vec2<f32>(640.0, 360.0), 0.0, 1.0);
     out.uv = in.position;
