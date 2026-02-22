@@ -22,6 +22,16 @@ const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
 const INVINCIBLE_DURATION: f32 = 0.5;
 /// Spatial Hash のセルサイズ（px）
 const CELL_SIZE: f32 = 80.0;
+/// Magic Wand の発射間隔（秒）
+const WEAPON_COOLDOWN: f32 = 1.0;
+/// 弾丸の移動速度（px/秒）
+const BULLET_SPEED: f32 = 400.0;
+/// 弾丸のダメージ
+const BULLET_DAMAGE: i32 = 10;
+/// 弾丸の生存時間（秒）
+const BULLET_LIFETIME: f32 = 3.0;
+/// 弾丸の当たり判定半径（px）
+const BULLET_RADIUS: f32 = 6.0;
 
 // ─── プレイヤー ───────────────────────────────────────────────
 pub struct PlayerState {
@@ -88,6 +98,100 @@ fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
     }
 }
 
+// ─── 弾丸 SoA ─────────────────────────────────────────────────
+pub struct BulletWorld {
+    pub positions_x:  Vec<f32>,
+    pub positions_y:  Vec<f32>,
+    pub velocities_x: Vec<f32>,
+    pub velocities_y: Vec<f32>,
+    pub damage:       Vec<i32>,
+    pub lifetime:     Vec<f32>,
+    pub alive:        Vec<bool>,
+    pub count:        usize,
+}
+
+impl BulletWorld {
+    pub fn new() -> Self {
+        Self {
+            positions_x:  Vec::new(),
+            positions_y:  Vec::new(),
+            velocities_x: Vec::new(),
+            velocities_y: Vec::new(),
+            damage:       Vec::new(),
+            lifetime:     Vec::new(),
+            alive:        Vec::new(),
+            count:        0,
+        }
+    }
+
+    pub fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
+        // 死んでいるスロットを再利用
+        for i in 0..self.positions_x.len() {
+            if !self.alive[i] {
+                self.positions_x[i]  = x;
+                self.positions_y[i]  = y;
+                self.velocities_x[i] = vx;
+                self.velocities_y[i] = vy;
+                self.damage[i]       = damage;
+                self.lifetime[i]     = lifetime;
+                self.alive[i]        = true;
+                self.count += 1;
+                return;
+            }
+        }
+        self.positions_x.push(x);
+        self.positions_y.push(y);
+        self.velocities_x.push(vx);
+        self.velocities_y.push(vy);
+        self.damage.push(damage);
+        self.lifetime.push(lifetime);
+        self.alive.push(true);
+        self.count += 1;
+    }
+
+    pub fn kill(&mut self, i: usize) {
+        if self.alive[i] {
+            self.alive[i] = false;
+            self.count = self.count.saturating_sub(1);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions_x.len()
+    }
+}
+
+// ─── 武器状態 ─────────────────────────────────────────────────
+pub struct WeaponState {
+    /// 次の発射まで残り時間（秒）
+    pub cooldown_timer: f32,
+}
+
+impl WeaponState {
+    pub fn new() -> Self {
+        Self { cooldown_timer: 0.0 }
+    }
+}
+
+/// 最近接の生存敵インデックスを返す
+pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usize> {
+    let mut min_dist = f32::MAX;
+    let mut nearest  = None;
+    for i in 0..enemies.len() {
+        if !enemies.alive[i] {
+            continue;
+        }
+        let dx   = enemies.positions_x[i] - px;
+        let dy   = enemies.positions_y[i] - py;
+        let dist = dx * dx + dy * dy;
+        if dist < min_dist {
+            min_dist = dist;
+            nearest  = Some(i);
+        }
+    }
+    nearest
+}
+
 /// Chase AI: 全敵をプレイヤーに向けて移動
 pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, dt: f32) {
     for i in 0..enemies.len() {
@@ -109,6 +213,8 @@ pub struct GameWorldInner {
     pub frame_id:  u32,
     pub player:    PlayerState,
     pub enemies:   EnemyWorld,
+    pub bullets:   BulletWorld,
+    pub weapon:    WeaponState,
     pub rng:       SimpleRng,
     pub collision: CollisionWorld,
 }
@@ -153,6 +259,8 @@ fn create_world() -> ResourceArc<GameWorld> {
             invincible_timer: 0.0,
         },
         enemies:   EnemyWorld::new(),
+        bullets:   BulletWorld::new(),
+        weapon:    WeaponState::new(),
         rng:       SimpleRng::new(12345),
         collision: CollisionWorld::new(CELL_SIZE),
     })))
@@ -236,6 +344,74 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 11: 武器・弾丸システム ──────────────────────────────
+    // 1. 武器クールダウンを更新し、発射タイミングなら最近接敵に向けて発射
+    w.weapon.cooldown_timer = (w.weapon.cooldown_timer - dt).max(0.0);
+    if w.weapon.cooldown_timer <= 0.0 {
+        if let Some(target_idx) = find_nearest_enemy(&w.enemies, px, py) {
+            let tx  = w.enemies.positions_x[target_idx] + ENEMY_RADIUS;
+            let ty  = w.enemies.positions_y[target_idx] + ENEMY_RADIUS;
+            let bdx = tx - px;
+            let bdy = ty - py;
+            let blen = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
+            let vx  = (bdx / blen) * BULLET_SPEED;
+            let vy  = (bdy / blen) * BULLET_SPEED;
+            w.bullets.spawn(px, py, vx, vy, BULLET_DAMAGE, BULLET_LIFETIME);
+            w.weapon.cooldown_timer = WEAPON_COOLDOWN;
+        }
+    }
+
+    // 2. 弾丸を移動・寿命更新
+    let bullet_len = w.bullets.len();
+    for i in 0..bullet_len {
+        if !w.bullets.alive[i] {
+            continue;
+        }
+        w.bullets.positions_x[i] += w.bullets.velocities_x[i] * dt;
+        w.bullets.positions_y[i] += w.bullets.velocities_y[i] * dt;
+        w.bullets.lifetime[i]    -= dt;
+        if w.bullets.lifetime[i] <= 0.0 {
+            w.bullets.kill(i);
+            continue;
+        }
+        // 画面外に出た弾丸も消す
+        let bx = w.bullets.positions_x[i];
+        let by = w.bullets.positions_y[i];
+        if bx < -100.0 || bx > SCREEN_WIDTH + 100.0 || by < -100.0 || by > SCREEN_HEIGHT + 100.0 {
+            w.bullets.kill(i);
+        }
+    }
+
+    // 3. 弾丸 vs 敵 衝突判定
+    let hit_r = BULLET_RADIUS + ENEMY_RADIUS;
+    for bi in 0..bullet_len {
+        if !w.bullets.alive[bi] {
+            continue;
+        }
+        let bx  = w.bullets.positions_x[bi];
+        let by  = w.bullets.positions_y[bi];
+        let dmg = w.bullets.damage[bi];
+
+        let nearby = w.collision.dynamic.query_nearby(bx, by, hit_r);
+        for ei in nearby {
+            if !w.enemies.alive[ei] {
+                continue;
+            }
+            let ex  = w.enemies.positions_x[ei] + ENEMY_RADIUS;
+            let ey  = w.enemies.positions_y[ei] + ENEMY_RADIUS;
+            let ddx = bx - ex;
+            let ddy = by - ey;
+            if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                w.enemies.hp[ei] -= dmg as f32;
+                if w.enemies.hp[ei] <= 0.0 {
+                    w.enemies.alive[ei] = false;
+                }
+                w.bullets.kill(bi);
+                break;
+            }
+        }
+    }
+
     w.frame_id
 }
 
@@ -254,18 +430,30 @@ fn get_player_hp(world: ResourceArc<GameWorld>) -> f64 {
 }
 
 /// 描画データを返す: [{x, y, kind}] のリスト
-/// kind: 0 = player, 1 = enemy
+/// kind: 0 = player, 1 = enemy, 2 = bullet
 #[rustler::nif]
 fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     let w = world.0.lock().unwrap();
-    let mut result = Vec::with_capacity(1 + w.enemies.len());
+    let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len());
     result.push((w.player.x, w.player.y, 0u8));
     for i in 0..w.enemies.len() {
         if w.enemies.alive[i] {
             result.push((w.enemies.positions_x[i], w.enemies.positions_y[i], 1u8));
         }
     }
+    for i in 0..w.bullets.len() {
+        if w.bullets.alive[i] {
+            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], 2u8));
+        }
+    }
     result
+}
+
+/// 現在飛んでいる弾丸数を返す（Step 11）
+#[rustler::nif]
+fn get_bullet_count(world: ResourceArc<GameWorld>) -> usize {
+    let w = world.0.lock().unwrap();
+    w.bullets.count
 }
 
 // ─── ローダー ─────────────────────────────────────────────────
