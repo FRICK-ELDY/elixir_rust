@@ -4,7 +4,7 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Step 7 以降でここに GameLoop などを追加する
+      Game.GameLoop,
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]
