@@ -1,21 +1,10 @@
-<<<<<<< HEAD
 mod constants;
 
 use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
-=======
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
 use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::Mutex;
 
 rustler::atoms! {
-<<<<<<< HEAD
-    ok
-}
-
-pub struct PlayerState {
-    pub x: f32,
-    pub y: f32,
-=======
     ok,
     slime,
 }
@@ -24,21 +13,8 @@ pub struct PlayerState {
 pub struct PlayerState {
     pub x:        f32,
     pub y:        f32,
-    pub speed:    f32,
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
     pub input_dx: f32,
     pub input_dy: f32,
-}
-
-<<<<<<< HEAD
-pub struct GameWorldInner {
-    pub frame_id: u32,
-    pub player: PlayerState,
-=======
-impl Default for PlayerState {
-    fn default() -> Self {
-        Self { x: 640.0, y: 360.0, speed: 200.0, input_dx: 0.0, input_dy: 0.0 }
-    }
 }
 
 // ─── 敵 SoA ──────────────────────────────────────────────────
@@ -86,10 +62,10 @@ fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
     let margin = 80.0;
     let side = rng.next_u32() % 4;
     match side {
-        0 => (rng.next_f32() * sw,          -margin),           // 上
-        1 => (rng.next_f32() * sw,          sh + margin),       // 下
-        2 => (-margin,                       rng.next_f32() * sh), // 左
-        _ => (sw + margin,                   rng.next_f32() * sh), // 右
+        0 => (rng.next_f32() * sw, -margin),
+        1 => (rng.next_f32() * sw, sh + margin),
+        2 => (-margin,             rng.next_f32() * sh),
+        _ => (sw + margin,         rng.next_f32() * sh),
     }
 }
 
@@ -111,11 +87,10 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
-    pub frame_id:   u32,
-    pub player:     PlayerState,
-    pub enemies:    EnemyWorld,
-    pub rng_state:  u64,
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
+    pub frame_id:  u32,
+    pub player:    PlayerState,
+    pub enemies:   EnemyWorld,
+    pub rng_state: u64,
 }
 
 pub struct GameWorld(pub Mutex<GameWorldInner>);
@@ -130,40 +105,34 @@ fn add(a: i64, b: i64) -> NifResult<i64> {
 #[rustler::nif]
 fn create_world() -> ResourceArc<GameWorld> {
     ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
-<<<<<<< HEAD
-        frame_id: 0,
-        player: PlayerState {
-            x: SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
-            y: SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
+        frame_id:  0,
+        player:    PlayerState {
+            x:        SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
+            y:        SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
             input_dx: 0.0,
             input_dy: 0.0,
         },
-=======
-        frame_id:  0,
-        player:    PlayerState::default(),
         enemies:   EnemyWorld::new(),
         rng_state: 12345,
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
     })))
 }
 
 /// プレイヤーの入力方向を設定（Step 8）
 #[rustler::nif]
-fn set_player_input(world: ResourceArc<GameWorld>, dx: f32, dy: f32) -> Atom {
+fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
     let mut w = world.0.lock().unwrap();
-    w.player.input_dx = dx;
-    w.player.input_dy = dy;
+    w.player.input_dx = dx as f32;
+    w.player.input_dy = dy as f32;
     ok()
 }
 
 /// 敵をスポーン（Step 9）
-/// kind は将来の拡張用（現在は無視）
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, _kind: Atom, count: usize) -> Atom {
     let mut w = world.0.lock().unwrap();
     let seed = w.rng_state;
     w.rng_state = w.rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-    w.enemies.spawn(count, 1280.0, 720.0, seed);
+    w.enemies.spawn(count, SCREEN_WIDTH, SCREEN_HEIGHT, seed);
     ok()
 }
 
@@ -173,7 +142,6 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     let mut w = world.0.lock().unwrap();
     w.frame_id += 1;
 
-<<<<<<< HEAD
     let dt = delta_ms as f32 / 1000.0;
     let dx = w.player.input_dx;
     let dy = w.player.input_dy;
@@ -187,44 +155,22 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
 
     w.player.x = w.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
     w.player.y = w.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
-=======
-    let dt = (delta_ms as f32) / 1000.0;
-
-    // プレイヤー移動
-    let input_dx = w.player.input_dx;
-    let input_dy = w.player.input_dy;
-    let speed    = w.player.speed;
-    if input_dx != 0.0 || input_dy != 0.0 {
-        let len = (input_dx * input_dx + input_dy * input_dy).sqrt().max(0.001);
-        w.player.x += (input_dx / len) * speed * dt;
-        w.player.y += (input_dy / len) * speed * dt;
-    }
 
     // Chase AI
     let px = w.player.x;
     let py = w.player.y;
     update_chase_ai(&mut w.enemies, px, py, dt);
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
 
     w.frame_id
 }
 
-<<<<<<< HEAD
-#[rustler::nif]
-fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
-    let mut w = world.0.lock().unwrap();
-    w.player.input_dx = dx as f32;
-    w.player.input_dy = dy as f32;
-    ok()
-}
-
+/// プレイヤー座標を返す（Step 8）
 #[rustler::nif]
 fn get_player_pos(world: ResourceArc<GameWorld>) -> (f64, f64) {
     let w = world.0.lock().unwrap();
     (w.player.x as f64, w.player.y as f64)
 }
 
-=======
 /// 描画データを返す: [{x, y, kind}] のリスト
 /// kind: 0 = player, 1 = enemy
 #[rustler::nif]
@@ -242,7 +188,6 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
 
 // ─── ローダー ─────────────────────────────────────────────────
 
->>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
 #[allow(non_local_definitions)]
 fn load(env: rustler::Env, _: rustler::Term) -> bool {
     let _ = rustler::resource!(GameWorld, env);
