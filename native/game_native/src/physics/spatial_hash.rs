@@ -1,16 +1,16 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 // ─── Spatial Hash ─────────────────────────────────────────────
 pub struct SpatialHash {
     pub cell_size: f32,
-    cells: HashMap<(i32, i32), Vec<usize>>,
+    cells: FxHashMap<(i32, i32), Vec<usize>>,
 }
 
 impl SpatialHash {
     pub fn new(cell_size: f32) -> Self {
         Self {
             cell_size,
-            cells: HashMap::new(),
+            cells: FxHashMap::default(),
         }
     }
 
@@ -30,20 +30,27 @@ impl SpatialHash {
         )
     }
 
-    /// 指定円の範囲内にあるエンティティ ID を返す（距離フィルタなし）
-    pub fn query_nearby(&self, x: f32, y: f32, radius: f32) -> Vec<usize> {
+    /// 指定円の範囲内にあるエンティティ ID を `buf` に書き込む（アロケーションなし）。
+    /// 呼び出し前に `buf` をクリアする必要はない（内部で `clear()` する）。
+    pub fn query_nearby_into(&self, x: f32, y: f32, radius: f32, buf: &mut Vec<usize>) {
+        buf.clear();
         let r = (radius / self.cell_size).ceil() as i32;
         let cx = (x / self.cell_size).floor() as i32;
         let cy = (y / self.cell_size).floor() as i32;
-        let mut result = Vec::new();
         for ix in (cx - r)..=(cx + r) {
             for iy in (cy - r)..=(cy + r) {
                 if let Some(ids) = self.cells.get(&(ix, iy)) {
-                    result.extend_from_slice(ids);
+                    buf.extend_from_slice(ids);
                 }
             }
         }
-        result
+    }
+
+    /// 後方互換用（`query_nearby_into` への移行が完了したら削除可）
+    pub fn query_nearby(&self, x: f32, y: f32, radius: f32) -> Vec<usize> {
+        let mut buf = Vec::new();
+        self.query_nearby_into(x, y, radius, &mut buf);
+        buf
     }
 }
 
