@@ -244,17 +244,6 @@ impl WeaponSlot {
     }
 }
 
-// ─── 武器状態（後方互換のため残す） ──────────────────────────
-pub struct WeaponState {
-    /// 次の発射まで残り時間（秒）
-    pub cooldown_timer: f32,
-}
-
-impl WeaponState {
-    pub fn new() -> Self {
-        Self { cooldown_timer: 0.0 }
-    }
-}
 
 /// 最近接の生存敵インデックスを返す
 pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usize> {
@@ -315,7 +304,6 @@ pub struct GameWorldInner {
     pub player:             PlayerState,
     pub enemies:            EnemyWorld,
     pub bullets:            BulletWorld,
-    pub weapon:             WeaponState,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
@@ -379,7 +367,6 @@ fn create_world() -> ResourceArc<GameWorld> {
         },
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
-        weapon:             WeaponState::new(),
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
@@ -476,24 +463,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
-    // ── Step 11: 武器・弾丸システム ──────────────────────────────
-    // 1. 武器クールダウンを更新し、発射タイミングなら最近接敵に向けて発射
-    w.weapon.cooldown_timer = (w.weapon.cooldown_timer - dt).max(0.0);
-    if w.weapon.cooldown_timer <= 0.0 {
-        if let Some(target_idx) = find_nearest_enemy(&w.enemies, px, py) {
-            let tx  = w.enemies.positions_x[target_idx] + ENEMY_RADIUS;
-            let ty  = w.enemies.positions_y[target_idx] + ENEMY_RADIUS;
-            let bdx = tx - px;
-            let bdy = ty - py;
-            let blen = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
-            let vx  = (bdx / blen) * BULLET_SPEED;
-            let vy  = (bdy / blen) * BULLET_SPEED;
-            w.bullets.spawn(px, py, vx, vy, BULLET_DAMAGE, BULLET_LIFETIME);
-            w.weapon.cooldown_timer = WEAPON_COOLDOWN;
-        }
-    }
-
-    // ── Step 14: 追加武器スロットの発射処理 ──────────────────────
+    // ── Step 11/14: 武器スロット発射処理 ────────────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
         let slot_count = w.weapon_slots.len();
@@ -680,14 +650,15 @@ fn get_hud_data(world: ResourceArc<GameWorld>) -> (f64, f64, u32, f64) {
 // ─── Step 14: レベルアップ・武器選択 ──────────────────────────
 
 /// 次のレベルに必要な累積経験値を返す
+/// 現在の `level` から次のレベルに上がるために必要な累積 EXP を返す。
+/// EXP_TABLE[level] = Lv.level → Lv.(level+1) に必要な累積 EXP。
+/// 経験値は累積で管理するため、レベルアップ後も exp はリセットしない。
 fn exp_required_for_next(level: u32) -> u32 {
-    // exp_table: index = level（1 始まり）、値 = そのレベルに必要な累積 EXP
     const EXP_TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
     let idx = level as usize;
     if idx < EXP_TABLE.len() {
         EXP_TABLE[idx]
     } else {
-        // テーブル外は等差数列で延長
         270 + (idx as u32 - 9) * 50
     }
 }
@@ -724,9 +695,9 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
         w.weapon_slots[target] = WeaponSlot::new(kind);
     }
 
-    // レベルアップ処理: レベルを上げ、経験値をリセット、フラグを解除
+    // レベルアップ処理: レベルを上げ、フラグを解除
+    // exp は累積値で管理するためリセットしない
     w.level += 1;
-    w.exp    = 0;
     w.level_up_pending = false;
 
     ok()

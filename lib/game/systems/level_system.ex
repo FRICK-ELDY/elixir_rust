@@ -1,25 +1,9 @@
 defmodule Game.LevelSystem do
   @moduledoc """
   レベルアップ管理システム（Step 14）。
-  経験値テーブルに基づいてレベルアップを判定し、
-  武器選択肢（3 択）を生成する。
+  レベルアップ判定は Rust 側（physics_step）で行い、
+  このモジュールは武器選択肢の生成とラベル変換を担当する。
   """
-
-  # インデックス = レベル（1 始まり）、値 = そのレベルに必要な累積 EXP
-  @exp_table [0, 10, 25, 45, 70, 100, 135, 175, 220, 270]
-
-  @doc """
-  現在の経験値とレベルからレベルアップを判定する。
-  Rust 側の `level_up_pending` フラグを確認して呼び出す。
-  """
-  def check_level_up(current_exp, current_level) do
-    required = Enum.at(@exp_table, current_level, :infinity)
-    if current_exp >= required do
-      {:level_up, current_level + 1}
-    else
-      :no_change
-    end
-  end
 
   @doc """
   レベルアップ時に提示する武器選択肢を 3 つ返す。

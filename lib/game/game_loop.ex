@@ -93,16 +93,15 @@ defmodule Game.GameLoop do
       Game.SpawnSystem.maybe_spawn(state.world_ref, elapsed, state.last_spawn_ms)
 
     # ── Step 14: レベルアップ判定 ──────────────────────────────
-    {_exp, _level, level_up_pending, _exp_to_next} =
+    {exp, level, level_up_pending, exp_to_next} =
       Game.NifBridge.get_level_up_data(state.world_ref)
 
     new_state =
       if level_up_pending and state.phase == :playing do
-        {exp, level, _pending, exp_to_next} = Game.NifBridge.get_level_up_data(state.world_ref)
         choices = Game.LevelSystem.generate_weapon_choices(state.weapons)
 
         Logger.info(
-          "[LEVEL UP] ★ レベルアップ！ Lv.#{level - 1} → Lv.#{level} | " <>
+          "[LEVEL UP] ★ レベルアップ！ Lv.#{level} → Lv.#{level + 1} | " <>
           "EXP: #{exp} | 次まで: #{exp_to_next} | " <>
           "選択肢: #{Enum.map_join(choices, " / ", &Game.LevelSystem.weapon_label/1)}"
         )
@@ -118,10 +117,9 @@ defmodule Game.GameLoop do
       end
 
     if rem(state.frame_count, 60) == 0 do
-      {px, py}                              = Game.NifBridge.get_player_pos(state.world_ref)
-      {hp, max_hp, score, elapsed_s}        = Game.NifBridge.get_hud_data(state.world_ref)
-      {exp, level, _pending, exp_to_next}   = Game.NifBridge.get_level_up_data(state.world_ref)
-      enemy_count                           = Game.NifBridge.get_enemy_count(state.world_ref)
+      {px, py}                       = Game.NifBridge.get_player_pos(state.world_ref)
+      {hp, max_hp, score, elapsed_s} = Game.NifBridge.get_hud_data(state.world_ref)
+      enemy_count                    = Game.NifBridge.get_enemy_count(state.world_ref)
       bullet_count                          = Game.NifBridge.get_bullet_count(state.world_ref)
       frame_time_ms                         = Game.NifBridge.get_frame_time_ms(state.world_ref)
       budget_warn                           = if frame_time_ms > @tick_ms, do: " ⚠ OVER BUDGET", else: ""
