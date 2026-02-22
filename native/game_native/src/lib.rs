@@ -229,6 +229,117 @@ impl WeaponSlot {
 }
 
 
+// ─── パーティクル SoA ──────────────────────────────────────────
+pub struct ParticleWorld {
+    pub positions_x:  Vec<f32>,
+    pub positions_y:  Vec<f32>,
+    pub velocities_x: Vec<f32>,
+    pub velocities_y: Vec<f32>,
+    pub lifetime:     Vec<f32>,
+    pub max_lifetime: Vec<f32>,
+    pub color:        Vec<[f32; 4]>,
+    pub size:         Vec<f32>,
+    pub alive:        Vec<bool>,
+    pub count:        usize,
+}
+
+impl ParticleWorld {
+    pub fn new() -> Self {
+        Self {
+            positions_x:  Vec::new(),
+            positions_y:  Vec::new(),
+            velocities_x: Vec::new(),
+            velocities_y: Vec::new(),
+            lifetime:     Vec::new(),
+            max_lifetime: Vec::new(),
+            color:        Vec::new(),
+            size:         Vec::new(),
+            alive:        Vec::new(),
+            count:        0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions_x.len()
+    }
+
+    pub fn spawn_one(
+        &mut self,
+        x: f32, y: f32,
+        vx: f32, vy: f32,
+        lifetime: f32,
+        color: [f32; 4],
+        size: f32,
+    ) {
+        for i in 0..self.positions_x.len() {
+            if !self.alive[i] {
+                self.positions_x[i]  = x;
+                self.positions_y[i]  = y;
+                self.velocities_x[i] = vx;
+                self.velocities_y[i] = vy;
+                self.lifetime[i]     = lifetime;
+                self.max_lifetime[i] = lifetime;
+                self.color[i]        = color;
+                self.size[i]         = size;
+                self.alive[i]        = true;
+                self.count += 1;
+                return;
+            }
+        }
+        self.positions_x.push(x);
+        self.positions_y.push(y);
+        self.velocities_x.push(vx);
+        self.velocities_y.push(vy);
+        self.lifetime.push(lifetime);
+        self.max_lifetime.push(lifetime);
+        self.color.push(color);
+        self.size.push(size);
+        self.alive.push(true);
+        self.count += 1;
+    }
+
+    pub fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4], rng: &mut SimpleRng) {
+        for _ in 0..count {
+            let angle = rng.next_f32() * std::f32::consts::TAU;
+            let speed = 50.0 + rng.next_f32() * 150.0;
+            let vx = angle.cos() * speed;
+            let vy = angle.sin() * speed;
+            let lifetime = 0.3 + rng.next_f32() * 0.4;
+            let size = 4.0 + rng.next_f32() * 4.0;
+            self.spawn_one(x, y, vx, vy, lifetime, color, size);
+        }
+    }
+
+    /// rng を外部で使用できない場合のエミット（事前に生成したパラメータリストを受け取る）
+    pub fn emit_params(&mut self, params: &[(f32, f32, f32, f32, f32, f32, [f32; 4])]) {
+        for &(x, y, vx, vy, lifetime, size, color) in params {
+            self.spawn_one(x, y, vx, vy, lifetime, color, size);
+        }
+    }
+
+    pub fn kill(&mut self, i: usize) {
+        if self.alive[i] {
+            self.alive[i] = false;
+            self.count = self.count.saturating_sub(1);
+        }
+    }
+}
+
+/// パーティクルエミット用のパラメータを乱数で生成する（借用分離のため）
+fn gen_particle_params(
+    x: f32, y: f32, count: usize, color: [f32; 4], rng: &mut SimpleRng,
+) -> Vec<(f32, f32, f32, f32, f32, f32, [f32; 4])> {
+    (0..count).map(|_| {
+        let angle = rng.next_f32() * std::f32::consts::TAU;
+        let speed = 50.0 + rng.next_f32() * 150.0;
+        let vx = angle.cos() * speed;
+        let vy = angle.sin() * speed;
+        let lifetime = 0.3 + rng.next_f32() * 0.4;
+        let size = 4.0 + rng.next_f32() * 4.0;
+        (x, y, vx, vy, lifetime, size, color)
+    }).collect()
+}
+
 /// 最近接の生存敵インデックスを返す
 pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usize> {
     let mut min_dist = f32::MAX;
@@ -288,6 +399,7 @@ pub struct GameWorldInner {
     pub player:             PlayerState,
     pub enemies:            EnemyWorld,
     pub bullets:            BulletWorld,
+    pub particles:          ParticleWorld,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
@@ -351,6 +463,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         },
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
+        particles:          ParticleWorld::new(),
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
@@ -443,6 +556,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
                 w.player.hp = (w.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
+                // 赤いパーティクルをプレイヤー位置に発生
+                let ppx = w.player.x + PLAYER_RADIUS;
+                let ppy = w.player.y + PLAYER_RADIUS;
+                let params = gen_particle_params(ppx, ppy, 6, [1.0, 0.15, 0.15, 1.0], &mut w.rng);
+                w.particles.emit_params(&params);
             }
         }
     }
@@ -487,6 +605,25 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             }
         }
     }
+
+    // ── パーティクル更新: 移動 + 重力 + フェードアウト ───────────
+    {
+        let plen = w.particles.len();
+        for i in 0..plen {
+            if !w.particles.alive[i] { continue; }
+            w.particles.positions_x[i] += w.particles.velocities_x[i] * dt;
+            w.particles.positions_y[i] += w.particles.velocities_y[i] * dt;
+            w.particles.velocities_y[i] += 200.0 * dt;
+            w.particles.lifetime[i] -= dt;
+            if w.particles.lifetime[i] <= 0.0 {
+                w.particles.kill(i);
+            }
+        }
+    }
+
+    // ── プレイヤーがダメージを受けた時に赤いパーティクルを発生 ──
+    // invincible_timer がちょうどセットされたフレームを検出
+    // （前フレームで 0 だったが今フレームで > 0 になった場合）
 
     // 2. 弾丸を移動・寿命更新
     let bullet_len = w.bullets.len();
@@ -542,6 +679,13 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                             w.level_up_pending = true;
                         }
                     }
+                    // ── Step 16: 敵撃破時オレンジパーティクル ────
+                    let params = gen_particle_params(ex, ey, 8, [1.0, 0.5, 0.1, 1.0], &mut w.rng);
+                    w.particles.emit_params(&params);
+                } else {
+                    // ── Step 16: ヒット時黄色パーティクル ─────────
+                    let params = gen_particle_params(ex, ey, 3, [1.0, 0.9, 0.3, 1.0], &mut w.rng);
+                    w.particles.emit_params(&params);
                 }
                 w.bullets.kill(bi);
                 break;
@@ -593,6 +737,26 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
         if w.bullets.alive[i] {
             result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], 2u8));
         }
+    }
+    result
+}
+
+/// パーティクル描画データを返す: [(x, y, r, g, b, alpha, size)]
+#[rustler::nif]
+fn get_particle_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, f32, f32, f32, f32, f32)> {
+    let w = world.0.lock().unwrap();
+    let mut result = Vec::with_capacity(w.particles.count);
+    for i in 0..w.particles.len() {
+        if !w.particles.alive[i] { continue; }
+        let alpha = (w.particles.lifetime[i] / w.particles.max_lifetime[i]).clamp(0.0, 1.0);
+        let c = w.particles.color[i];
+        result.push((
+            w.particles.positions_x[i],
+            w.particles.positions_y[i],
+            c[0], c[1], c[2],
+            alpha,
+            w.particles.size[i],
+        ));
     }
     result
 }

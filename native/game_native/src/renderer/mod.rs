@@ -32,11 +32,13 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// アトラス内の UV 座標（256x64 px アトラス）
-// [0..63]   プレイヤー
-// [64..127] 敵
+// アトラス内の UV 座標（320x64 px アトラス）
+// [0..63]    プレイヤー
+// [64..127]  敵
 // [128..191] 弾丸
-const ATLAS_W: f32 = 256.0;
+// [192..255] パーティクル
+// [256..319] 予備
+const ATLAS_W: f32 = 320.0;
 const ATLAS_H: f32 = 64.0;
 
 pub fn player_uv() -> ([f32; 2], [f32; 2]) {
@@ -47,6 +49,9 @@ pub fn enemy_uv() -> ([f32; 2], [f32; 2]) {
 }
 pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
     ([128.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
+    ([192.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -68,8 +73,8 @@ impl ScreenUniform {
 }
 
 // ─── インスタンスバッファの最大容量 ────────────────────────────
-// Player 1 + Enemies 10000 + Bullets 2000 = 12001
-const MAX_INSTANCES: usize = 12001;
+// Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 = 14001
+const MAX_INSTANCES: usize = 14001;
 
 // ─── HUD データ ────────────────────────────────────────────────
 
@@ -386,12 +391,19 @@ impl Renderer {
 
     /// ゲーム状態からインスタンスリストを構築して GPU バッファを更新する
     /// render_data: [(x, y, kind)] kind: 0=player, 1=enemy, 2=bullet
-    pub fn update_instances(&mut self, render_data: &[(f32, f32, u8)]) {
-        let (player_uv_off, player_uv_sz) = player_uv();
-        let (enemy_uv_off, enemy_uv_sz)   = enemy_uv();
-        let (bullet_uv_off, bullet_uv_sz) = bullet_uv();
+    /// particle_data: [(x, y, r, g, b, alpha, size)]
+    pub fn update_instances(
+        &mut self,
+        render_data: &[(f32, f32, u8)],
+        particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
+    ) {
+        let (player_uv_off, player_uv_sz)     = player_uv();
+        let (enemy_uv_off, enemy_uv_sz)       = enemy_uv();
+        let (bullet_uv_off, bullet_uv_sz)     = bullet_uv();
+        let (particle_uv_off, particle_uv_sz) = particle_uv();
 
-        let mut instances: Vec<SpriteInstance> = Vec::with_capacity(render_data.len());
+        let mut instances: Vec<SpriteInstance> =
+            Vec::with_capacity(render_data.len() + particle_data.len());
 
         for &(x, y, kind) in render_data {
             let inst = match kind {
@@ -422,6 +434,18 @@ impl Renderer {
             if instances.len() >= MAX_INSTANCES {
                 break;
             }
+        }
+
+        // パーティクルを描画（スプライトサイズはパーティクルの size に合わせる）
+        for &(x, y, r, g, b, alpha, size) in particle_data {
+            if instances.len() >= MAX_INSTANCES { break; }
+            instances.push(SpriteInstance {
+                position:   [x - size / 2.0, y - size / 2.0],
+                size:       [size, size],
+                uv_offset:  particle_uv_off,
+                uv_size:    particle_uv_sz,
+                color_tint: [r, g, b, alpha],
+            });
         }
 
         self.instance_count = instances.len() as u32;

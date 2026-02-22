@@ -1,16 +1,17 @@
 """
 アトラス画像生成スクリプト
-256x64 px の RGBA PNG を生成する:
+320x64 px の RGBA PNG を生成する:
   [  0.. 63] x [0..63]: プレイヤー（水色の正方形）
   [ 64..127] x [0..63]: 敵スライム（赤い正方形）
   [128..191] x [0..63]: 弾丸（黄色い円）
-  [192..255] x [0..63]: 予備（透明）
+  [192..255] x [0..63]: パーティクル（白い円）
+  [256..319] x [0..63]: 予備（透明）
 """
 
 import struct
 import zlib
 
-W, H = 256, 64
+W, H = 320, 64
 
 pixels = bytearray(W * H * 4)
 
@@ -57,6 +58,10 @@ fill_rect(107, 24, 112, 30, 20, 20, 20)
 fill_circle(160, 32, 10, 255, 220, 0)
 fill_circle(160, 32, 7, 255, 255, 100)
 
+# パーティクル: 白い円（小さめ、ソフトエッジ）
+fill_circle(224, 32, 12, 255, 255, 255)
+fill_circle(224, 32, 8, 255, 255, 255)
+
 # PNG エンコード（標準ライブラリのみ使用）
 def make_png(width, height, rgba_data):
     def chunk(name, data):
@@ -82,4 +87,4 @@ def make_png(width, height, rgba_data):
 with open('atlas.png', 'wb') as f:
     f.write(make_png(W, H, pixels))
 
-print("atlas.png generated (256x64 RGBA)")
+print("atlas.png generated (320x64 RGBA)")

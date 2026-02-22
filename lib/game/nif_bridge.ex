@@ -39,4 +39,7 @@ defmodule Game.NifBridge do
 
   # Step 14: 武器を追加しレベルアップを確定する（weapon_name: "magic_wand" | "axe" | "cross"）
   def add_weapon(_world, _weapon_name), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 16: パーティクル描画データ取得（[{x, y, r, g, b, alpha, size}]）
+  def get_particle_data(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
