@@ -61,13 +61,4 @@ impl CollisionWorld {
         }
     }
 
-    /// 毎フレーム: 生存している敵を全て再登録
-    pub fn rebuild(&mut self, positions_x: &[f32], positions_y: &[f32], alive: &[bool]) {
-        self.dynamic.clear();
-        for i in 0..alive.len() {
-            if alive[i] {
-                self.dynamic.insert(i, positions_x[i], positions_y[i]);
-            }
-        }
-    }
 }

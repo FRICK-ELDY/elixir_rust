@@ -113,6 +113,24 @@ pub struct GameWorldInner {
     pub collision: CollisionWorld,
 }
 
+impl GameWorldInner {
+    /// 衝突判定用の Spatial Hash を再構築する（clone 不要）
+    fn rebuild_collision(&mut self) {
+        self.collision.dynamic.clear();
+        self.enemies.alive
+            .iter()
+            .enumerate()
+            .filter(|&(_, &is_alive)| is_alive)
+            .for_each(|(i, _)| {
+                self.collision.dynamic.insert(
+                    i,
+                    self.enemies.positions_x[i],
+                    self.enemies.positions_y[i],
+                );
+            });
+    }
+}
+
 pub struct GameWorld(pub Mutex<GameWorldInner>);
 
 // ─── NIF 関数 ─────────────────────────────────────────────────
@@ -188,11 +206,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
 
     // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築
-    // Rust の借用チェッカー制約のため、敵データを一時コピーして collision に渡す
-    let enemy_px: Vec<f32> = w.enemies.positions_x.clone();
-    let enemy_py: Vec<f32> = w.enemies.positions_y.clone();
-    let enemy_alive: Vec<bool> = w.enemies.alive.clone();
-    w.collision.rebuild(&enemy_px, &enemy_py, &enemy_alive);
+    w.rebuild_collision();
 
     // 2. プレイヤー周辺の敵を取得して円-円判定
     let hit_radius = PLAYER_RADIUS + ENEMY_RADIUS;
@@ -216,10 +230,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         if dist_sq < hit_radius * hit_radius {
             // 敵→プレイヤーへのダメージ（無敵時間中は無効）
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
-                w.player.hp -= ENEMY_DAMAGE_PER_SEC * dt;
-                if w.player.hp < 0.0 {
-                    w.player.hp = 0.0;
-                }
+                w.player.hp = (w.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
             }
         }
