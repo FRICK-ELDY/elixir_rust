@@ -23,4 +23,7 @@ defmodule Game.NifBridge do
 
   # Step 10: プレイヤー HP 取得
   def get_player_hp(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 11: 弾丸数取得
+  def get_bullet_count(_world), do: :erlang.nif_error(:nif_not_loaded)
 end

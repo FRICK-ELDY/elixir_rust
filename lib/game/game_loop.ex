@@ -41,15 +41,17 @@ defmodule Game.GameLoop do
       Game.SpawnSystem.maybe_spawn(state.world_ref, elapsed, state.last_spawn_ms)
 
     if rem(state.frame_count, 60) == 0 do
-      {px, py}    = Game.NifBridge.get_player_pos(state.world_ref)
-      hp          = Game.NifBridge.get_player_hp(state.world_ref)
-      render_data = Game.NifBridge.get_render_data(state.world_ref)
-      enemy_count = length(render_data) - 1
+      {px, py}      = Game.NifBridge.get_player_pos(state.world_ref)
+      hp            = Game.NifBridge.get_player_hp(state.world_ref)
+      render_data   = Game.NifBridge.get_render_data(state.world_ref)
+      enemy_count   = Enum.count(render_data, fn {_, _, kind} -> kind == 1 end)
+      bullet_count  = Enum.count(render_data, fn {_, _, kind} -> kind == 2 end)
       Logger.info(
         "Frame: #{state.frame_count} | " <>
         "Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)}) | " <>
         "HP: #{Float.round(hp, 1)} | " <>
-        "Enemies: #{enemy_count}"
+        "Enemies: #{enemy_count} | " <>
+        "Bullets: #{bullet_count}"
       )
     end
 
