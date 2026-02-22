@@ -243,12 +243,43 @@ impl WeaponKind {
 // ─── 武器スロット ─────────────────────────────────────────────
 pub struct WeaponSlot {
     pub kind:           WeaponKind,
+    pub level:          u32,   // 1〜8
     pub cooldown_timer: f32,
 }
 
 impl WeaponSlot {
     pub fn new(kind: WeaponKind) -> Self {
-        Self { kind, cooldown_timer: 0.0 }
+        Self { kind, level: 1, cooldown_timer: 0.0 }
+    }
+
+    /// レベルに応じたクールダウン（レベルが上がるほど速く撃てる）
+    pub fn effective_cooldown(&self) -> f32 {
+        let base = self.kind.cooldown();
+        // Lv1 が基準、Lv8 で 50% 短縮
+        (base * (1.0 - (self.level as f32 - 1.0) * 0.07)).max(base * 0.5)
+    }
+
+    /// レベルに応じたダメージ（レベルが上がるほど強い）
+    pub fn effective_damage(&self) -> i32 {
+        let base = self.kind.damage();
+        base + (self.level as i32 - 1) * (base / 4).max(1)
+    }
+
+    /// レベルに応じた弾丸数
+    pub fn bullet_count(&self) -> usize {
+        match self.kind {
+            WeaponKind::MagicWand => match self.level {
+                1..=2 => 1,
+                3..=4 => 2,
+                5..=6 => 3,
+                _     => 4,
+            },
+            WeaponKind::Cross => match self.level {
+                1..=3 => 4,  // 上下左右
+                _     => 8,  // 斜め追加
+            },
+            _ => 1,
+        }
     }
 }
 
@@ -572,7 +603,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
-    // ── Step 11/14: 武器スロット発射処理 ────────────────────────
+    // ── Step 11/14/17: 武器スロット発射処理 ─────────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
         let slot_count = w.weapon_slots.len();
@@ -581,9 +612,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             if w.weapon_slots[si].cooldown_timer > 0.0 {
                 continue;
             }
-            let kind = w.weapon_slots[si].kind;
-            let cd   = kind.cooldown();
-            let dmg  = kind.damage();
+            let kind  = w.weapon_slots[si].kind;
+            // Step 17: レベルに応じたクールダウン・ダメージ・弾数を使用
+            let cd    = w.weapon_slots[si].effective_cooldown();
+            let dmg   = w.weapon_slots[si].effective_damage();
+            let bcount = w.weapon_slots[si].bullet_count();
             match kind {
                 WeaponKind::MagicWand => {
                     if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
@@ -591,8 +624,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                         let ty   = w.enemies.positions_y[ti] + ENEMY_RADIUS;
                         let bdx  = tx - px;
                         let bdy  = ty - py;
-                        let blen = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
-                        w.bullets.spawn(px, py, (bdx / blen) * BULLET_SPEED, (bdy / blen) * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                        // bcount 発同時発射（Lv3 で 2 発、Lv5 で 3 発）
+                        // 複数発は少しずつ角度をずらして扇状に発射
+                        let base_angle = bdy.atan2(bdx);
+                        let spread = std::f32::consts::PI * 0.08; // 約 14 度の広がり
+                        let half = (bcount as f32 - 1.0) / 2.0;
+                        for bi in 0..bcount {
+                            let angle = base_angle + (bi as f32 - half) * spread;
+                            let vx = angle.cos() * BULLET_SPEED;
+                            let vy = angle.sin() * BULLET_SPEED;
+                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME);
+                        }
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
@@ -602,9 +644,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 WeaponKind::Cross => {
-                    // 上下左右 4 方向に同時発射
-                    let dirs: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
-                    for (dx_dir, dy_dir) in dirs {
+                    // Lv1〜3: 上下左右 4 方向、Lv4 以上: 斜め 4 方向も追加
+                    let dirs_4: [(f32, f32); 4] = [
+                        (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
+                    ];
+                    let diag = std::f32::consts::FRAC_1_SQRT_2;
+                    let dirs_8: [(f32, f32); 8] = [
+                        (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
+                        (diag, -diag), (-diag, -diag), (diag, diag), (-diag, diag),
+                    ];
+                    let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
+                    for &(dx_dir, dy_dir) in dirs {
                         w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME);
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
@@ -821,9 +871,25 @@ fn get_level_up_data(world: ResourceArc<GameWorld>) -> (u32, u32, bool, u32) {
     (w.exp, w.level, w.level_up_pending, exp_to_next)
 }
 
-/// 武器を追加し、レベルアップ待機を解除する（Step 14）
+/// 装備中の武器スロット情報を返す（Step 17）
+/// 戻り値: [(weapon_name, level)] のリスト
+#[rustler::nif]
+fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
+    let w = world.0.lock().unwrap();
+    w.weapon_slots.iter().map(|s| {
+        let name = match s.kind {
+            WeaponKind::MagicWand => "magic_wand".to_string(),
+            WeaponKind::Axe       => "axe".to_string(),
+            WeaponKind::Cross     => "cross".to_string(),
+        };
+        (name, s.level)
+    }).collect()
+}
+
+/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17）
 /// weapon_name: "magic_wand" | "axe" | "cross"
-/// 最大 6 スロットを超えた場合は既存スロットを上書き（最も古い同種を優先）
+/// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
+/// 新規武器は最大 6 スロットまで追加可能
 #[rustler::nif]
 fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     let mut w = world.0.lock().unwrap();
@@ -836,13 +902,13 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     };
 
     const MAX_SLOTS: usize = 6;
-    if w.weapon_slots.len() < MAX_SLOTS {
+    // 同じ武器を選んだ場合はレベルアップ
+    if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+        slot.level = (slot.level + 1).min(8);
+    } else if w.weapon_slots.len() < MAX_SLOTS {
         w.weapon_slots.push(WeaponSlot::new(kind));
-    } else {
-        // 同種スロットがあれば上書き、なければ先頭を上書き
-        let target = w.weapon_slots.iter().position(|s| s.kind == kind).unwrap_or(0);
-        w.weapon_slots[target] = WeaponSlot::new(kind);
     }
+    // MAX_SLOTS かつ新規武器の場合は何もしない（選択肢に出ないはず）
 
     // レベルアップ処理: レベルを上げ、フラグを解除
     // exp は累積値で管理するためリセットしない

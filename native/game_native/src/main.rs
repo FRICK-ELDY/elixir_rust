@@ -97,6 +97,7 @@ struct BulletWorld {
     positions_y:  Vec<f32>,
     velocities_x: Vec<f32>,
     velocities_y: Vec<f32>,
+    damage:       Vec<i32>,
     lifetime:     Vec<f32>,
     alive:        Vec<bool>,
     count:        usize,
@@ -104,15 +105,16 @@ struct BulletWorld {
 
 impl BulletWorld {
     fn new() -> Self {
-        Self { positions_x: Vec::new(), positions_y: Vec::new(), velocities_x: Vec::new(), velocities_y: Vec::new(), lifetime: Vec::new(), alive: Vec::new(), count: 0 }
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), velocities_x: Vec::new(), velocities_y: Vec::new(), damage: Vec::new(), lifetime: Vec::new(), alive: Vec::new(), count: 0 }
     }
-    fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32) {
+    fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32) {
         let slot = self.alive.iter().position(|&a| !a);
         if let Some(i) = slot {
             self.positions_x[i]  = x;
             self.positions_y[i]  = y;
             self.velocities_x[i] = vx;
             self.velocities_y[i] = vy;
+            self.damage[i]       = dmg;
             self.lifetime[i]     = BULLET_LIFETIME;
             self.alive[i]        = true;
         } else {
@@ -120,6 +122,7 @@ impl BulletWorld {
             self.positions_y.push(y);
             self.velocities_x.push(vx);
             self.velocities_y.push(vy);
+            self.damage.push(dmg);
             self.lifetime.push(BULLET_LIFETIME);
             self.alive.push(true);
         }
@@ -209,6 +212,47 @@ impl ParticleWorld {
     }
 }
 
+// ─── Step 17: 武器スロット ─────────────────────────────────────
+#[derive(Clone, PartialEq)]
+enum WeaponKind { MagicWand, Axe, Cross }
+
+impl WeaponKind {
+    fn name(&self) -> &'static str {
+        match self { Self::MagicWand => "magic_wand", Self::Axe => "axe", Self::Cross => "cross" }
+    }
+    fn base_cooldown(&self) -> f32 {
+        match self { Self::MagicWand => WEAPON_COOLDOWN, Self::Axe => 1.5, Self::Cross => 2.0 }
+    }
+    fn base_damage(&self) -> i32 {
+        match self { Self::MagicWand => BULLET_DAMAGE, Self::Axe => 25, Self::Cross => 15 }
+    }
+}
+
+struct WeaponSlot {
+    kind:           WeaponKind,
+    level:          u32,
+    cooldown_timer: f32,
+}
+
+impl WeaponSlot {
+    fn new(kind: WeaponKind) -> Self { Self { kind, level: 1, cooldown_timer: 0.0 } }
+    fn effective_cooldown(&self) -> f32 {
+        let b = self.kind.base_cooldown();
+        (b * (1.0 - (self.level as f32 - 1.0) * 0.07)).max(b * 0.5)
+    }
+    fn effective_damage(&self) -> i32 {
+        let b = self.kind.base_damage();
+        b + (self.level as i32 - 1) * (b / 4).max(1)
+    }
+    fn bullet_count(&self) -> usize {
+        match self.kind {
+            WeaponKind::MagicWand => match self.level { 1..=2 => 1, 3..=4 => 2, 5..=6 => 3, _ => 4 },
+            WeaponKind::Cross     => if self.level >= 4 { 8 } else { 4 },
+            _                     => 1,
+        }
+    }
+}
+
 struct GameWorld {
     player:           PlayerState,
     enemies:          EnemyWorld,
@@ -219,12 +263,12 @@ struct GameWorld {
     score:            u32,
     elapsed_seconds:  f32,
     last_spawn_secs:  f32,
-    weapon_cooldown:  f32,
+    // Step 17: 武器スロット（複数武器・レベル管理）
+    weapon_slots:     Vec<WeaponSlot>,
     exp:              u32,
     level:            u32,
     level_up_pending: bool,
     weapon_choices:   Vec<String>,
-    level_up_timer:   f32,
 }
 
 impl GameWorld {
@@ -245,21 +289,17 @@ impl GameWorld {
             score:            0,
             elapsed_seconds:  0.0,
             last_spawn_secs:  0.0,
-            weapon_cooldown:  0.0,
+            weapon_slots:     vec![WeaponSlot::new(WeaponKind::MagicWand)],
             exp:              0,
             level:            1,
             level_up_pending: false,
             weapon_choices:   Vec::new(),
-            level_up_timer:   0.0,
         }
     }
 
     fn step(&mut self, dt: f32) {
+        // レベルアップ中はゲームを一時停止（プレイヤーがボタンを選ぶまで待つ）
         if self.level_up_pending {
-            self.level_up_timer += dt;
-            if self.level_up_timer >= 3.0 {
-                self.confirm_level_up();
-            }
             return;
         }
 
@@ -341,17 +381,50 @@ impl GameWorld {
             }
         }
 
-        // 武器（Magic Wand）
-        self.weapon_cooldown = (self.weapon_cooldown - dt).max(0.0);
-        if self.weapon_cooldown <= 0.0 {
-            if let Some(ti) = self.find_nearest_enemy(px, py) {
-                let tx  = self.enemies.positions_x[ti] + ENEMY_RADIUS;
-                let ty  = self.enemies.positions_y[ti] + ENEMY_RADIUS;
-                let bdx = tx - px;
-                let bdy = ty - py;
-                let bl  = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
-                self.bullets.spawn(px, py, (bdx / bl) * BULLET_SPEED, (bdy / bl) * BULLET_SPEED);
-                self.weapon_cooldown = WEAPON_COOLDOWN;
+        // Step 17: 武器スロット発射処理（レベルに応じたクールダウン・ダメージ・弾数）
+        let slot_count = self.weapon_slots.len();
+        for si in 0..slot_count {
+            self.weapon_slots[si].cooldown_timer = (self.weapon_slots[si].cooldown_timer - dt).max(0.0);
+            if self.weapon_slots[si].cooldown_timer > 0.0 { continue; }
+
+            let cd     = self.weapon_slots[si].effective_cooldown();
+            let dmg    = self.weapon_slots[si].effective_damage();
+            let bcount = self.weapon_slots[si].bullet_count();
+
+            match self.weapon_slots[si].kind {
+                WeaponKind::MagicWand => {
+                    if let Some(ti) = self.find_nearest_enemy(px, py) {
+                        let tx  = self.enemies.positions_x[ti] + ENEMY_RADIUS;
+                        let ty  = self.enemies.positions_y[ti] + ENEMY_RADIUS;
+                        let bdx = tx - px;
+                        let bdy = ty - py;
+                        let base_angle = bdy.atan2(bdx);
+                        let spread = std::f32::consts::PI * 0.08;
+                        let half   = (bcount as f32 - 1.0) / 2.0;
+                        for bi in 0..bcount {
+                            let angle = base_angle + (bi as f32 - half) * spread;
+                            self.bullets.spawn(px, py, angle.cos() * BULLET_SPEED, angle.sin() * BULLET_SPEED, dmg);
+                        }
+                        self.weapon_slots[si].cooldown_timer = cd;
+                    }
+                }
+                WeaponKind::Axe => {
+                    self.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg);
+                    self.weapon_slots[si].cooldown_timer = cd;
+                }
+                WeaponKind::Cross => {
+                    let dirs_4: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
+                    let diag = std::f32::consts::FRAC_1_SQRT_2;
+                    let dirs_8: [(f32, f32); 8] = [
+                        (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
+                        (diag, -diag), (-diag, -diag), (diag, diag), (-diag, diag),
+                    ];
+                    let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
+                    for &(dx_dir, dy_dir) in dirs {
+                        self.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg);
+                    }
+                    self.weapon_slots[si].cooldown_timer = cd;
+                }
             }
         }
 
@@ -377,8 +450,9 @@ impl GameWorld {
         let hit_r2 = BULLET_RADIUS + ENEMY_RADIUS;
         for bi in 0..bl {
             if !self.bullets.alive[bi] { continue; }
-            let bx = self.bullets.positions_x[bi];
-            let by = self.bullets.positions_y[bi];
+            let bx  = self.bullets.positions_x[bi];
+            let by  = self.bullets.positions_y[bi];
+            let dmg = self.bullets.damage[bi];
             let nearby = self.collision.dynamic.query_nearby(bx, by, hit_r2);
             for ei in nearby {
                 if !self.enemies.alive[ei] { continue; }
@@ -387,7 +461,7 @@ impl GameWorld {
                 let ddx = bx - ex;
                 let ddy = by - ey;
                 if ddx * ddx + ddy * ddy < hit_r2 * hit_r2 {
-                    self.enemies.hp[ei] -= BULLET_DAMAGE as f32;
+                    self.enemies.hp[ei] -= dmg as f32;
                     if self.enemies.hp[ei] <= 0.0 {
                         self.enemies.kill(ei);
                         self.score += 10;
@@ -437,19 +511,43 @@ impl GameWorld {
         let required = exp_for_next(self.level);
         if self.exp >= required {
             self.level_up_pending = true;
-            self.level_up_timer   = 0.0;
-            self.weapon_choices   = vec![
-                "magic_wand".to_string(),
-                "axe".to_string(),
-                "cross".to_string(),
+            // 選択肢: 未所持優先 → 低レベル順（Lv.8 は除外）
+            let all: &[(&str, WeaponKind)] = &[
+                ("magic_wand", WeaponKind::MagicWand),
+                ("axe",        WeaponKind::Axe),
+                ("cross",      WeaponKind::Cross),
             ];
+            let mut choices: Vec<(i32, String)> = all.iter()
+                .filter_map(|(name, kind)| {
+                    let lv = self.weapon_slots.iter()
+                        .find(|s| &s.kind == kind)
+                        .map(|s| s.level)
+                        .unwrap_or(0);
+                    if lv >= 8 { return None; }
+                    let sort_key = if lv == 0 { -1i32 } else { lv as i32 };
+                    Some((sort_key, name.to_string()))
+                })
+                .collect();
+            choices.sort_by_key(|(k, _)| *k);
+            self.weapon_choices = choices.into_iter().take(3).map(|(_, n)| n).collect();
         }
     }
 
-    fn confirm_level_up(&mut self) {
+    /// 武器を選択してレベルアップを確定する
+    fn select_weapon(&mut self, weapon_name: &str) {
+        let kind = match weapon_name {
+            "axe"   => WeaponKind::Axe,
+            "cross" => WeaponKind::Cross,
+            _       => WeaponKind::MagicWand,
+        };
+        const MAX_SLOTS: usize = 6;
+        if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+            slot.level = (slot.level + 1).min(8);
+        } else if self.weapon_slots.len() < MAX_SLOTS {
+            self.weapon_slots.push(WeaponSlot::new(kind));
+        }
         self.level            += 1;
         self.level_up_pending  = false;
-        self.level_up_timer    = 0.0;
         self.weapon_choices.clear();
     }
 
@@ -499,6 +597,10 @@ impl GameWorld {
             fps,
             level_up_pending: self.level_up_pending,
             weapon_choices:  self.weapon_choices.clone(),
+            // Step 17: 武器レベル情報
+            weapon_levels:   self.weapon_slots.iter()
+                .map(|s| (s.kind.name().to_string(), s.level))
+                .collect(),
         }
     }
 }
@@ -615,6 +717,23 @@ impl ApplicationHandler for App {
                 self.game.player.input_dx = dx;
                 self.game.player.input_dy = dy;
 
+                // Step 17: レベルアップ中は 1/2/3 キーで武器選択
+                if self.game.level_up_pending {
+                    let idx = if self.keys_held.contains(&KeyCode::Digit1) { Some(0) }
+                              else if self.keys_held.contains(&KeyCode::Digit2) { Some(1) }
+                              else if self.keys_held.contains(&KeyCode::Digit3) { Some(2) }
+                              else { None };
+                    if let Some(i) = idx {
+                        if let Some(choice) = self.game.weapon_choices.get(i).cloned() {
+                            // キーを離すまで連続選択しないよう、選択後にキーを消費
+                            self.keys_held.remove(&KeyCode::Digit1);
+                            self.keys_held.remove(&KeyCode::Digit2);
+                            self.keys_held.remove(&KeyCode::Digit3);
+                            self.game.select_weapon(&choice);
+                        }
+                    }
+                }
+
                 // ─── ゲームステップ ────────────────────────────
                 if let Some(last) = self.last_update {
                     let dt = now.duration_since(last).as_secs_f32().min(0.05);
@@ -630,7 +749,10 @@ impl ApplicationHandler for App {
                     let particle_data = self.game.get_particle_data();
                     renderer.update_instances(&render_data, &particle_data);
                     let hud = self.game.hud_data(renderer.current_fps);
-                    renderer.render(window, &hud);
+                    // Step 17: ボタンクリックで武器選択
+                    if let Some(chosen) = renderer.render(window, &hud) {
+                        self.game.select_weapon(&chosen);
+                    }
                 }
 
                 if let Some(window) = self.window.as_ref() {
