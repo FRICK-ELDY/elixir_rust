@@ -120,10 +120,11 @@ struct ParticleWorld {
     size:         Vec<f32>,
     alive:        Vec<bool>,
     count:        usize,
+    rng:          SimpleRng,
 }
 
 impl ParticleWorld {
-    fn new() -> Self {
+    fn new(seed: u64) -> Self {
         Self {
             positions_x:  Vec::new(),
             positions_y:  Vec::new(),
@@ -135,6 +136,7 @@ impl ParticleWorld {
             size:         Vec::new(),
             alive:        Vec::new(),
             count:        0,
+            rng:          SimpleRng::new(seed),
         }
     }
 
@@ -168,14 +170,14 @@ impl ParticleWorld {
         self.count += 1;
     }
 
-    fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4], rng: &mut SimpleRng) {
+    fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4]) {
         for _ in 0..count {
-            let angle = rng.next_f32() * std::f32::consts::TAU;
-            let speed = 50.0 + rng.next_f32() * 150.0;
+            let angle = self.rng.next_f32() * std::f32::consts::TAU;
+            let speed = 50.0 + self.rng.next_f32() * 150.0;
             let vx = angle.cos() * speed;
             let vy = angle.sin() * speed;
-            let lt = 0.3 + rng.next_f32() * 0.4;
-            let sz = 4.0 + rng.next_f32() * 4.0;
+            let lt = 0.3 + self.rng.next_f32() * 0.4;
+            let sz = 4.0 + self.rng.next_f32() * 4.0;
             self.spawn_one(x, y, vx, vy, lt, color, sz);
         }
     }
@@ -215,7 +217,7 @@ impl GameWorld {
             },
             enemies:          EnemyWorld::new(),
             bullets:          BulletWorld::new(),
-            particles:        ParticleWorld::new(),
+            particles:        ParticleWorld::new(67890),
             collision:        CollisionWorld::new(CELL_SIZE),
             rng:              SimpleRng::new(42),
             score:            0,
@@ -309,7 +311,7 @@ impl GameWorld {
                     self.player.hp = (self.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
                     self.player.invincible_timer = INVINCIBLE_DURATION;
                     // 赤いパーティクル
-                    self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0], &mut self.rng);
+                    self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
                 }
             }
         }
@@ -367,10 +369,10 @@ impl GameWorld {
                         self.exp   += 5;
                         self.check_level_up();
                         // 撃破: オレンジパーティクル
-                        self.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0], &mut self.rng);
+                        self.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0]);
                     } else {
                         // ヒット: 黄色パーティクル
-                        self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0], &mut self.rng);
+                        self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                     }
                     self.bullets.kill(bi);
                     break;

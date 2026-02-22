@@ -241,10 +241,11 @@ pub struct ParticleWorld {
     pub size:         Vec<f32>,
     pub alive:        Vec<bool>,
     pub count:        usize,
+    rng:              SimpleRng,
 }
 
 impl ParticleWorld {
-    pub fn new() -> Self {
+    pub fn new(seed: u64) -> Self {
         Self {
             positions_x:  Vec::new(),
             positions_y:  Vec::new(),
@@ -256,6 +257,7 @@ impl ParticleWorld {
             size:         Vec::new(),
             alive:        Vec::new(),
             count:        0,
+            rng:          SimpleRng::new(seed),
         }
     }
 
@@ -298,21 +300,14 @@ impl ParticleWorld {
         self.count += 1;
     }
 
-    pub fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4], rng: &mut SimpleRng) {
+    pub fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4]) {
         for _ in 0..count {
-            let angle = rng.next_f32() * std::f32::consts::TAU;
-            let speed = 50.0 + rng.next_f32() * 150.0;
+            let angle = self.rng.next_f32() * std::f32::consts::TAU;
+            let speed = 50.0 + self.rng.next_f32() * 150.0;
             let vx = angle.cos() * speed;
             let vy = angle.sin() * speed;
-            let lifetime = 0.3 + rng.next_f32() * 0.4;
-            let size = 4.0 + rng.next_f32() * 4.0;
-            self.spawn_one(x, y, vx, vy, lifetime, color, size);
-        }
-    }
-
-    /// rng を外部で使用できない場合のエミット（事前に生成したパラメータリストを受け取る）
-    pub fn emit_params(&mut self, params: &[(f32, f32, f32, f32, f32, f32, [f32; 4])]) {
-        for &(x, y, vx, vy, lifetime, size, color) in params {
+            let lifetime = 0.3 + self.rng.next_f32() * 0.4;
+            let size = 4.0 + self.rng.next_f32() * 4.0;
             self.spawn_one(x, y, vx, vy, lifetime, color, size);
         }
     }
@@ -323,21 +318,6 @@ impl ParticleWorld {
             self.count = self.count.saturating_sub(1);
         }
     }
-}
-
-/// パーティクルエミット用のパラメータを乱数で生成する（借用分離のため）
-fn gen_particle_params(
-    x: f32, y: f32, count: usize, color: [f32; 4], rng: &mut SimpleRng,
-) -> Vec<(f32, f32, f32, f32, f32, f32, [f32; 4])> {
-    (0..count).map(|_| {
-        let angle = rng.next_f32() * std::f32::consts::TAU;
-        let speed = 50.0 + rng.next_f32() * 150.0;
-        let vx = angle.cos() * speed;
-        let vy = angle.sin() * speed;
-        let lifetime = 0.3 + rng.next_f32() * 0.4;
-        let size = 4.0 + rng.next_f32() * 4.0;
-        (x, y, vx, vy, lifetime, size, color)
-    }).collect()
 }
 
 /// 最近接の生存敵インデックスを返す
@@ -463,7 +443,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         },
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
-        particles:          ParticleWorld::new(),
+        particles:          ParticleWorld::new(67890),
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
@@ -559,8 +539,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 // 赤いパーティクルをプレイヤー位置に発生
                 let ppx = w.player.x + PLAYER_RADIUS;
                 let ppy = w.player.y + PLAYER_RADIUS;
-                let params = gen_particle_params(ppx, ppy, 6, [1.0, 0.15, 0.15, 1.0], &mut w.rng);
-                w.particles.emit_params(&params);
+                w.particles.emit(ppx, ppy, 6, [1.0, 0.15, 0.15, 1.0]);
             }
         }
     }
@@ -621,10 +600,6 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
-    // ── プレイヤーがダメージを受けた時に赤いパーティクルを発生 ──
-    // invincible_timer がちょうどセットされたフレームを検出
-    // （前フレームで 0 だったが今フレームで > 0 になった場合）
-
     // 2. 弾丸を移動・寿命更新
     let bullet_len = w.bullets.len();
     for i in 0..bullet_len {
@@ -680,12 +655,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                         }
                     }
                     // ── Step 16: 敵撃破時オレンジパーティクル ────
-                    let params = gen_particle_params(ex, ey, 8, [1.0, 0.5, 0.1, 1.0], &mut w.rng);
-                    w.particles.emit_params(&params);
+                    w.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0]);
                 } else {
                     // ── Step 16: ヒット時黄色パーティクル ─────────
-                    let params = gen_particle_params(ex, ey, 3, [1.0, 0.9, 0.3, 1.0], &mut w.rng);
-                    w.particles.emit_params(&params);
+                    w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                 }
                 w.bullets.kill(bi);
                 break;
