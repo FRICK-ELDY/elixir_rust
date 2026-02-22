@@ -32,26 +32,33 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// アトラス内の UV 座標（320x64 px アトラス）
+// アトラス内の UV 座標（384x64 px アトラス）
 // [0..63]    プレイヤー
-// [64..127]  敵
-// [128..191] 弾丸
-// [192..255] パーティクル
-// [256..319] 予備
-const ATLAS_W: f32 = 320.0;
+// [64..127]  Slime（緑）
+// [128..191] Bat（紫）
+// [192..255] Golem（灰）
+// [256..319] 弾丸
+// [320..383] パーティクル
+const ATLAS_W: f32 = 384.0;
 const ATLAS_H: f32 = 64.0;
 
 pub fn player_uv() -> ([f32; 2], [f32; 2]) {
     ([0.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
-pub fn enemy_uv() -> ([f32; 2], [f32; 2]) {
+pub fn slime_uv() -> ([f32; 2], [f32; 2]) {
     ([64.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
-pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
+pub fn bat_uv() -> ([f32; 2], [f32; 2]) {
     ([128.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
-pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
+pub fn golem_uv() -> ([f32; 2], [f32; 2]) {
     ([192.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
+    ([256.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
+    ([320.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -75,6 +82,24 @@ impl ScreenUniform {
 // ─── インスタンスバッファの最大容量 ────────────────────────────
 // Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 = 14001
 const MAX_INSTANCES: usize = 14001;
+
+// 敵タイプ別のスプライトサイズ（px）
+// kind: 1=slime(40px), 2=bat(24px), 3=golem(64px)
+fn enemy_sprite_size(kind: u8) -> f32 {
+    match kind {
+        2 => 24.0,  // Bat: 小さい
+        3 => 64.0,  // Golem: 大きい
+        _ => 40.0,  // Slime: 基本
+    }
+}
+
+fn enemy_uv_for_kind(kind: u8) -> ([f32; 2], [f32; 2]) {
+    match kind {
+        2 => bat_uv(),
+        3 => golem_uv(),
+        _ => slime_uv(),
+    }
+}
 
 // ─── HUD データ ────────────────────────────────────────────────
 
@@ -392,7 +417,7 @@ impl Renderer {
     }
 
     /// ゲーム状態からインスタンスリストを構築して GPU バッファを更新する
-    /// render_data: [(x, y, kind)] kind: 0=player, 1=enemy, 2=bullet
+    /// render_data: [(x, y, kind)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
     pub fn update_instances(
         &mut self,
@@ -400,7 +425,6 @@ impl Renderer {
         particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
     ) {
         let (player_uv_off, player_uv_sz)     = player_uv();
-        let (enemy_uv_off, enemy_uv_sz)       = enemy_uv();
         let (bullet_uv_off, bullet_uv_sz)     = bullet_uv();
         let (particle_uv_off, particle_uv_sz) = particle_uv();
 
@@ -416,14 +440,19 @@ impl Renderer {
                     uv_size:    player_uv_sz,
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
-                1 => SpriteInstance {
-                    position:   [x, y],
-                    size:       [SPRITE_SIZE * 0.75, SPRITE_SIZE * 0.75],
-                    uv_offset:  enemy_uv_off,
-                    uv_size:    enemy_uv_sz,
-                    color_tint: [1.0, 1.0, 1.0, 1.0],
-                },
-                2 => SpriteInstance {
+                // 敵タイプ: 1=slime, 2=bat, 3=golem
+                1 | 2 | 3 => {
+                    let sz = enemy_sprite_size(kind);
+                    let (uv_off, uv_sz) = enemy_uv_for_kind(kind);
+                    SpriteInstance {
+                        position:   [x, y],
+                        size:       [sz, sz],
+                        uv_offset:  uv_off,
+                        uv_size:    uv_sz,
+                        color_tint: [1.0, 1.0, 1.0, 1.0],
+                    }
+                }
+                4 => SpriteInstance {
                     position:   [x - 8.0, y - 8.0],
                     size:       [16.0, 16.0],
                     uv_offset:  bullet_uv_off,

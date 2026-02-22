@@ -4,7 +4,7 @@ mod weapon;
 
 use constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
+    CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS,
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
@@ -20,6 +20,8 @@ use std::sync::Mutex;
 rustler::atoms! {
     ok,
     slime,
+    bat,
+    golem,
     // 武器種別アトム
     magic_wand,
     axe,
@@ -27,6 +29,48 @@ rustler::atoms! {
     // level_up 通知アトム
     level_up,
     no_change,
+}
+
+// ─── 敵タイプ ─────────────────────────────────────────────────
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
+pub enum EnemyKind {
+    Slime = 0,
+    Bat   = 1,
+    Golem = 2,
+}
+
+impl EnemyKind {
+    pub fn max_hp(&self) -> f32 {
+        match self { Self::Slime => 30.0, Self::Bat => 15.0, Self::Golem => 150.0 }
+    }
+    pub fn speed(&self) -> f32 {
+        match self { Self::Slime => 80.0, Self::Bat => 160.0, Self::Golem => 40.0 }
+    }
+    pub fn radius(&self) -> f32 {
+        match self { Self::Slime => 20.0, Self::Bat => 12.0, Self::Golem => 32.0 }
+    }
+    pub fn exp_reward(&self) -> u32 {
+        match self { Self::Slime => 5, Self::Bat => 3, Self::Golem => 20 }
+    }
+    pub fn damage_per_sec(&self) -> f32 {
+        match self { Self::Slime => 20.0, Self::Bat => 10.0, Self::Golem => 40.0 }
+    }
+    /// レンダラーに渡す kind 値（0=player, 1=slime, 2=bat, 3=golem）
+    pub fn render_kind(&self) -> u8 {
+        match self { Self::Slime => 1, Self::Bat => 2, Self::Golem => 3 }
+    }
+    pub fn from_atom(atom: Atom) -> Self {
+        // rustler::atoms! で定義したアトム関数と直接比較する
+        // bat() / golem() は初回呼び出し時に BEAM アトムテーブルに登録される
+        if atom == bat() {
+            Self::Bat
+        } else if atom == golem() {
+            Self::Golem
+        } else {
+            Self::Slime
+        }
+    }
 }
 
 // ─── Player ───────────────────────────────────────────────────
@@ -48,6 +92,7 @@ pub struct EnemyWorld {
     pub speeds:       Vec<f32>,
     pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
+    pub kinds:        Vec<EnemyKind>,
     pub count:        usize,
     /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
     pub sep_x:        Vec<f32>,
@@ -66,6 +111,7 @@ impl EnemyWorld {
             speeds:       Vec::new(),
             hp:           Vec::new(),
             alive:        Vec::new(),
+            kinds:        Vec::new(),
             count:        0,
             sep_x:        Vec::new(),
             sep_y:        Vec::new(),
@@ -84,8 +130,10 @@ impl EnemyWorld {
         }
     }
 
-    /// 画面外のランダムな位置に `n` 体スポーン（死んだスロットを再利用）
-    pub fn spawn(&mut self, positions: &[(f32, f32)]) {
+    /// 指定タイプの敵を `positions` の座標にスポーン（死んだスロットを再利用）
+    pub fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
+        let speed  = kind.speed();
+        let max_hp = kind.max_hp();
         let mut slot = 0usize;
         for &(x, y) in positions {
             // 死んでいるスロットを探して再利用
@@ -104,9 +152,10 @@ impl EnemyWorld {
                 self.positions_y[slot]  = y;
                 self.velocities_x[slot] = 0.0;
                 self.velocities_y[slot] = 0.0;
-                self.speeds[slot]       = 80.0;
-                self.hp[slot]           = 30.0;
+                self.speeds[slot]       = speed;
+                self.hp[slot]           = max_hp;
                 self.alive[slot]        = true;
+                self.kinds[slot]        = kind;
                 self.count += 1;
                 slot += 1;
             } else {
@@ -114,9 +163,10 @@ impl EnemyWorld {
                 self.positions_y.push(y);
                 self.velocities_x.push(0.0);
                 self.velocities_y.push(0.0);
-                self.speeds.push(80.0);
-                self.hp.push(30.0);
+                self.speeds.push(speed);
+                self.hp.push(max_hp);
                 self.alive.push(true);
+                self.kinds.push(kind);
                 self.sep_x.push(0.0);
                 self.sep_y.push(0.0);
                 self.count += 1;
@@ -450,15 +500,17 @@ fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
     ok()
 }
 
-/// 敵をスポーン（Step 9）
+/// 敵をスポーン（Step 9 / Step 18）
+/// kind: :slime | :bat | :golem
 #[rustler::nif]
-fn spawn_enemies(world: ResourceArc<GameWorld>, _kind: Atom, count: usize) -> Atom {
+fn spawn_enemies(world: ResourceArc<GameWorld>, kind: Atom, count: usize) -> Atom {
     let mut w = world.0.lock().unwrap();
+    let enemy_kind = EnemyKind::from_atom(kind);
     // rng の借用を先に終わらせてから enemies に渡す
     let positions: Vec<(f32, f32)> = (0..count)
         .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
         .collect();
-    w.enemies.spawn(&positions);
+    w.enemies.spawn(&positions, enemy_kind);
     ok()
 }
 
@@ -499,21 +551,26 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     // 1. 動的 Spatial Hash を再構築
     w.rebuild_collision();
 
-    // 2. プレイヤー周辺の敵を取得して円-円判定
-    let hit_radius = PLAYER_RADIUS + ENEMY_RADIUS;
-    let candidates = w.collision.dynamic.query_nearby(px, py, hit_radius);
-
     // 無敵タイマーを更新
     if w.player.invincible_timer > 0.0 {
         w.player.invincible_timer = (w.player.invincible_timer - dt).max(0.0);
     }
 
+    // 2. プレイヤー周辺の敵を取得して円-円判定
+    // 最大の敵半径（Golem: 32px）を考慮してクエリ半径を広げる
+    let max_enemy_radius = 32.0_f32;
+    let query_radius = PLAYER_RADIUS + max_enemy_radius;
+    let candidates = w.collision.dynamic.query_nearby(px, py, query_radius);
+
     for idx in candidates {
         if !w.enemies.alive[idx] {
             continue;
         }
-        let ex = w.enemies.positions_x[idx] + ENEMY_RADIUS;
-        let ey = w.enemies.positions_y[idx] + ENEMY_RADIUS;
+        let kind = w.enemies.kinds[idx];
+        let enemy_r = kind.radius();
+        let hit_radius = PLAYER_RADIUS + enemy_r;
+        let ex = w.enemies.positions_x[idx] + enemy_r;
+        let ey = w.enemies.positions_y[idx] + enemy_r;
         let ddx = px - ex;
         let ddy = py - ey;
         let dist_sq = ddx * ddx + ddy * ddy;
@@ -521,7 +578,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         if dist_sq < hit_radius * hit_radius {
             // 敵→プレイヤーへのダメージ（無敵時間中は無効）
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
-                w.player.hp = (w.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
+                w.player.hp = (w.player.hp - kind.damage_per_sec() * dt).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
                 // 赤いパーティクルをプレイヤー位置に発生
                 let ppx = w.player.x + PLAYER_RADIUS;
@@ -548,8 +605,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             match kind {
                 WeaponKind::MagicWand => {
                     if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
-                        let tx   = w.enemies.positions_x[ti] + ENEMY_RADIUS;
-                        let ty   = w.enemies.positions_y[ti] + ENEMY_RADIUS;
+                        let target_r = w.enemies.kinds[ti].radius();
+                        let tx   = w.enemies.positions_x[ti] + target_r;
+                        let ty   = w.enemies.positions_y[ti] + target_r;
                         let bdx  = tx - px;
                         let bdy  = ty - py;
                         // bcount 発同時発射（Lv3 で 2 発、Lv5 で 3 発）
@@ -628,7 +686,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     }
 
     // 3. 弾丸 vs 敵 衝突判定
-    let hit_r = BULLET_RADIUS + ENEMY_RADIUS;
+    // 最大の敵半径（Golem: 32px）を考慮してクエリ半径を広げる
+    let bullet_query_r = BULLET_RADIUS + 32.0_f32;
     for bi in 0..bullet_len {
         if !w.bullets.alive[bi] {
             continue;
@@ -637,13 +696,16 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         let by  = w.bullets.positions_y[bi];
         let dmg = w.bullets.damage[bi];
 
-        let nearby = w.collision.dynamic.query_nearby(bx, by, hit_r);
+        let nearby = w.collision.dynamic.query_nearby(bx, by, bullet_query_r);
         for ei in nearby {
             if !w.enemies.alive[ei] {
                 continue;
             }
-            let ex  = w.enemies.positions_x[ei] + ENEMY_RADIUS;
-            let ey  = w.enemies.positions_y[ei] + ENEMY_RADIUS;
+            let kind    = w.enemies.kinds[ei];
+            let enemy_r = kind.radius();
+            let hit_r   = BULLET_RADIUS + enemy_r;
+            let ex  = w.enemies.positions_x[ei] + enemy_r;
+            let ey  = w.enemies.positions_y[ei] + enemy_r;
             let ddx = bx - ex;
             let ddy = by - ey;
             if ddx * ddx + ddy * ddy < hit_r * hit_r {
@@ -651,17 +713,23 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 if w.enemies.hp[ei] <= 0.0 {
                     w.enemies.kill(ei);
                     // ── Step 13: 敵撃破でスコア加算 ──────────────
-                    w.score += 10;
-                    // ── Step 14: 経験値加算・レベルアップ判定 ────
-                    w.exp += 5;
+                    // Step 18: 敵タイプに応じたスコア（経験値 × 2）
+                    w.score += kind.exp_reward() * 2;
+                    // ── Step 14/18: 経験値加算（タイプ別）────────
+                    w.exp += kind.exp_reward();
                     if !w.level_up_pending {
                         let required = exp_required_for_next(w.level);
                         if w.exp >= required {
                             w.level_up_pending = true;
                         }
                     }
-                    // ── Step 16: 敵撃破時オレンジパーティクル ────
-                    w.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0]);
+                    // ── Step 16/18: 敵タイプ別パーティクル ────────
+                    let particle_color = match kind {
+                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],   // オレンジ
+                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],   // 紫
+                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],   // 灰
+                    };
+                    w.particles.emit(ex, ey, 8, particle_color);
                 } else {
                     // ── Step 16: ヒット時黄色パーティクル ─────────
                     w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
@@ -701,7 +769,7 @@ fn get_player_hp(world: ResourceArc<GameWorld>) -> f64 {
 }
 
 /// 描画データを返す: [{x, y, kind}] のリスト
-/// kind: 0 = player, 1 = enemy, 2 = bullet
+/// kind: 0 = player, 1 = slime, 2 = bat, 3 = golem, 4 = bullet
 #[rustler::nif]
 fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     let w = world.0.lock().unwrap();
@@ -709,12 +777,16 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     result.push((w.player.x, w.player.y, 0u8));
     for i in 0..w.enemies.len() {
         if w.enemies.alive[i] {
-            result.push((w.enemies.positions_x[i], w.enemies.positions_y[i], 1u8));
+            result.push((
+                w.enemies.positions_x[i],
+                w.enemies.positions_y[i],
+                w.enemies.kinds[i].render_kind(),
+            ));
         }
     }
     for i in 0..w.bullets.len() {
         if w.bullets.alive[i] {
-            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], 2u8));
+            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], 4u8));
         }
     }
     result
@@ -845,6 +917,11 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
 #[allow(non_local_definitions)]
 fn load(env: rustler::Env, _: rustler::Term) -> bool {
     let _ = rustler::resource!(GameWorld, env);
+    // アトムを NIF ロード時に事前登録して、比較が確実に動作するようにする
+    let _ = ok();
+    let _ = slime();
+    let _ = bat();
+    let _ = golem();
     true
 }
 
