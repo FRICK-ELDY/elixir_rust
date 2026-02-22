@@ -1,8 +1,9 @@
 mod constants;
 mod physics;
 
-use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use constants::{FRAME_BUDGET_MS, PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
 use physics::spatial_hash::CollisionWorld;
+use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::Mutex;
 
@@ -225,31 +226,51 @@ pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usiz
     nearest
 }
 
-/// Chase AI: 全敵をプレイヤーに向けて移動
+/// Chase AI: 全敵をプレイヤーに向けて移動（rayon で並列化）
 pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, dt: f32) {
-    for i in 0..enemies.len() {
-        if !enemies.alive[i] {
-            continue;
-        }
-        let dx = player_x - enemies.positions_x[i];
-        let dy = player_y - enemies.positions_y[i];
-        let dist = (dx * dx + dy * dy).sqrt().max(0.001);
-        enemies.velocities_x[i] = (dx / dist) * enemies.speeds[i];
-        enemies.velocities_y[i] = (dy / dist) * enemies.speeds[i];
-        enemies.positions_x[i] += enemies.velocities_x[i] * dt;
-        enemies.positions_y[i] += enemies.velocities_y[i] * dt;
-    }
+    let len = enemies.len();
+    // 各 SoA 配列をスライスとして取り出し、zip で並列イテレート
+    let positions_x  = &mut enemies.positions_x[..len];
+    let positions_y  = &mut enemies.positions_y[..len];
+    let velocities_x = &mut enemies.velocities_x[..len];
+    let velocities_y = &mut enemies.velocities_y[..len];
+    let speeds       = &enemies.speeds[..len];
+    let alive        = &enemies.alive[..len];
+
+    (
+        positions_x,
+        positions_y,
+        velocities_x,
+        velocities_y,
+        speeds,
+        alive,
+    )
+        .into_par_iter()
+        .for_each(|(px, py, vx, vy, speed, is_alive)| {
+            if !*is_alive {
+                return;
+            }
+            let dx   = player_x - *px;
+            let dy   = player_y - *py;
+            let dist = (dx * dx + dy * dy).sqrt().max(0.001);
+            *vx  = (dx / dist) * speed;
+            *vy  = (dy / dist) * speed;
+            *px += *vx * dt;
+            *py += *vy * dt;
+        });
 }
 
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
-    pub frame_id:  u32,
-    pub player:    PlayerState,
-    pub enemies:   EnemyWorld,
-    pub bullets:   BulletWorld,
-    pub weapon:    WeaponState,
-    pub rng:       SimpleRng,
-    pub collision: CollisionWorld,
+    pub frame_id:           u32,
+    pub player:             PlayerState,
+    pub enemies:            EnemyWorld,
+    pub bullets:            BulletWorld,
+    pub weapon:             WeaponState,
+    pub rng:                SimpleRng,
+    pub collision:          CollisionWorld,
+    /// 直近フレームの物理ステップ処理時間（ミリ秒）
+    pub last_frame_time_ms: f64,
 }
 
 impl GameWorldInner {
@@ -282,8 +303,8 @@ fn add(a: i64, b: i64) -> NifResult<i64> {
 #[rustler::nif]
 fn create_world() -> ResourceArc<GameWorld> {
     ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
-        frame_id:  0,
-        player:    PlayerState {
+        frame_id:           0,
+        player:             PlayerState {
             x:                SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
             y:                SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
             input_dx:         0.0,
@@ -291,11 +312,12 @@ fn create_world() -> ResourceArc<GameWorld> {
             hp:               100.0,
             invincible_timer: 0.0,
         },
-        enemies:   EnemyWorld::new(),
-        bullets:   BulletWorld::new(),
-        weapon:    WeaponState::new(),
-        rng:       SimpleRng::new(12345),
-        collision: CollisionWorld::new(CELL_SIZE),
+        enemies:            EnemyWorld::new(),
+        bullets:            BulletWorld::new(),
+        weapon:             WeaponState::new(),
+        rng:                SimpleRng::new(12345),
+        collision:          CollisionWorld::new(CELL_SIZE),
+        last_frame_time_ms: 0.0,
     })))
 }
 
@@ -320,9 +342,11 @@ fn spawn_enemies(world: ResourceArc<GameWorld>, _kind: Atom, count: usize) -> At
     ok()
 }
 
-/// 物理ステップ: プレイヤー移動 + Chase AI + 衝突判定（Step 8/9/10）
+/// 物理ステップ: プレイヤー移動 + Chase AI + 衝突判定（Step 8/9/10/12）
 #[rustler::nif(schedule = "DirtyCpu")]
 fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
+    let t_start = std::time::Instant::now();
+
     let mut w = world.0.lock().unwrap();
     w.frame_id += 1;
 
@@ -445,6 +469,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 12: フレーム時間計測 ────────────────────────────────
+    let elapsed_ms = t_start.elapsed().as_secs_f64() * 1000.0;
+    w.last_frame_time_ms = elapsed_ms;
+    if elapsed_ms > FRAME_BUDGET_MS {
+        eprintln!(
+            "[PERF] Frame budget exceeded: {:.2}ms (enemies: {})",
+            elapsed_ms,
+            w.enemies.count
+        );
+    }
+
     w.frame_id
 }
 
@@ -487,6 +522,20 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
 fn get_bullet_count(world: ResourceArc<GameWorld>) -> usize {
     let w = world.0.lock().unwrap();
     w.bullets.count
+}
+
+/// 直近フレームの物理ステップ処理時間をミリ秒で返す（Step 12）
+#[rustler::nif]
+fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> f64 {
+    let w = world.0.lock().unwrap();
+    w.last_frame_time_ms
+}
+
+/// 現在生存している敵の数を返す（Step 12）
+#[rustler::nif]
+fn get_enemy_count(world: ResourceArc<GameWorld>) -> usize {
+    let w = world.0.lock().unwrap();
+    w.enemies.count
 }
 
 // ─── ローダー ─────────────────────────────────────────────────

@@ -9,3 +9,7 @@ pub const PLAYER_SIZE: f32 = SPRITE_SIZE;
 
 /// プレイヤーの移動速度（ピクセル/秒）
 pub const PLAYER_SPEED: f32 = 200.0;
+
+/// 60fps のフレーム予算（ミリ秒）
+#[allow(dead_code)]
+pub const FRAME_BUDGET_MS: f64 = 1000.0 / 60.0;

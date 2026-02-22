@@ -706,6 +706,7 @@ dependencies = [
  "bytemuck",
  "image",
  "pollster",
+ "rayon",
  "rustler",
  "wgpu",
  "winit",
