@@ -48,4 +48,10 @@ defmodule Game.NifBridge do
 
   # 武器選択をスキップしてレベルアップ待機を解除する（全武器MaxLv時など）
   def skip_level_up(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 19: アイテム描画データ取得（[{x, y, kind}] kind: 5=gem, 6=potion, 7=magnet）
+  def get_item_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 19: 磁石エフェクト残り時間（秒）を取得
+  def get_magnet_timer(_world), do: :erlang.nif_error(:nif_not_loaded)
 end

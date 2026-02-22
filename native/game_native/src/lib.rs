@@ -31,6 +31,75 @@ rustler::atoms! {
     no_change,
 }
 
+// ─── アイテムタイプ ────────────────────────────────────────────
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ItemKind {
+    Gem    = 0,  // 経験値宝石（緑）
+    Potion = 1,  // 回復ポーション（赤）
+    Magnet = 2,  // 磁石（黄）
+}
+
+impl ItemKind {
+    /// レンダラーに渡す kind 値（5=gem, 6=potion, 7=magnet）
+    pub fn render_kind(&self) -> u8 {
+        match self { Self::Gem => 5, Self::Potion => 6, Self::Magnet => 7 }
+    }
+}
+
+// ─── アイテム SoA ──────────────────────────────────────────────
+pub struct ItemWorld {
+    pub positions_x: Vec<f32>,
+    pub positions_y: Vec<f32>,
+    pub kinds:       Vec<ItemKind>,
+    pub value:       Vec<u32>,   // Gem: EXP 量, Potion: 回復量, Magnet: 未使用
+    pub alive:       Vec<bool>,
+    pub count:       usize,
+}
+
+impl ItemWorld {
+    pub fn new() -> Self {
+        Self {
+            positions_x: Vec::new(),
+            positions_y: Vec::new(),
+            kinds:       Vec::new(),
+            value:       Vec::new(),
+            alive:       Vec::new(),
+            count:       0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions_x.len()
+    }
+
+    pub fn spawn(&mut self, x: f32, y: f32, kind: ItemKind, value: u32) {
+        for i in 0..self.positions_x.len() {
+            if !self.alive[i] {
+                self.positions_x[i] = x;
+                self.positions_y[i] = y;
+                self.kinds[i]       = kind;
+                self.value[i]       = value;
+                self.alive[i]       = true;
+                self.count += 1;
+                return;
+            }
+        }
+        self.positions_x.push(x);
+        self.positions_y.push(y);
+        self.kinds.push(kind);
+        self.value.push(value);
+        self.alive.push(true);
+        self.count += 1;
+    }
+
+    pub fn kill(&mut self, i: usize) {
+        if self.alive[i] {
+            self.alive[i] = false;
+            self.count = self.count.saturating_sub(1);
+        }
+    }
+}
+
 // ─── 敵タイプ ─────────────────────────────────────────────────
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[repr(u8)]
@@ -414,6 +483,10 @@ pub struct GameWorldInner {
     pub enemies:            EnemyWorld,
     pub bullets:            BulletWorld,
     pub particles:          ParticleWorld,
+    /// ─── Step 19: アイテム ────────────────────────────────────
+    pub items:              ItemWorld,
+    /// 磁石エフェクト残り時間（秒）
+    pub magnet_timer:       f32,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
@@ -484,6 +557,8 @@ fn create_world() -> ResourceArc<GameWorld> {
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
         particles:          ParticleWorld::new(67890),
+        items:              ItemWorld::new(),
+        magnet_timer:       0.0,
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
@@ -670,6 +745,59 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 19: アイテム更新（磁石エフェクト + 自動収集） ─────
+    {
+        // 磁石タイマー更新
+        if w.magnet_timer > 0.0 {
+            w.magnet_timer = (w.magnet_timer - dt).max(0.0);
+        }
+
+        // 磁石エフェクト: アクティブ中は宝石がプレイヤーに向かって飛んでくる
+        if w.magnet_timer > 0.0 {
+            let item_len = w.items.len();
+            for i in 0..item_len {
+                if !w.items.alive[i] { continue; }
+                if w.items.kinds[i] != ItemKind::Gem { continue; }
+                let dx = px - w.items.positions_x[i];
+                let dy = py - w.items.positions_y[i];
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                w.items.positions_x[i] += (dx / dist) * 300.0 * dt;
+                w.items.positions_y[i] += (dy / dist) * 300.0 * dt;
+            }
+        }
+
+        // 自動収集判定（通常: 60px、磁石中: 全画面）
+        let collect_r = if w.magnet_timer > 0.0 { 9999.0_f32 } else { 60.0_f32 };
+        let collect_r_sq = collect_r * collect_r;
+        let item_len = w.items.len();
+        for i in 0..item_len {
+            if !w.items.alive[i] { continue; }
+            let dx = px - w.items.positions_x[i];
+            let dy = py - w.items.positions_y[i];
+            if dx * dx + dy * dy <= collect_r_sq {
+                match w.items.kinds[i] {
+                    ItemKind::Gem => {
+                        // EXP は既に撃破時に加算済みのため、ここでは収集のみ
+                    }
+                    ItemKind::Potion => {
+                        // HP 回復（最大 HP を超えない）
+                        w.player.hp = (w.player.hp + w.items.value[i] as f32)
+                            .min(w.player_max_hp);
+                        // 回復パーティクル（緑）
+                        w.particles.emit(px, py, 6, [0.2, 1.0, 0.4, 1.0]);
+                    }
+                    ItemKind::Magnet => {
+                        // 磁石エフェクトを 10 秒間有効化
+                        w.magnet_timer = 10.0;
+                        // 磁石パーティクル（黄）
+                        w.particles.emit(px, py, 8, [1.0, 0.9, 0.2, 1.0]);
+                    }
+                }
+                w.items.kill(i);
+            }
+        }
+    }
+
     // 2. 弾丸を移動・寿命更新
     let bullet_len = w.bullets.len();
     for i in 0..bullet_len {
@@ -714,35 +842,49 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             let ey  = w.enemies.positions_y[ei] + enemy_r;
             let ddx = bx - ex;
             let ddy = by - ey;
-            if ddx * ddx + ddy * ddy < hit_r * hit_r {
-                w.enemies.hp[ei] -= dmg as f32;
-                if w.enemies.hp[ei] <= 0.0 {
-                    w.enemies.kill(ei);
-                    // ── Step 13: 敵撃破でスコア加算 ──────────────
-                    // Step 18: 敵タイプに応じたスコア（経験値 × 2）
-                    w.score += kind.exp_reward() * 2;
-                    // ── Step 14/18: 経験値加算（タイプ別）────────
-                    w.exp += kind.exp_reward();
-                    if !w.level_up_pending {
-                        let required = exp_required_for_next(w.level);
-                        if w.exp >= required {
-                            w.level_up_pending = true;
+                if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                    w.enemies.hp[ei] -= dmg as f32;
+                    if w.enemies.hp[ei] <= 0.0 {
+                        w.enemies.kill(ei);
+                        // ── Step 13: 敵撃破でスコア加算 ──────────────
+                        // Step 18: 敵タイプに応じたスコア（経験値 × 2）
+                        w.score += kind.exp_reward() * 2;
+                        // ── Step 14/18: 経験値加算（タイプ別）────────
+                        w.exp += kind.exp_reward();
+                        if !w.level_up_pending {
+                            let required = exp_required_for_next(w.level);
+                            if w.exp >= required {
+                                w.level_up_pending = true;
+                            }
                         }
+                        // ── Step 16/18: 敵タイプ別パーティクル ────────
+                        let particle_color = match kind {
+                            EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],   // オレンジ
+                            EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],   // 紫
+                            EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],   // 灰
+                        };
+                        w.particles.emit(ex, ey, 8, particle_color);
+                        // ── Step 19: アイテムドロップ ──────────────────
+                        // 経験値宝石は 100% ドロップ
+                        let gem_value = kind.exp_reward();
+                        w.items.spawn(ex, ey, ItemKind::Gem, gem_value);
+                        // 回復ポーション: 5% ドロップ
+                        let roll_potion = w.rng.next_u32() % 100;
+                        if roll_potion < 5 {
+                            w.items.spawn(ex, ey, ItemKind::Potion, 20);
+                        }
+                        // 磁石: 2% ドロップ
+                        let roll_magnet = w.rng.next_u32() % 100;
+                        if roll_magnet < 2 {
+                            w.items.spawn(ex, ey, ItemKind::Magnet, 0);
+                        }
+                    } else {
+                        // ── Step 16: ヒット時黄色パーティクル ─────────
+                        w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                     }
-                    // ── Step 16/18: 敵タイプ別パーティクル ────────
-                    let particle_color = match kind {
-                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],   // オレンジ
-                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],   // 紫
-                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],   // 灰
-                    };
-                    w.particles.emit(ex, ey, 8, particle_color);
-                } else {
-                    // ── Step 16: ヒット時黄色パーティクル ─────────
-                    w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
+                    w.bullets.kill(bi);
+                    break;
                 }
-                w.bullets.kill(bi);
-                break;
-            }
         }
     }
 
@@ -923,6 +1065,32 @@ fn skip_level_up(world: ResourceArc<GameWorld>) -> Atom {
     let mut w = world.0.lock().unwrap();
     w.complete_level_up();
     ok()
+}
+
+// ─── Step 19: アイテム関連 NIF ─────────────────────────────────
+
+/// アイテム描画データを返す: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
+#[rustler::nif]
+fn get_item_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
+    let w = world.0.lock().unwrap();
+    let mut result = Vec::with_capacity(w.items.count);
+    for i in 0..w.items.len() {
+        if w.items.alive[i] {
+            result.push((
+                w.items.positions_x[i],
+                w.items.positions_y[i],
+                w.items.kinds[i].render_kind(),
+            ));
+        }
+    }
+    result
+}
+
+/// 磁石エフェクトの残り時間（秒）を返す
+#[rustler::nif]
+fn get_magnet_timer(world: ResourceArc<GameWorld>) -> f64 {
+    let w = world.0.lock().unwrap();
+    w.magnet_timer as f64
 }
 
 // ─── ローダー ─────────────────────────────────────────────────

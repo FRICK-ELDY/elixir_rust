@@ -32,14 +32,17 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// アトラス内の UV 座標（384x64 px アトラス）
+// アトラス内の UV 座標（576x64 px アトラス）
 // [0..63]    プレイヤー
 // [64..127]  Slime（緑）
 // [128..191] Bat（紫）
 // [192..255] Golem（灰）
 // [256..319] 弾丸
 // [320..383] パーティクル
-const ATLAS_W: f32 = 384.0;
+// [384..447] 経験値宝石（緑）
+// [448..511] 回復ポーション（赤）
+// [512..575] 磁石（黄）
+const ATLAS_W: f32 = 576.0;
 const ATLAS_H: f32 = 64.0;
 
 pub fn player_uv() -> ([f32; 2], [f32; 2]) {
@@ -59,6 +62,15 @@ pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
 }
 pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
     ([320.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn gem_uv() -> ([f32; 2], [f32; 2]) {
+    ([384.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn potion_uv() -> ([f32; 2], [f32; 2]) {
+    ([448.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn magnet_uv() -> ([f32; 2], [f32; 2]) {
+    ([512.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -80,8 +92,8 @@ impl ScreenUniform {
 }
 
 // ─── インスタンスバッファの最大容量 ────────────────────────────
-// Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 = 14001
-const MAX_INSTANCES: usize = 14001;
+// Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 + Items 500 = 14501
+const MAX_INSTANCES: usize = 14501;
 
 // 敵タイプ別のスプライトサイズ（px）
 // kind: 1=slime(40px), 2=bat(24px), 3=golem(64px)
@@ -121,6 +133,10 @@ pub struct HudData {
     pub weapon_choices:   Vec<String>,
     /// Step 17: 装備中の武器レベル [(weapon_name, level)]
     pub weapon_levels:    Vec<(String, u32)>,
+    /// Step 19: 磁石エフェクト残り時間（秒）
+    pub magnet_timer:     f32,
+    /// Step 19: アイテム数
+    pub item_count:       usize,
 }
 
 // ─── Renderer ─────────────────────────────────────────────────
@@ -419,17 +435,22 @@ impl Renderer {
     /// ゲーム状態からインスタンスリストを構築して GPU バッファを更新する
     /// render_data: [(x, y, kind)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
+    /// item_data: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
     pub fn update_instances(
         &mut self,
         render_data: &[(f32, f32, u8)],
         particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
+        item_data: &[(f32, f32, u8)],
     ) {
         let (player_uv_off, player_uv_sz)     = player_uv();
         let (bullet_uv_off, bullet_uv_sz)     = bullet_uv();
         let (particle_uv_off, particle_uv_sz) = particle_uv();
+        let (gem_uv_off, gem_uv_sz)           = gem_uv();
+        let (potion_uv_off, potion_uv_sz)     = potion_uv();
+        let (magnet_uv_off, magnet_uv_sz)     = magnet_uv();
 
         let mut instances: Vec<SpriteInstance> =
-            Vec::with_capacity(render_data.len() + particle_data.len());
+            Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len());
 
         for &(x, y, kind) in render_data {
             let inst = match kind {
@@ -476,6 +497,24 @@ impl Renderer {
                 uv_offset:  particle_uv_off,
                 uv_size:    particle_uv_sz,
                 color_tint: [r, g, b, alpha],
+            });
+        }
+
+        // Step 19: アイテムを描画
+        for &(x, y, kind) in item_data {
+            if instances.len() >= MAX_INSTANCES { break; }
+            let (uv_off, uv_sz, sz) = match kind {
+                5 => (gem_uv_off,    gem_uv_sz,    20.0_f32), // Gem: 20px
+                6 => (potion_uv_off, potion_uv_sz, 24.0_f32), // Potion: 24px
+                7 => (magnet_uv_off, magnet_uv_sz, 28.0_f32), // Magnet: 28px
+                _ => continue,
+            };
+            instances.push(SpriteInstance {
+                position:   [x - sz / 2.0, y - sz / 2.0],
+                size:       [sz, sz],
+                uv_offset:  uv_off,
+                uv_size:    uv_sz,
+                color_tint: [1.0, 1.0, 1.0, 1.0],
             });
         }
 
@@ -758,6 +797,17 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                         egui::RichText::new(format!("Bullets: {}", hud.bullet_count))
                             .color(egui::Color32::from_rgb(200, 200, 255)),
                     );
+                    ui.label(
+                        egui::RichText::new(format!("Items: {}", hud.item_count))
+                            .color(egui::Color32::from_rgb(150, 230, 150)),
+                    );
+                    if hud.magnet_timer > 0.0 {
+                        ui.label(
+                            egui::RichText::new(format!("MAGNET {:.1}s", hud.magnet_timer))
+                                .color(egui::Color32::from_rgb(255, 230, 50))
+                                .strong(),
+                        );
+                    }
                 });
         });
 

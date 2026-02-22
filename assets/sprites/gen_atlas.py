@@ -1,18 +1,21 @@
 """
 アトラス画像生成スクリプト
-384x64 px の RGBA PNG を生成する:
+576x64 px の RGBA PNG を生成する:
   [  0.. 63] x [0..63]: プレイヤー（水色の正方形）
   [ 64..127] x [0..63]: Slime（緑のスライム）
   [128..191] x [0..63]: Bat（紫のコウモリ）
   [192..255] x [0..63]: Golem（灰色のゴーレム）
   [256..319] x [0..63]: 弾丸（黄色い円）
   [320..383] x [0..63]: パーティクル（白い円）
+  [384..447] x [0..63]: 経験値宝石（緑のダイヤ）
+  [448..511] x [0..63]: 回復ポーション（赤い瓶）
+  [512..575] x [0..63]: 磁石（黄色い磁石）
 """
 
 import struct
 import zlib
 
-W, H = 384, 64
+W, H = 576, 64
 
 pixels = bytearray(W * H * 4)
 
@@ -99,6 +102,51 @@ fill_circle(288, 32, 7, 255, 255, 100)
 fill_circle(352, 32, 12, 255, 255, 255)
 fill_circle(352, 32, 8, 255, 255, 255)
 
+# 経験値宝石: 緑のダイヤ形
+# 外枠（濃い緑）
+for dy in range(-18, 19):
+    for dx in range(-18, 19):
+        if abs(dx) + abs(dy) <= 18:
+            set_pixel(416 + dx, 32 + dy, 0, 140, 60)
+# 内側（明るい緑）
+for dy in range(-14, 15):
+    for dx in range(-14, 15):
+        if abs(dx) + abs(dy) <= 14:
+            set_pixel(416 + dx, 32 + dy, 60, 220, 100)
+# ハイライト（白）
+for dy in range(-6, 4):
+    for dx in range(-6, 1):
+        if abs(dx) + abs(dy) <= 6:
+            set_pixel(416 + dx - 3, 32 + dy - 4, 200, 255, 200)
+
+# 回復ポーション: 赤い瓶
+# 瓶の胴体（赤）
+fill_rect(452, 24, 476, 56, 180, 30, 30)
+fill_rect(454, 26, 474, 54, 220, 60, 60)
+# 瓶の首（細い）
+fill_rect(458, 16, 470, 26, 160, 40, 40)
+fill_rect(460, 14, 468, 18, 140, 140, 140)
+# 液体ハイライト（明るい赤）
+fill_rect(456, 30, 462, 50, 255, 100, 100)
+# 光沢（白）
+fill_rect(456, 28, 462, 36, 255, 200, 200)
+
+# 磁石: 黄色いU字型磁石
+# 左脚
+fill_rect(520, 28, 536, 56, 180, 140, 0)
+fill_rect(522, 30, 534, 54, 240, 200, 0)
+# 右脚
+fill_rect(552, 28, 568, 56, 180, 140, 0)
+fill_rect(554, 30, 566, 54, 240, 200, 0)
+# 上部アーチ
+fill_rect(520, 16, 568, 32, 180, 140, 0)
+fill_rect(522, 18, 566, 30, 240, 200, 0)
+# 先端（赤と青で磁極を表現）
+fill_rect(520, 48, 536, 58, 220, 40, 40)
+fill_rect(552, 48, 568, 58, 40, 80, 220)
+# 光沢
+fill_rect(524, 20, 532, 26, 255, 240, 120)
+
 # PNG エンコード（標準ライブラリのみ使用）
 def make_png(width, height, rgba_data):
     def chunk(name, data):
@@ -124,10 +172,13 @@ def make_png(width, height, rgba_data):
 with open('atlas.png', 'wb') as f:
     f.write(make_png(W, H, pixels))
 
-print("atlas.png generated (384x64 RGBA)")
+print("atlas.png generated (576x64 RGBA)")
 print("  [  0.. 63] Player")
 print("  [ 64..127] Slime (green)")
 print("  [128..191] Bat   (purple)")
 print("  [192..255] Golem (gray)")
 print("  [256..319] Bullet (yellow)")
 print("  [320..383] Particle (white)")
+print("  [384..447] Gem (green diamond)")
+print("  [448..511] Potion (red bottle)")
+print("  [512..575] Magnet (yellow U-shape)")
