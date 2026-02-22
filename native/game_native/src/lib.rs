@@ -1,6 +1,8 @@
 mod constants;
+mod physics;
 
 use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use physics::spatial_hash::CollisionWorld;
 use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::Mutex;
 
@@ -9,12 +11,26 @@ rustler::atoms! {
     slime,
 }
 
+// ─── 定数 ─────────────────────────────────────────────────────
+/// プレイヤーの当たり判定半径（px）
+const PLAYER_RADIUS: f32 = PLAYER_SIZE / 2.0;
+/// 敵の当たり判定半径（px）
+const ENEMY_RADIUS: f32 = 20.0;
+/// 敵がプレイヤーに触れたときのダメージ（HP/秒）
+const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
+/// 被弾後の無敵時間（秒）
+const INVINCIBLE_DURATION: f32 = 0.5;
+/// Spatial Hash のセルサイズ（px）
+const CELL_SIZE: f32 = 80.0;
+
 // ─── プレイヤー ───────────────────────────────────────────────
 pub struct PlayerState {
-    pub x:        f32,
-    pub y:        f32,
-    pub input_dx: f32,
-    pub input_dy: f32,
+    pub x:                f32,
+    pub y:                f32,
+    pub input_dx:         f32,
+    pub input_dy:         f32,
+    pub hp:               f32,
+    pub invincible_timer: f32,
 }
 
 // ─── 敵 SoA ──────────────────────────────────────────────────
@@ -24,6 +40,7 @@ pub struct EnemyWorld {
     pub velocities_x: Vec<f32>,
     pub velocities_y: Vec<f32>,
     pub speeds:       Vec<f32>,
+    pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
 }
 
@@ -35,6 +52,7 @@ impl EnemyWorld {
             velocities_x: Vec::new(),
             velocities_y: Vec::new(),
             speeds:       Vec::new(),
+            hp:           Vec::new(),
             alive:        Vec::new(),
         }
     }
@@ -52,6 +70,7 @@ impl EnemyWorld {
             self.velocities_x.push(0.0);
             self.velocities_y.push(0.0);
             self.speeds.push(80.0);
+            self.hp.push(30.0);
             self.alive.push(true);
         }
     }
@@ -87,10 +106,29 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
-    pub frame_id: u32,
-    pub player:   PlayerState,
-    pub enemies:  EnemyWorld,
-    pub rng:      SimpleRng,
+    pub frame_id:  u32,
+    pub player:    PlayerState,
+    pub enemies:   EnemyWorld,
+    pub rng:       SimpleRng,
+    pub collision: CollisionWorld,
+}
+
+impl GameWorldInner {
+    /// 衝突判定用の Spatial Hash を再構築する（clone 不要）
+    fn rebuild_collision(&mut self) {
+        self.collision.dynamic.clear();
+        self.enemies.alive
+            .iter()
+            .enumerate()
+            .filter(|&(_, &is_alive)| is_alive)
+            .for_each(|(i, _)| {
+                self.collision.dynamic.insert(
+                    i,
+                    self.enemies.positions_x[i],
+                    self.enemies.positions_y[i],
+                );
+            });
+    }
 }
 
 pub struct GameWorld(pub Mutex<GameWorldInner>);
@@ -107,13 +145,16 @@ fn create_world() -> ResourceArc<GameWorld> {
     ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
         frame_id:  0,
         player:    PlayerState {
-            x:        SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
-            y:        SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
-            input_dx: 0.0,
-            input_dy: 0.0,
+            x:                SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
+            y:                SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
+            input_dx:         0.0,
+            input_dy:         0.0,
+            hp:               100.0,
+            invincible_timer: 0.0,
         },
-        enemies: EnemyWorld::new(),
-        rng:     SimpleRng::new(12345),
+        enemies:   EnemyWorld::new(),
+        rng:       SimpleRng::new(12345),
+        collision: CollisionWorld::new(CELL_SIZE),
     })))
 }
 
@@ -138,7 +179,7 @@ fn spawn_enemies(world: ResourceArc<GameWorld>, _kind: Atom, count: usize) -> At
     ok()
 }
 
-/// 物理ステップ: プレイヤー移動 + Chase AI（Step 8/9）
+/// 物理ステップ: プレイヤー移動 + Chase AI + 衝突判定（Step 8/9/10）
 #[rustler::nif(schedule = "DirtyCpu")]
 fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     let mut w = world.0.lock().unwrap();
@@ -159,9 +200,41 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     w.player.y = w.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
 
     // Chase AI
-    let px = w.player.x;
-    let py = w.player.y;
+    let px = w.player.x + PLAYER_RADIUS;
+    let py = w.player.y + PLAYER_RADIUS;
     update_chase_ai(&mut w.enemies, px, py, dt);
+
+    // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
+    // 1. 動的 Spatial Hash を再構築
+    w.rebuild_collision();
+
+    // 2. プレイヤー周辺の敵を取得して円-円判定
+    let hit_radius = PLAYER_RADIUS + ENEMY_RADIUS;
+    let candidates = w.collision.dynamic.query_nearby(px, py, hit_radius);
+
+    // 無敵タイマーを更新
+    if w.player.invincible_timer > 0.0 {
+        w.player.invincible_timer = (w.player.invincible_timer - dt).max(0.0);
+    }
+
+    for idx in candidates {
+        if !w.enemies.alive[idx] {
+            continue;
+        }
+        let ex = w.enemies.positions_x[idx] + ENEMY_RADIUS;
+        let ey = w.enemies.positions_y[idx] + ENEMY_RADIUS;
+        let ddx = px - ex;
+        let ddy = py - ey;
+        let dist_sq = ddx * ddx + ddy * ddy;
+
+        if dist_sq < hit_radius * hit_radius {
+            // 敵→プレイヤーへのダメージ（無敵時間中は無効）
+            if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
+                w.player.hp = (w.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
+                w.player.invincible_timer = INVINCIBLE_DURATION;
+            }
+        }
+    }
 
     w.frame_id
 }
@@ -171,6 +244,13 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
 fn get_player_pos(world: ResourceArc<GameWorld>) -> (f64, f64) {
     let w = world.0.lock().unwrap();
     (w.player.x as f64, w.player.y as f64)
+}
+
+/// プレイヤー HP を返す（Step 10）
+#[rustler::nif]
+fn get_player_hp(world: ResourceArc<GameWorld>) -> f64 {
+    let w = world.0.lock().unwrap();
+    w.player.hp as f64
 }
 
 /// 描画データを返す: [{x, y, kind}] のリスト
