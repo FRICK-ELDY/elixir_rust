@@ -3,11 +3,13 @@ mod physics;
 
 use constants::{
     BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, FRAME_BUDGET_MS,
+    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
+    ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS,
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_COOLDOWN,
 };
 use physics::rng::SimpleRng;
+use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
@@ -45,6 +47,9 @@ pub struct EnemyWorld {
     pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
     pub count:        usize,
+    /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
+    pub sep_x:        Vec<f32>,
+    pub sep_y:        Vec<f32>,
 }
 
 impl EnemyWorld {
@@ -58,6 +63,8 @@ impl EnemyWorld {
             hp:           Vec::new(),
             alive:        Vec::new(),
             count:        0,
+            sep_x:        Vec::new(),
+            sep_y:        Vec::new(),
         }
     }
 
@@ -105,10 +112,23 @@ impl EnemyWorld {
                 self.speeds.push(80.0);
                 self.hp.push(30.0);
                 self.alive.push(true);
+                self.sep_x.push(0.0);
+                self.sep_y.push(0.0);
                 self.count += 1;
             }
         }
     }
+}
+
+impl EnemySeparation for EnemyWorld {
+    fn enemy_count(&self) -> usize          { self.positions_x.len() }
+    fn is_alive(&self, i: usize) -> bool    { self.alive[i] }
+    fn pos_x(&self, i: usize) -> f32        { self.positions_x[i] }
+    fn pos_y(&self, i: usize) -> f32        { self.positions_y[i] }
+    fn add_pos_x(&mut self, i: usize, v: f32) { self.positions_x[i] += v; }
+    fn add_pos_y(&mut self, i: usize, v: f32) { self.positions_y[i] += v; }
+    fn sep_buf_x(&mut self) -> &mut Vec<f32>  { &mut self.sep_x }
+    fn sep_buf_y(&mut self) -> &mut Vec<f32>  { &mut self.sep_y }
 }
 
 /// 画面外の四辺いずれかにランダムに配置
@@ -373,6 +393,7 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
         });
 }
 
+
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
     pub frame_id:           u32,
@@ -507,6 +528,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     let px = w.player.x + PLAYER_RADIUS;
     let py = w.player.y + PLAYER_RADIUS;
     update_chase_ai(&mut w.enemies, px, py, dt);
+
+    // 敵同士の重なりを解消する分離パス
+    apply_separation(&mut w.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
     // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築

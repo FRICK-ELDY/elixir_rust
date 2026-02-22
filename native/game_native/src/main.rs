@@ -11,7 +11,8 @@ use std::time::Instant;
 
 use constants::{
     BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, INVINCIBLE_DURATION,
+    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
+    ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES, WEAPON_COOLDOWN,
 };
@@ -25,6 +26,7 @@ use winit::{
 };
 
 use physics::rng::SimpleRng;
+use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
 
 struct PlayerState {
@@ -41,11 +43,14 @@ struct EnemyWorld {
     hp:           Vec<f32>,
     alive:        Vec<bool>,
     count:        usize,
+    /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
+    sep_x:        Vec<f32>,
+    sep_y:        Vec<f32>,
 }
 
 impl EnemyWorld {
     fn new() -> Self {
-        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0 }
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0, sep_x: Vec::new(), sep_y: Vec::new() }
     }
     fn spawn(&mut self, positions: &[(f32, f32)]) {
         for &(x, y) in positions {
@@ -60,6 +65,8 @@ impl EnemyWorld {
                 self.positions_y.push(y);
                 self.hp.push(30.0);
                 self.alive.push(true);
+                self.sep_x.push(0.0);
+                self.sep_y.push(0.0);
             }
             self.count += 1;
         }
@@ -68,6 +75,17 @@ impl EnemyWorld {
         if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
     }
     fn len(&self) -> usize { self.positions_x.len() }
+}
+
+impl EnemySeparation for EnemyWorld {
+    fn enemy_count(&self) -> usize          { self.positions_x.len() }
+    fn is_alive(&self, i: usize) -> bool    { self.alive[i] }
+    fn pos_x(&self, i: usize) -> f32        { self.positions_x[i] }
+    fn pos_y(&self, i: usize) -> f32        { self.positions_y[i] }
+    fn add_pos_x(&mut self, i: usize, v: f32) { self.positions_x[i] += v; }
+    fn add_pos_y(&mut self, i: usize, v: f32) { self.positions_y[i] += v; }
+    fn sep_buf_x(&mut self) -> &mut Vec<f32>  { &mut self.sep_x }
+    fn sep_buf_y(&mut self) -> &mut Vec<f32>  { &mut self.sep_y }
 }
 
 struct BulletWorld {
@@ -268,6 +286,9 @@ impl GameWorld {
             self.enemies.positions_x[i] += (ddx / dist) * 80.0 * dt;
             self.enemies.positions_y[i] += (ddy / dist) * 80.0 * dt;
         }
+
+        // 敵同士の重なりを解消する分離パス
+        apply_separation(&mut self.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
         // 衝突: Spatial Hash 再構築
         self.collision.dynamic.clear();
