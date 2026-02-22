@@ -437,6 +437,12 @@ pub struct GameWorldInner {
 }
 
 impl GameWorldInner {
+    /// レベルアップ処理を完了する（武器選択・スキップ共通）
+    fn complete_level_up(&mut self) {
+        self.level += 1;
+        self.level_up_pending = false;
+    }
+
     /// 衝突判定用の Spatial Hash を再構築する（clone 不要）
     fn rebuild_collision(&mut self) {
         self.collision.dynamic.clear();
@@ -904,11 +910,18 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     }
     // Slots full + new weapon: no-op (Elixir-side generate_weapon_choices must not offer this)
 
-    // レベルアップ処理: レベルを上げ、フラグを解除
     // exp は累積値で管理するためリセットしない
-    w.level += 1;
-    w.level_up_pending = false;
+    w.complete_level_up();
 
+    ok()
+}
+
+/// 武器選択をスキップしてレベルアップ待機を解除する
+/// 全武器がMaxLvの場合など、選択肢がない状態で呼び出す
+#[rustler::nif]
+fn skip_level_up(world: ResourceArc<GameWorld>) -> Atom {
+    let mut w = world.0.lock().unwrap();
+    w.complete_level_up();
     ok()
 }
 

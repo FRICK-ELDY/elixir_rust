@@ -45,4 +45,7 @@ defmodule Game.NifBridge do
 
   # Step 17: 装備中の武器スロット情報取得（[{weapon_name, level}]）
   def get_weapon_levels(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # 武器選択をスキップしてレベルアップ待機を解除する（全武器MaxLv時など）
+  def skip_level_up(_world), do: :erlang.nif_error(:nif_not_loaded)
 end

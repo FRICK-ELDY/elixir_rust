@@ -568,15 +568,17 @@ impl GameWorld {
 
     /// 武器を選択してレベルアップを確定する
     fn select_weapon(&mut self, weapon_name: &str) {
-        let kind = match weapon_name {
-            "axe"   => WeaponKind::Axe,
-            "cross" => WeaponKind::Cross,
-            _       => WeaponKind::MagicWand,
-        };
-        if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
-            slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
-        } else if self.weapon_slots.len() < MAX_WEAPON_SLOTS {
-            self.weapon_slots.push(WeaponSlot::new(kind));
+        if weapon_name != "__skip__" {
+            let kind = match weapon_name {
+                "axe"   => WeaponKind::Axe,
+                "cross" => WeaponKind::Cross,
+                _       => WeaponKind::MagicWand,
+            };
+            if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+                slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
+            } else if self.weapon_slots.len() < MAX_WEAPON_SLOTS {
+                self.weapon_slots.push(WeaponSlot::new(kind));
+            }
         }
         self.level            += 1;
         self.level_up_pending  = false;
@@ -753,19 +755,24 @@ impl ApplicationHandler for App {
                 self.game.player.input_dx = dx;
                 self.game.player.input_dy = dy;
 
-                // Step 17: レベルアップ中は 1/2/3 キーで武器選択
+                // Step 17: レベルアップ中は 1/2/3 キーで武器選択、Esc でスキップ
                 if self.game.level_up_pending {
-                    let idx = if self.keys_held.contains(&KeyCode::Digit1) { Some(0) }
-                              else if self.keys_held.contains(&KeyCode::Digit2) { Some(1) }
-                              else if self.keys_held.contains(&KeyCode::Digit3) { Some(2) }
-                              else { None };
-                    if let Some(i) = idx {
-                        if let Some(choice) = self.game.weapon_choices.get(i).cloned() {
-                            // キーを離すまで連続選択しないよう、選択後にキーを消費
-                            self.keys_held.remove(&KeyCode::Digit1);
-                            self.keys_held.remove(&KeyCode::Digit2);
-                            self.keys_held.remove(&KeyCode::Digit3);
-                            self.game.select_weapon(&choice);
+                    if self.keys_held.contains(&KeyCode::Escape) {
+                        self.keys_held.remove(&KeyCode::Escape);
+                        self.game.select_weapon("__skip__");
+                    } else {
+                        let idx = if self.keys_held.contains(&KeyCode::Digit1) { Some(0) }
+                                  else if self.keys_held.contains(&KeyCode::Digit2) { Some(1) }
+                                  else if self.keys_held.contains(&KeyCode::Digit3) { Some(2) }
+                                  else { None };
+                        if let Some(i) = idx {
+                            if let Some(choice) = self.game.weapon_choices.get(i).cloned() {
+                                // キーを離すまで連続選択しないよう、選択後にキーを消費
+                                self.keys_held.remove(&KeyCode::Digit1);
+                                self.keys_held.remove(&KeyCode::Digit2);
+                                self.keys_held.remove(&KeyCode::Digit3);
+                                self.game.select_weapon(&choice);
+                            }
                         }
                     }
                 }
@@ -785,7 +792,7 @@ impl ApplicationHandler for App {
                     let particle_data = self.game.get_particle_data();
                     renderer.update_instances(&render_data, &particle_data);
                     let hud = self.game.hud_data(renderer.current_fps);
-                    // Step 17: ボタンクリックで武器選択
+                    // Step 17: ボタンクリックで武器選択（"__skip__" はスキップ扱い）
                     if let Some(chosen) = renderer.render(window, &hud) {
                         self.game.select_weapon(&chosen);
                     }
