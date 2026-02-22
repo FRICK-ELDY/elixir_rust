@@ -12,6 +12,8 @@ defmodule Game.Application do
       # Demonstrates OTP: this process is completely isolated from the game loop.
       # A crash here never affects gameplay; the supervisor restarts it automatically.
       Game.StressMonitor,
+      # Step 25: ゲームセッション統計収集（Elixir の強みを活かした独立プロセス）
+      Game.Stats,
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]

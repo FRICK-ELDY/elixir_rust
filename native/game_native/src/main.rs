@@ -72,16 +72,27 @@ impl EnemyKind {
     fn frame_count(self) -> u8 {
         match self { Self::Slime => 4, Self::Bat => 2, Self::Golem => 2 }
     }
+    // Step 25: 難易度カーブに合わせた敵タイプ選択
     fn for_elapsed(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> Self {
-        if elapsed_secs < 30.0 {
+        if elapsed_secs < 60.0 {
+            // 0〜60s: スライムのみ（チュートリアル）
             Self::Slime
-        } else if elapsed_secs < 60.0 {
-            if rng.next_u32() % 2 == 0 { Self::Slime } else { Self::Bat }
+        } else if elapsed_secs < 180.0 {
+            // 60〜180s: スライム70% + コウモリ30%
+            if rng.next_u32() % 10 < 7 { Self::Slime } else { Self::Bat }
+        } else if elapsed_secs < 360.0 {
+            // 180〜360s: スライム50% + コウモリ30% + ゴーレム20%
+            match rng.next_u32() % 10 {
+                0..=4 => Self::Slime,
+                5..=7 => Self::Bat,
+                _     => Self::Golem,
+            }
         } else {
+            // 360s〜: 全タイプ均等（高密度）
             match rng.next_u32() % 3 {
-                0 => Self::Bat,
-                1 => Self::Golem,
-                _ => Self::Slime,
+                0 => Self::Slime,
+                1 => Self::Bat,
+                _ => Self::Golem,
             }
         }
     }
@@ -165,6 +176,12 @@ impl BossState {
     }
 }
 
+
+// Step 25: エリート敵フラグ（10分以降に出現、HP3倍）
+fn is_elite_spawn(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> bool {
+    elapsed_secs >= 600.0 && rng.next_u32() % 5 == 0
+}
+
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -205,6 +222,8 @@ struct EnemyWorld {
     anim_timers:  Vec<f32>,
     /// Step 23: 現在のアニメーションフレーム番号
     anim_frames:  Vec<u8>,
+    /// Step 25: エリート敵フラグ（HP3倍・赤みがかった色で描画）
+    is_elite:     Vec<bool>,
 }
 
 impl EnemyWorld {
@@ -221,10 +240,11 @@ impl EnemyWorld {
             neighbor_buf: Vec::new(),
             anim_timers:  Vec::new(),
             anim_frames:  Vec::new(),
+            is_elite:     Vec::new(),
         }
     }
-    fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
-        let max_hp = kind.max_hp();
+    fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind, elite: bool) {
+        let max_hp = if elite { kind.max_hp() * 3.0 } else { kind.max_hp() };
         for &(x, y) in positions {
             let slot = self.alive.iter().position(|&a| !a);
             if let Some(i) = slot {
@@ -235,6 +255,7 @@ impl EnemyWorld {
                 self.kinds[i]        = kind;
                 self.anim_timers[i]  = 0.0;
                 self.anim_frames[i]  = 0;
+                self.is_elite[i]     = elite;
             } else {
                 self.positions_x.push(x);
                 self.positions_y.push(y);
@@ -245,6 +266,7 @@ impl EnemyWorld {
                 self.sep_y.push(0.0);
                 self.anim_timers.push(0.0);
                 self.anim_frames.push(0);
+                self.is_elite.push(elite);
             }
             self.count += 1;
         }
@@ -269,7 +291,17 @@ impl EnemySeparation for EnemyWorld {
 
 const BULLET_KIND_NORMAL:   u8 = 4;
 const BULLET_KIND_FIREBALL: u8 = 8;
-// 11=SlimeKing, 12=BatLord, 13=StoneGolem（ボス render_kind と共有）
+
+// Step 25: 画面フラッシュ定数
+const SCREEN_FLASH_DURATION:  f32 = 0.18; // フラッシュの持続時間（秒）
+const SCREEN_FLASH_MAX_ALPHA: f32 = 0.5;  // フラッシュの最大アルファ値
+
+// Step 25: エリート敵レンダリング定数（renderer/mod.rs からも参照）
+pub const ELITE_SIZE_MULTIPLIER: f32 = 1.2; // 通常敵に対するサイズ倍率
+// ボス render_kind: 11=SlimeKing, 12=BatLord, 13=StoneGolem
+// エリート敵は通常敵の render_kind にこのオフセットを加算して区別する（21/22/23）
+// ボスの 11/12/13 と衝突しないよう 20 を選択
+pub const ELITE_RENDER_KIND_OFFSET: u8 = 20;
 const BULLET_KIND_ROCK:     u8 = 14; // StoneGolem の岩弾
 
 struct BulletWorld {
@@ -433,6 +465,22 @@ impl ParticleWorld {
     }
 }
 
+// Step 25: ゲームの状態
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum GamePhase {
+    Title,
+    Playing,
+    GameOver,
+}
+
+// Step 25: スコアポップアップ
+struct ScorePopup {
+    x:        f32,
+    y:        f32,
+    value:    u32,
+    lifetime: f32,
+}
+
 struct GameWorld {
     player:           PlayerState,
     enemies:          EnemyWorld,
@@ -464,6 +512,16 @@ struct GameWorld {
     next_boss_index:  usize,
     /// ボス出現通知フラグ（1 フレームだけ true になる）
     boss_spawned:     bool,
+    // Step 25: ゲームバランス調整・ポリッシュ
+    phase:            GamePhase,
+    /// 画面フラッシュ（プレイヤーダメージ時に赤くなる）残り時間
+    screen_flash_timer: f32,
+    /// ヒットストップ（強攻撃ヒット時に一時停止）残り時間
+    hitstop_timer:    f32,
+    /// スコアポップアップリスト
+    score_popups:     Vec<ScorePopup>,
+    /// 撃破数
+    kill_count:       u32,
 }
 
 /// Step 22: 1 フレーム中に発生した音声イベント
@@ -480,12 +538,24 @@ struct SoundEvents {
 
 impl GameWorld {
     fn new() -> Self {
-        // プレイヤーはマップ中央からスタート
+        let mut world = Self::initial_state(SCREEN_WIDTH, SCREEN_HEIGHT);
+        world.phase = GamePhase::Title;
+        world
+    }
+
+    /// ゲームをリセットしてプレイ状態に移行する
+    fn reset(&mut self) {
+        let (sw, sh) = (self.screen_w, self.screen_h);
+        *self = Self::initial_state(sw, sh);
+    }
+
+    /// ゲーム状態を初期化して返す共通ヘルパー。
+    /// `phase` は呼び出し元が必要に応じて上書きする（デフォルトは Playing）。
+    fn initial_state(screen_w: f32, screen_h: f32) -> Self {
         let start_x = MAP_WIDTH  / 2.0 - PLAYER_SIZE / 2.0;
         let start_y = MAP_HEIGHT / 2.0 - PLAYER_SIZE / 2.0;
-        // カメラ初期位置: プレイヤーが画面中央に来るように（初期ウィンドウサイズ基準）
-        let cam_x = start_x + PLAYER_SIZE / 2.0 - SCREEN_WIDTH  / 2.0;
-        let cam_y = start_y + PLAYER_SIZE / 2.0 - SCREEN_HEIGHT / 2.0;
+        let cam_x = start_x + PLAYER_SIZE / 2.0 - screen_w / 2.0;
+        let cam_y = start_y + PLAYER_SIZE / 2.0 - screen_h / 2.0;
         Self {
             player: PlayerState {
                 x: start_x,
@@ -513,11 +583,16 @@ impl GameWorld {
             weapon_choices:   Vec::new(),
             camera_x:         cam_x,
             camera_y:         cam_y,
-            screen_w:         SCREEN_WIDTH,
-            screen_h:         SCREEN_HEIGHT,
+            screen_w,
+            screen_h,
             boss:             None,
             next_boss_index:  0,
             boss_spawned:     false,
+            phase:            GamePhase::Playing,
+            screen_flash_timer: 0.0,
+            hitstop_timer:    0.0,
+            score_popups:     Vec::new(),
+            kill_count:       0,
         }
     }
 
@@ -531,10 +606,33 @@ impl GameWorld {
     fn step(&mut self, dt: f32) -> SoundEvents {
         let mut se = SoundEvents::default();
 
+        // タイトル・ゲームオーバー中はゲームロジックをスキップ
+        if self.phase != GamePhase::Playing {
+            return se;
+        }
+
         // レベルアップ中はゲームを一時停止（プレイヤーがボタンを選ぶまで待つ）
         if self.level_up_pending {
             return se;
         }
+
+        // Step 25: ヒットストップ中はゲームロジックをスキップ（タイマーだけ進める）
+        if self.hitstop_timer > 0.0 {
+            self.hitstop_timer = (self.hitstop_timer - dt).max(0.0);
+            return se;
+        }
+
+        // Step 25: 画面フラッシュタイマー更新
+        if self.screen_flash_timer > 0.0 {
+            self.screen_flash_timer = (self.screen_flash_timer - dt).max(0.0);
+        }
+
+        // Step 25: スコアポップアップ更新
+        self.score_popups.retain_mut(|p| {
+            p.y -= 40.0 * dt;
+            p.lifetime -= dt;
+            p.lifetime > 0.0
+        });
 
         self.elapsed_seconds += dt;
 
@@ -664,7 +762,13 @@ impl GameWorld {
                     self.player.invincible_timer = INVINCIBLE_DURATION;
                     // 赤いパーティクル
                     self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
+                    // Step 25: 画面フラッシュ
+                    self.screen_flash_timer = SCREEN_FLASH_DURATION;
                     se.player_hurt = true;
+                    // HP が 0 になったらゲームオーバー
+                    if self.player.hp <= 0.0 {
+                        self.phase = GamePhase::GameOver;
+                    }
                 }
             }
         }
@@ -754,8 +858,11 @@ impl GameWorld {
                             if self.enemies.hp[ei] <= 0.0 {
                                 self.enemies.kill(ei);
                                 let kind_e = self.enemies.kinds[ei];
-                                self.score += kind_e.exp_reward() * 2;
-                                self.exp   += kind_e.exp_reward();
+                                let exp_val = kind_e.exp_reward();
+                                let score_val = exp_val * 2;
+                                self.score += score_val;
+                                self.exp   += exp_val;
+                                self.kill_count += 1;
                                 let prev_pending = self.level_up_pending;
                                 self.check_level_up();
                                 if self.level_up_pending && !prev_pending { se.level_up = true; }
@@ -765,6 +872,8 @@ impl GameWorld {
                                     EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                                 };
                                 self.particles.emit(hit_x, hit_y, 8, pc);
+                                // Step 25: スコアポップアップ
+                                self.score_popups.push(ScorePopup { x: hit_x, y: hit_y - 20.0, value: score_val, lifetime: 0.8 });
                                 se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
@@ -839,11 +948,16 @@ impl GameWorld {
                             if self.enemies.hp[ei] <= 0.0 {
                                 self.enemies.kill(ei);
                                 let kind_e = self.enemies.kinds[ei];
-                                self.score += kind_e.exp_reward() * 2;
-                                self.exp   += kind_e.exp_reward();
+                                let exp_val = kind_e.exp_reward();
+                                let score_val = exp_val * 2;
+                                self.score += score_val;
+                                self.exp   += exp_val;
+                                self.kill_count += 1;
                                 let prev_pending = self.level_up_pending;
                                 self.check_level_up();
                                 if self.level_up_pending && !prev_pending { se.level_up = true; }
+                                // Step 25: スコアポップアップ
+                                self.score_popups.push(ScorePopup { x: hit_x, y: hit_y - 20.0, value: score_val, lifetime: 0.8 });
                                 se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
@@ -939,8 +1053,11 @@ impl GameWorld {
                     self.enemies.hp[ei] -= dmg as f32;
                     if self.enemies.hp[ei] <= 0.0 {
                         self.enemies.kill(ei);
-                        self.score += kind.exp_reward() * 2;
-                        self.exp   += kind.exp_reward();
+                        let exp_val = kind.exp_reward();
+                        let score_val = exp_val * 2;
+                        self.score += score_val;
+                        self.exp   += exp_val;
+                        self.kill_count += 1;
                         let prev_pending = self.level_up_pending;
                         self.check_level_up();
                         if self.level_up_pending && !prev_pending { se.level_up = true; }
@@ -951,7 +1068,13 @@ impl GameWorld {
                             EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                         };
                         self.particles.emit(ex, ey, 8, pc);
+                        // Step 25: スコアポップアップ
+                        self.score_popups.push(ScorePopup { x: ex, y: ey - 20.0, value: score_val, lifetime: 0.8 });
                         se.enemy_death = true;
+                        // Step 25: ゴーレム撃破時にヒットストップ（2フレーム ≒ 0.033s）
+                        if kind == EnemyKind::Golem {
+                            self.hitstop_timer = 0.033;
+                        }
                         // Step 19: アイテムドロップ（1体につき最大1種類）
                         let roll = self.rng.next_u32() % 100;
                         let (item_kind, item_value) = if roll < 2 {
@@ -1156,7 +1279,7 @@ impl GameWorld {
                 let angle = i as f32 * std::f32::consts::TAU / 8.0;
                 (boss_action.special_x + angle.cos() * 120.0, boss_action.special_y + angle.sin() * 120.0)
             }).collect();
-            self.enemies.spawn(&positions, EnemyKind::Slime);
+            self.enemies.spawn(&positions, EnemyKind::Slime, false);
             self.particles.emit(boss_action.special_x, boss_action.special_y, 16, [0.2, 1.0, 0.2, 1.0]);
         }
         if boss_action.spawn_rocks {
@@ -1233,17 +1356,18 @@ impl GameWorld {
         // → Whip ダメージをボスに適用するため、weapon_slots ループ後にチェック
         // （実装上、Whip の当たり判定はループ内で行われているため、ここでは不要）
 
-        // Wave-based enemy spawn（Step 18: タイプ別スポーン）
+        // Wave-based enemy spawn（Step 18: タイプ別スポーン、Step 25: エリート敵）
         let (wave_interval, wave_count) = current_wave(self.elapsed_seconds);
         if self.elapsed_seconds - self.last_spawn_secs >= wave_interval
             && self.enemies.count < MAX_ENEMIES
         {
             let to_spawn = wave_count.min(MAX_ENEMIES - self.enemies.count);
             let kind = EnemyKind::for_elapsed(self.elapsed_seconds, &mut self.rng);
+            let elite = is_elite_spawn(self.elapsed_seconds, &mut self.rng);
             let positions: Vec<(f32, f32)> = (0..to_spawn)
                 .map(|_| spawn_outside(&mut self.rng))
                 .collect();
-            self.enemies.spawn(&positions, kind);
+            self.enemies.spawn(&positions, kind, elite);
             self.last_spawn_secs = self.elapsed_seconds;
         }
 
@@ -1320,7 +1444,9 @@ impl GameWorld {
         (self.camera_x, self.camera_y)
     }
 
-    /// Step 23/24: (x, y, kind, anim_frame) を返す
+    /// Step 23/24/25: (x, y, kind, anim_frame) を返す
+    /// エリート敵は render_kind + 20 でマーク（レンダラー側で赤みがかった色で描画）
+    /// ボスは render_kind 11/12/13 を使用
     fn get_render_data(&self) -> Vec<(f32, f32, u8, u8)> {
         let mut v = Vec::with_capacity(2 + self.enemies.len() + self.bullets.len());
         v.push((self.player.x, self.player.y, 0u8, self.player.anim_frame));
@@ -1341,10 +1467,12 @@ impl GameWorld {
         }
         for i in 0..self.enemies.len() {
             if self.enemies.alive[i] {
+                let base_kind = self.enemies.kinds[i].render_kind();
+                let kind = if self.enemies.is_elite[i] { base_kind + ELITE_RENDER_KIND_OFFSET } else { base_kind };
                 v.push((
                     self.enemies.positions_x[i],
                     self.enemies.positions_y[i],
-                    self.enemies.kinds[i].render_kind(),
+                    kind,
                     self.enemies.anim_frames[i],
                 ));
             }
@@ -1401,14 +1529,11 @@ impl GameWorld {
             fps,
             level_up_pending: self.level_up_pending,
             weapon_choices:  self.weapon_choices.clone(),
-            // Step 17: 武器レベル情報
             weapon_levels:   self.weapon_slots.iter()
                 .map(|s| (s.kind.name().to_string(), s.level))
                 .collect(),
-            // Step 19: アイテム情報
             magnet_timer:    self.magnet_timer,
             item_count:      self.items.count,
-            // Step 20: カメラ座標
             camera_x:        self.camera_x,
             camera_y:        self.camera_y,
             // Step 24: ボス情報
@@ -1417,6 +1542,15 @@ impl GameWorld {
                 hp:     b.hp,
                 max_hp: b.max_hp,
             }),
+            // Step 25
+            phase:           self.phase,
+            screen_flash_alpha: if self.screen_flash_timer > 0.0 {
+                (self.screen_flash_timer / SCREEN_FLASH_DURATION).clamp(0.0, 1.0) * SCREEN_FLASH_MAX_ALPHA
+            } else { 0.0 },
+            score_popups:    self.score_popups.iter()
+                .map(|p| (p.x, p.y, p.value, p.lifetime))
+                .collect(),
+            kill_count:      self.kill_count,
         }
     }
 }
@@ -1488,11 +1622,8 @@ impl ApplicationHandler for App {
 
         let renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        // Step 22: 音声デバイスを初期化し BGM を開始する
+        // Step 22: 音声デバイスを初期化（BGM はゲーム開始時に再生）
         let audio = AudioManager::new();
-        if let Some(ref am) = audio {
-            am.play_bgm(BGM_BYTES);
-        }
 
         self.window      = Some(window);
         self.renderer    = Some(renderer);
@@ -1597,15 +1728,30 @@ impl ApplicationHandler for App {
                 if let (Some(renderer), Some(window)) =
                     (self.renderer.as_mut(), self.window.as_ref())
                 {
-                    let render_data    = self.game.get_render_data();   // Step 23: (x,y,kind,anim_frame)
+                    let render_data    = self.game.get_render_data();
                     let particle_data  = self.game.get_particle_data();
                     let item_data      = self.game.get_item_data();
                     let camera_offset  = self.game.camera_offset();
                     renderer.update_instances(&render_data, &particle_data, &item_data, camera_offset);
                     let hud = self.game.hud_data(renderer.current_fps);
-                    // Step 17: ボタンクリックで武器選択（"__skip__" はスキップ扱い）
                     if let Some(chosen) = renderer.render(window, &hud) {
-                        self.game.select_weapon(&chosen);
+                        match chosen.as_str() {
+                            // Step 25: タイトル「Start」
+                            "__start__" => {
+                                self.game.reset();
+                                if let Some(ref am) = self.audio {
+                                    am.play_bgm(BGM_BYTES);
+                                }
+                            }
+                            // Step 25: ゲームオーバー「Retry」
+                            "__retry__" => {
+                                self.game.reset();
+                                if let Some(ref am) = self.audio {
+                                    am.resume_bgm();
+                                }
+                            }
+                            _ => self.game.select_weapon(&chosen),
+                        }
                     }
                 }
 
