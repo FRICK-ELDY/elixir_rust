@@ -1,9 +1,10 @@
-use crate::constants::SPRITE_SIZE;
+use crate::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-// 四角形 1 枚の頂点（正規化座標 0.0〜1.0）
+// ─── 頂点・インデックス ────────────────────────────────────────
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -19,7 +20,8 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
-// インスタンスごとの GPU データ
+// ─── インスタンスデータ ────────────────────────────────────────
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SpriteInstance {
@@ -30,12 +32,30 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// 画面サイズ Uniform（シェーダーの group(1) に対応）
+// アトラス内の UV 座標（256x64 px アトラス）
+// [0..63]   プレイヤー
+// [64..127] 敵
+// [128..191] 弾丸
+const ATLAS_W: f32 = 256.0;
+const ATLAS_H: f32 = 64.0;
+
+pub fn player_uv() -> ([f32; 2], [f32; 2]) {
+    ([0.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn enemy_uv() -> ([f32; 2], [f32; 2]) {
+    ([64.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
+    ([128.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+
+// ─── 画面サイズ Uniform ────────────────────────────────────────
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct ScreenUniform {
-    half_size: [f32; 2], // (width / 2, height / 2)
-    _pad: [f32; 2],      // wgpu の 16 バイトアライメント要件
+    half_size: [f32; 2],
+    _pad: [f32; 2],
 }
 
 impl ScreenUniform {
@@ -47,8 +67,31 @@ impl ScreenUniform {
     }
 }
 
-const GRID_DIM: usize = 10;
-const INSTANCE_COUNT: usize = GRID_DIM * GRID_DIM;
+// ─── インスタンスバッファの最大容量 ────────────────────────────
+// Player 1 + Enemies 10000 + Bullets 2000 = 12001
+const MAX_INSTANCES: usize = 12001;
+
+// ─── HUD データ ────────────────────────────────────────────────
+
+#[derive(Default, Clone)]
+pub struct HudData {
+    pub hp:               f32,
+    pub max_hp:           f32,
+    pub score:            u32,
+    pub elapsed_seconds:  f32,
+    pub level:            u32,
+    pub exp:              u32,
+    pub exp_to_next:      u32,
+    pub enemy_count:      usize,
+    pub bullet_count:     usize,
+    // Populated from Renderer::current_fps each frame; passed to build_hud_ui
+    #[allow(dead_code)]
+    pub fps:              f32,
+    pub level_up_pending: bool,
+    pub weapon_choices:   Vec<String>,
+}
+
+// ─── Renderer ─────────────────────────────────────────────────
 
 pub struct Renderer {
     surface:              wgpu::Surface<'static>,
@@ -60,12 +103,17 @@ pub struct Renderer {
     index_buffer:         wgpu::Buffer,
     instance_buffer:      wgpu::Buffer,
     instance_count:       u32,
-    bind_group:           wgpu::BindGroup,           // group(0): テクスチャ
-    screen_uniform_buf:   wgpu::Buffer,              // group(1): 画面サイズ
-    screen_bind_group:    wgpu::BindGroup,           // group(1) バインドグループ
+    bind_group:           wgpu::BindGroup,
+    screen_uniform_buf:   wgpu::Buffer,
+    screen_bind_group:    wgpu::BindGroup,
+    // egui
+    egui_ctx:             egui::Context,
+    egui_renderer:        egui_wgpu::Renderer,
+    egui_winit:           egui_winit::State,
     // FPS 計測
     frame_count:          u32,
     fps_timer:            std::time::Instant,
+    pub current_fps:      f32,
 }
 
 impl Renderer {
@@ -95,7 +143,7 @@ impl Renderer {
             .expect("サーフェス設定の取得に失敗しました");
         surface.configure(&device, &config);
 
-        // テクスチャアトラスの読み込み
+        // ─── テクスチャアトラス ──────────────────────────────────
         let atlas_bytes = include_bytes!("../../../../assets/sprites/atlas.png");
         let atlas_image = image::load_from_memory(atlas_bytes)
             .expect("atlas.png の読み込みに失敗しました")
@@ -140,7 +188,7 @@ impl Renderer {
             ..Default::default()
         });
 
-        // group(0): テクスチャ・サンプラー バインドグループレイアウト
+        // ─── バインドグループ group(0): テクスチャ ───────────────
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label:   Some("Texture Bind Group Layout"),
@@ -179,7 +227,7 @@ impl Renderer {
             ],
         });
 
-        // group(1): 画面サイズ Uniform バッファ
+        // ─── バインドグループ group(1): 画面サイズ Uniform ──────
         let screen_uniform = ScreenUniform::new(size.width, size.height);
         let screen_uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label:    Some("Screen Uniform Buffer"),
@@ -211,14 +259,13 @@ impl Renderer {
             }],
         });
 
-        // シェーダー
+        // ─── シェーダー・パイプライン ────────────────────────────
         let shader_source = include_str!("shaders/sprite.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label:  Some("Sprite Shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        // パイプライン（group(0): テクスチャ、group(1): 画面サイズ）
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label:                Some("Sprite Pipeline Layout"),
             bind_group_layouts:   &[&texture_bind_group_layout, &screen_bind_group_layout],
@@ -232,13 +279,11 @@ impl Renderer {
                 module:      &shader,
                 entry_point: Some("vs_main"),
                 buffers:     &[
-                    // slot 0: 頂点バッファ（Vertex ごとに進む）
                     wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                         step_mode:    wgpu::VertexStepMode::Vertex,
                         attributes:   &wgpu::vertex_attr_array![0 => Float32x2],
                     },
-                    // slot 1: インスタンスバッファ（Instance ごとに進む）
                     wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<SpriteInstance>() as wgpu::BufferAddress,
                         step_mode:    wgpu::VertexStepMode::Instance,
@@ -276,7 +321,7 @@ impl Renderer {
             cache:         None,
         });
 
-        // 頂点・インデックスバッファ
+        // ─── 頂点・インデックスバッファ ──────────────────────────
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label:    Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(VERTICES),
@@ -288,22 +333,25 @@ impl Renderer {
             usage:    wgpu::BufferUsages::INDEX,
         });
 
-        // インスタンスバッファ（100体を格子状に配置）
-        let instances: Vec<SpriteInstance> = (0..INSTANCE_COUNT)
-            .map(|i| SpriteInstance {
-                position:   [(i % GRID_DIM) as f32 * SPRITE_SIZE, (i / GRID_DIM) as f32 * SPRITE_SIZE],
-                size:       [SPRITE_SIZE, SPRITE_SIZE],
-                uv_offset:  [0.0, 0.0],
-                uv_size:    [1.0, 1.0],
-                color_tint: [1.0, 1.0, 1.0, 1.0],
-            })
-            .collect();
-
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label:    Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instances),
-            usage:    wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        // ─── インスタンスバッファ（動的・最大 MAX_INSTANCES 体）──
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label:              Some("Instance Buffer"),
+            size:               (std::mem::size_of::<SpriteInstance>() * MAX_INSTANCES) as u64,
+            usage:              wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
+
+        // ─── egui 初期化 ─────────────────────────────────────────
+        let egui_ctx = egui::Context::default();
+        let egui_renderer = egui_wgpu::Renderer::new(&device, config.format, None, 1, false);
+        let egui_winit = egui_winit::State::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
 
         Self {
             surface,
@@ -314,40 +362,87 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             instance_buffer,
-            instance_count: INSTANCE_COUNT as u32,
+            instance_count: 0,
             bind_group,
             screen_uniform_buf,
             screen_bind_group,
+            egui_ctx,
+            egui_renderer,
+            egui_winit,
             frame_count: 0,
             fps_timer: std::time::Instant::now(),
+            current_fps: 0.0,
         }
     }
 
-    /// プレイヤーのインスタンス（index 0）の位置を更新する
-    pub fn update_player(&mut self, x: f32, y: f32) {
-        let instance = SpriteInstance {
-            position:   [x, y],
-            size:       [SPRITE_SIZE, SPRITE_SIZE],
-            uv_offset:  [0.0, 0.0],
-            uv_size:    [1.0, 1.0],
-            color_tint: [0.2, 0.8, 1.0, 1.0], // 水色でプレイヤーを識別
-        };
-        self.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::bytes_of(&instance),
-        );
+    /// winit のウィンドウイベントを egui に転送する
+    pub fn handle_window_event(
+        &mut self,
+        window: &Window,
+        event: &winit::event::WindowEvent,
+    ) -> bool {
+        self.egui_winit.on_window_event(window, event).consumed
+    }
+
+    /// ゲーム状態からインスタンスリストを構築して GPU バッファを更新する
+    /// render_data: [(x, y, kind)] kind: 0=player, 1=enemy, 2=bullet
+    pub fn update_instances(&mut self, render_data: &[(f32, f32, u8)]) {
+        let (player_uv_off, player_uv_sz) = player_uv();
+        let (enemy_uv_off, enemy_uv_sz)   = enemy_uv();
+        let (bullet_uv_off, bullet_uv_sz) = bullet_uv();
+
+        let mut instances: Vec<SpriteInstance> = Vec::with_capacity(render_data.len());
+
+        for &(x, y, kind) in render_data {
+            let inst = match kind {
+                0 => SpriteInstance {
+                    position:   [x, y],
+                    size:       [SPRITE_SIZE, SPRITE_SIZE],
+                    uv_offset:  player_uv_off,
+                    uv_size:    player_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                1 => SpriteInstance {
+                    position:   [x, y],
+                    size:       [SPRITE_SIZE * 0.75, SPRITE_SIZE * 0.75],
+                    uv_offset:  enemy_uv_off,
+                    uv_size:    enemy_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                2 => SpriteInstance {
+                    position:   [x - 8.0, y - 8.0],
+                    size:       [16.0, 16.0],
+                    uv_offset:  bullet_uv_off,
+                    uv_size:    bullet_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                _ => continue,
+            };
+            instances.push(inst);
+            if instances.len() >= MAX_INSTANCES {
+                break;
+            }
+        }
+
+        self.instance_count = instances.len() as u32;
+
+        if !instances.is_empty() {
+            self.queue.write_buffer(
+                &self.instance_buffer,
+                0,
+                bytemuck::cast_slice(&instances),
+            );
+        }
     }
 
     pub fn resize(&mut self, new_width: u32, new_height: u32) {
         if new_width == 0 || new_height == 0 {
             return;
         }
-        self.config.width = new_width;
+        self.config.width  = new_width;
         self.config.height = new_height;
         self.surface.configure(&self.device, &self.config);
 
-        // ウィンドウサイズ変更時に Uniform バッファを更新
         let screen_uniform = ScreenUniform::new(new_width, new_height);
         self.queue.write_buffer(
             &self.screen_uniform_buf,
@@ -356,17 +451,17 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self) {
-        // FPS 計測（1 秒ごとにコンソール出力）
+    pub fn render(&mut self, window: &Window, hud: &HudData) {
+        // ─── FPS 計測 ────────────────────────────────────────────
         self.frame_count += 1;
         let elapsed = self.fps_timer.elapsed();
         if elapsed.as_secs_f32() >= 1.0 {
-            let fps = self.frame_count as f32 / elapsed.as_secs_f32();
-            println!("FPS: {fps:.1}");
+            self.current_fps = self.frame_count as f32 / elapsed.as_secs_f32();
             self.frame_count = 0;
-            self.fps_timer = std::time::Instant::now();
+            self.fps_timer   = std::time::Instant::now();
         }
 
+        // ─── サーフェス取得 ──────────────────────────────────────
         let output = match self.surface.get_current_texture() {
             Ok(t) => t,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -380,12 +475,11 @@ impl Renderer {
         };
 
         let view = output.texture.create_view(&Default::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
 
+        // ─── スプライト描画パス ──────────────────────────────────
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Sprite Pass"),
@@ -394,9 +488,9 @@ impl Renderer {
                     resolve_target: None,
                     ops:            wgpu::Operations {
                         load:  wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.05,
-                            g: 0.0,
-                            b: 0.1,
+                            r: BG_R,
+                            g: BG_G,
+                            b: BG_B,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -407,17 +501,254 @@ impl Renderer {
                 occlusion_query_set:      None,
             });
 
-            pass.set_pipeline(&self.render_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_bind_group(1, &self.screen_bind_group, &[]);
-            pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            // 1 draw call で 100 体を描画
-            pass.draw_indexed(0..INDICES.len() as u32, 0, 0..self.instance_count);
+            if self.instance_count > 0 {
+                pass.set_pipeline(&self.render_pipeline);
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_bind_group(1, &self.screen_bind_group, &[]);
+                pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+                pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                pass.draw_indexed(0..INDICES.len() as u32, 0, 0..self.instance_count);
+            }
+        }
+
+        // ─── egui HUD パス ───────────────────────────────────────
+        let raw_input = self.egui_winit.take_egui_input(window);
+        let full_output = self.egui_ctx.run(raw_input, |ctx| {
+            build_hud_ui(ctx, hud, self.current_fps);
+        });
+
+        self.egui_winit.handle_platform_output(window, full_output.platform_output);
+
+        let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+
+        for (id, delta) in full_output.textures_delta.set {
+            self.egui_renderer.update_texture(&self.device, &self.queue, id, &delta);
+        }
+
+        let screen_desc = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: full_output.pixels_per_point,
+        };
+        self.egui_renderer.update_buffers(&self.device, &self.queue, &mut encoder, &tris, &screen_desc);
+
+        // egui_renderer.render() は RenderPass を消費するため、別スコープで処理する
+        {
+            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view:           &view,
+                    resolve_target: None,
+                    ops:            wgpu::Operations {
+                        load:  wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes:         None,
+                occlusion_query_set:      None,
+            });
+            // egui-wgpu 0.31 では render() が RenderPass を所有する形に変更された
+            self.egui_renderer.render(
+                &mut render_pass.forget_lifetime(),
+                &tris,
+                &screen_desc,
+            );
+        }
+
+        for id in full_output.textures_delta.free {
+            self.egui_renderer.free_texture(&id);
         }
 
         self.queue.submit([encoder.finish()]);
         output.present();
+    }
+}
+
+// ─── HUD UI 構築 ───────────────────────────────────────────────
+
+fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
+    // 上部 HUD バー
+    egui::Area::new(egui::Id::new("hud_top"))
+        .anchor(egui::Align2::LEFT_TOP, egui::vec2(8.0, 8.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180))
+                .inner_margin(egui::Margin::symmetric(12, 8))
+                .corner_radius(6.0)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        // HP バー
+                        let hp_ratio = if hud.max_hp > 0.0 {
+                            (hud.hp / hud.max_hp).clamp(0.0, 1.0)
+                        } else {
+                            0.0
+                        };
+                        ui.label(
+                            egui::RichText::new("HP")
+                                .color(egui::Color32::from_rgb(255, 100, 100))
+                                .strong(),
+                        );
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(160.0, 18.0),
+                            egui::Sense::hover(),
+                        );
+                        let painter = ui.painter();
+                        painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(60, 20, 20));
+                        let fill_w = rect.width() * hp_ratio;
+                        let fill_rect = egui::Rect::from_min_size(
+                            rect.min,
+                            egui::vec2(fill_w, rect.height()),
+                        );
+                        let hp_color = if hp_ratio > 0.5 {
+                            egui::Color32::from_rgb(80, 220, 80)
+                        } else if hp_ratio > 0.25 {
+                            egui::Color32::from_rgb(220, 180, 0)
+                        } else {
+                            egui::Color32::from_rgb(220, 60, 60)
+                        };
+                        painter.rect_filled(fill_rect, 4.0, hp_color);
+                        ui.label(
+                            egui::RichText::new(format!("{:.0}/{:.0}", hud.hp, hud.max_hp))
+                                .color(egui::Color32::WHITE),
+                        );
+
+                        ui.separator();
+
+                        // EXP バー
+                        let exp_total = hud.exp + hud.exp_to_next;
+                        let exp_ratio = if exp_total > 0 {
+                            (hud.exp as f32 / exp_total as f32).clamp(0.0, 1.0)
+                        } else {
+                            0.0
+                        };
+                        ui.label(
+                            egui::RichText::new(format!("Lv.{}", hud.level))
+                                .color(egui::Color32::from_rgb(255, 220, 50))
+                                .strong(),
+                        );
+                        let (exp_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(100.0, 18.0),
+                            egui::Sense::hover(),
+                        );
+                        let painter = ui.painter();
+                        painter.rect_filled(exp_rect, 4.0, egui::Color32::from_rgb(20, 20, 60));
+                        let exp_fill = egui::Rect::from_min_size(
+                            exp_rect.min,
+                            egui::vec2(exp_rect.width() * exp_ratio, exp_rect.height()),
+                        );
+                        painter.rect_filled(exp_fill, 4.0, egui::Color32::from_rgb(80, 120, 255));
+                        ui.label(
+                            egui::RichText::new(format!("EXP {}", hud.exp))
+                                .color(egui::Color32::from_rgb(180, 200, 255)),
+                        );
+
+                        ui.separator();
+
+                        // スコア・タイマー
+                        let total_s = hud.elapsed_seconds as u32;
+                        let m = total_s / 60;
+                        let s = total_s % 60;
+                        ui.label(
+                            egui::RichText::new(format!("Score: {}", hud.score))
+                                .color(egui::Color32::from_rgb(255, 220, 100))
+                                .strong(),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!("{:02}:{:02}", m, s))
+                                .color(egui::Color32::WHITE),
+                        );
+                    });
+                });
+        });
+
+    // 右上: デバッグ情報
+    egui::Area::new(egui::Id::new("hud_debug"))
+        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 140))
+                .inner_margin(egui::Margin::symmetric(8, 6))
+                .corner_radius(6.0)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("FPS: {fps:.0}"))
+                            .color(egui::Color32::from_rgb(100, 255, 100)),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("Enemies: {}", hud.enemy_count))
+                            .color(egui::Color32::from_rgb(255, 150, 100)),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("Bullets: {}", hud.bullet_count))
+                            .color(egui::Color32::from_rgb(200, 200, 255)),
+                    );
+                });
+        });
+
+    // レベルアップ画面
+    if hud.level_up_pending {
+        egui::Area::new(egui::Id::new("level_up"))
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgba_unmultiplied(10, 10, 40, 230))
+                    .inner_margin(egui::Margin::symmetric(40, 30))
+                    .corner_radius(12.0)
+                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 220, 50)))
+                    .show(ui, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!("** LEVEL UP! Lv.{} **", hud.level))
+                                    .color(egui::Color32::from_rgb(255, 220, 50))
+                                    .size(28.0)
+                                    .strong(),
+                            );
+                            ui.add_space(12.0);
+                            ui.label(
+                                egui::RichText::new("Choose a weapon")
+                                    .color(egui::Color32::WHITE)
+                                    .size(16.0),
+                            );
+                            ui.add_space(16.0);
+                            ui.horizontal(|ui| {
+                                for choice in &hud.weapon_choices {
+                                    egui::Frame::new()
+                                        .fill(egui::Color32::from_rgb(30, 30, 80))
+                                        .inner_margin(egui::Margin::symmetric(16, 12))
+                                        .corner_radius(8.0)
+                                        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 200)))
+                                        .show(ui, |ui| {
+                                            ui.label(
+                                                egui::RichText::new(weapon_display_name(choice))
+                                                    .color(egui::Color32::from_rgb(180, 200, 255))
+                                                    .size(14.0)
+                                                    .strong(),
+                                            );
+                                        });
+                                    ui.add_space(8.0);
+                                }
+                            });
+                            ui.add_space(8.0);
+                            ui.label(
+                                egui::RichText::new("(Auto-select in 3s)")
+                                    .color(egui::Color32::from_rgb(150, 150, 150))
+                                    .size(12.0),
+                            );
+                        });
+                    });
+            });
+    }
+}
+
+fn weapon_display_name(name: &str) -> &str {
+    match name {
+        "magic_wand" => "Magic Wand\nAuto-aim nearest enemy",
+        "axe"        => "Axe\nThrow upward",
+        "cross"      => "Cross\nFire in 4 directions",
+        _            => name,
     }
 }
