@@ -33,4 +33,10 @@ defmodule Game.NifBridge do
 
   # Step 13: HUD データ一括取得（{hp, max_hp, score, elapsed_seconds}）
   def get_hud_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 14: レベルアップ関連データ取得（{exp, level, level_up_pending, exp_to_next}）
+  def get_level_up_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 14: 武器を追加しレベルアップを確定する（weapon_name: "magic_wand" | "axe" | "cross"）
+  def add_weapon(_world, _weapon_name), do: :erlang.nif_error(:nif_not_loaded)
 end

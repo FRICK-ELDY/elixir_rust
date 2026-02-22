@@ -10,6 +10,13 @@ use std::sync::Mutex;
 rustler::atoms! {
     ok,
     slime,
+    // 武器種別アトム
+    magic_wand,
+    axe,
+    cross,
+    // level_up 通知アトム
+    level_up,
+    no_change,
 }
 
 // ─── 定数 ─────────────────────────────────────────────────────
@@ -195,7 +202,49 @@ impl BulletWorld {
     }
 }
 
-// ─── 武器状態 ─────────────────────────────────────────────────
+// ─── 武器種別 ─────────────────────────────────────────────────
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum WeaponKind {
+    /// 基本武器: 最近接敵に向けて弾丸を発射
+    MagicWand,
+    /// 斧: プレイヤーの上方向に放物線を描いて飛ぶ（簡易実装: 上方向に直進）
+    Axe,
+    /// 十字: 上下左右 4 方向に同時発射
+    Cross,
+}
+
+impl WeaponKind {
+    /// 武器ごとの発射クールダウン（秒）
+    pub fn cooldown(&self) -> f32 {
+        match self {
+            WeaponKind::MagicWand => WEAPON_COOLDOWN,
+            WeaponKind::Axe       => 1.5,
+            WeaponKind::Cross     => 2.0,
+        }
+    }
+    /// 武器ごとのダメージ
+    pub fn damage(&self) -> i32 {
+        match self {
+            WeaponKind::MagicWand => BULLET_DAMAGE,
+            WeaponKind::Axe       => 25,
+            WeaponKind::Cross     => 15,
+        }
+    }
+}
+
+// ─── 武器スロット ─────────────────────────────────────────────
+pub struct WeaponSlot {
+    pub kind:           WeaponKind,
+    pub cooldown_timer: f32,
+}
+
+impl WeaponSlot {
+    pub fn new(kind: WeaponKind) -> Self {
+        Self { kind, cooldown_timer: 0.0 }
+    }
+}
+
+// ─── 武器状態（後方互換のため残す） ──────────────────────────
 pub struct WeaponState {
     /// 次の発射まで残り時間（秒）
     pub cooldown_timer: f32,
@@ -278,6 +327,15 @@ pub struct GameWorldInner {
     pub elapsed_seconds:    f32,
     /// プレイヤーの最大 HP（HP バー計算用）
     pub player_max_hp:      f32,
+    /// ─── Step 14: レベルアップ ────────────────────────────────
+    /// 現在の経験値
+    pub exp:                u32,
+    /// 現在のレベル（1 始まり）
+    pub level:              u32,
+    /// レベルアップ待機フラグ（Elixir 側が武器選択を完了するまで true）
+    pub level_up_pending:   bool,
+    /// 装備中の武器スロット（最大 6 つ）
+    pub weapon_slots:       Vec<WeaponSlot>,
 }
 
 impl GameWorldInner {
@@ -328,6 +386,10 @@ fn create_world() -> ResourceArc<GameWorld> {
         score:              0,
         elapsed_seconds:    0.0,
         player_max_hp:      100.0,
+        exp:                0,
+        level:              1,
+        level_up_pending:   false,
+        weapon_slots:       vec![WeaponSlot::new(WeaponKind::MagicWand)],
     })))
 }
 
@@ -431,6 +493,47 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 14: 追加武器スロットの発射処理 ──────────────────────
+    // level_up_pending 中は発射を止めてゲームを一時停止する
+    if !w.level_up_pending {
+        let slot_count = w.weapon_slots.len();
+        for si in 0..slot_count {
+            w.weapon_slots[si].cooldown_timer = (w.weapon_slots[si].cooldown_timer - dt).max(0.0);
+            if w.weapon_slots[si].cooldown_timer > 0.0 {
+                continue;
+            }
+            let kind = w.weapon_slots[si].kind;
+            let cd   = kind.cooldown();
+            let dmg  = kind.damage();
+            match kind {
+                WeaponKind::MagicWand => {
+                    if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
+                        let tx   = w.enemies.positions_x[ti] + ENEMY_RADIUS;
+                        let ty   = w.enemies.positions_y[ti] + ENEMY_RADIUS;
+                        let bdx  = tx - px;
+                        let bdy  = ty - py;
+                        let blen = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
+                        w.bullets.spawn(px, py, (bdx / blen) * BULLET_SPEED, (bdy / blen) * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                        w.weapon_slots[si].cooldown_timer = cd;
+                    }
+                }
+                WeaponKind::Axe => {
+                    // 上方向に直進（簡易実装）
+                    w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME);
+                    w.weapon_slots[si].cooldown_timer = cd;
+                }
+                WeaponKind::Cross => {
+                    // 上下左右 4 方向に同時発射
+                    let dirs: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
+                    for (dx_dir, dy_dir) in dirs {
+                        w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                    }
+                    w.weapon_slots[si].cooldown_timer = cd;
+                }
+            }
+        }
+    }
+
     // 2. 弾丸を移動・寿命更新
     let bullet_len = w.bullets.len();
     for i in 0..bullet_len {
@@ -477,6 +580,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     w.enemies.kill(ei);
                     // ── Step 13: 敵撃破でスコア加算 ──────────────
                     w.score += 10;
+                    // ── Step 14: 経験値加算・レベルアップ判定 ────
+                    w.exp += 5;
+                    if !w.level_up_pending {
+                        let required = exp_required_for_next(w.level);
+                        if w.exp >= required {
+                            w.level_up_pending = true;
+                        }
+                    }
                 }
                 w.bullets.kill(bi);
                 break;
@@ -564,6 +675,61 @@ fn get_hud_data(world: ResourceArc<GameWorld>) -> (f64, f64, u32, f64) {
         w.score,
         w.elapsed_seconds  as f64,
     )
+}
+
+// ─── Step 14: レベルアップ・武器選択 ──────────────────────────
+
+/// 次のレベルに必要な累積経験値を返す
+fn exp_required_for_next(level: u32) -> u32 {
+    // exp_table: index = level（1 始まり）、値 = そのレベルに必要な累積 EXP
+    const EXP_TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
+    let idx = level as usize;
+    if idx < EXP_TABLE.len() {
+        EXP_TABLE[idx]
+    } else {
+        // テーブル外は等差数列で延長
+        270 + (idx as u32 - 9) * 50
+    }
+}
+
+/// レベルアップ関連データを一括取得（Step 14）
+/// 戻り値: (exp, level, level_up_pending, exp_to_next)
+#[rustler::nif]
+fn get_level_up_data(world: ResourceArc<GameWorld>) -> (u32, u32, bool, u32) {
+    let w = world.0.lock().unwrap();
+    let exp_to_next = exp_required_for_next(w.level).saturating_sub(w.exp);
+    (w.exp, w.level, w.level_up_pending, exp_to_next)
+}
+
+/// 武器を追加し、レベルアップ待機を解除する（Step 14）
+/// weapon_name: "magic_wand" | "axe" | "cross"
+/// 最大 6 スロットを超えた場合は既存スロットを上書き（最も古い同種を優先）
+#[rustler::nif]
+fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
+    let mut w = world.0.lock().unwrap();
+
+    let kind = match weapon_name {
+        "magic_wand" => WeaponKind::MagicWand,
+        "axe"        => WeaponKind::Axe,
+        "cross"      => WeaponKind::Cross,
+        _            => WeaponKind::MagicWand,
+    };
+
+    const MAX_SLOTS: usize = 6;
+    if w.weapon_slots.len() < MAX_SLOTS {
+        w.weapon_slots.push(WeaponSlot::new(kind));
+    } else {
+        // 同種スロットがあれば上書き、なければ先頭を上書き
+        let target = w.weapon_slots.iter().position(|s| s.kind == kind).unwrap_or(0);
+        w.weapon_slots[target] = WeaponSlot::new(kind);
+    }
+
+    // レベルアップ処理: レベルを上げ、経験値をリセット、フラグを解除
+    w.level += 1;
+    w.exp    = 0;
+    w.level_up_pending = false;
+
+    ok()
 }
 
 // ─── ローダー ─────────────────────────────────────────────────
