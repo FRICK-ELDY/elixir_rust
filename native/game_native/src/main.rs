@@ -109,10 +109,89 @@ impl BulletWorld {
     fn len(&self) -> usize { self.positions_x.len() }
 }
 
+struct ParticleWorld {
+    positions_x:  Vec<f32>,
+    positions_y:  Vec<f32>,
+    velocities_x: Vec<f32>,
+    velocities_y: Vec<f32>,
+    lifetime:     Vec<f32>,
+    max_lifetime: Vec<f32>,
+    color:        Vec<[f32; 4]>,
+    size:         Vec<f32>,
+    alive:        Vec<bool>,
+    count:        usize,
+    rng:          SimpleRng,
+}
+
+impl ParticleWorld {
+    fn new(seed: u64) -> Self {
+        Self {
+            positions_x:  Vec::new(),
+            positions_y:  Vec::new(),
+            velocities_x: Vec::new(),
+            velocities_y: Vec::new(),
+            lifetime:     Vec::new(),
+            max_lifetime: Vec::new(),
+            color:        Vec::new(),
+            size:         Vec::new(),
+            alive:        Vec::new(),
+            count:        0,
+            rng:          SimpleRng::new(seed),
+        }
+    }
+
+    fn len(&self) -> usize { self.positions_x.len() }
+
+    fn spawn_one(&mut self, x: f32, y: f32, vx: f32, vy: f32, lt: f32, color: [f32; 4], size: f32) {
+        for i in 0..self.positions_x.len() {
+            if !self.alive[i] {
+                self.positions_x[i]  = x;
+                self.positions_y[i]  = y;
+                self.velocities_x[i] = vx;
+                self.velocities_y[i] = vy;
+                self.lifetime[i]     = lt;
+                self.max_lifetime[i] = lt;
+                self.color[i]        = color;
+                self.size[i]         = size;
+                self.alive[i]        = true;
+                self.count += 1;
+                return;
+            }
+        }
+        self.positions_x.push(x);
+        self.positions_y.push(y);
+        self.velocities_x.push(vx);
+        self.velocities_y.push(vy);
+        self.lifetime.push(lt);
+        self.max_lifetime.push(lt);
+        self.color.push(color);
+        self.size.push(size);
+        self.alive.push(true);
+        self.count += 1;
+    }
+
+    fn emit(&mut self, x: f32, y: f32, count: usize, color: [f32; 4]) {
+        for _ in 0..count {
+            let angle = self.rng.next_f32() * std::f32::consts::TAU;
+            let speed = 50.0 + self.rng.next_f32() * 150.0;
+            let vx = angle.cos() * speed;
+            let vy = angle.sin() * speed;
+            let lt = 0.3 + self.rng.next_f32() * 0.4;
+            let sz = 4.0 + self.rng.next_f32() * 4.0;
+            self.spawn_one(x, y, vx, vy, lt, color, sz);
+        }
+    }
+
+    fn kill(&mut self, i: usize) {
+        if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
+    }
+}
+
 struct GameWorld {
     player:           PlayerState,
     enemies:          EnemyWorld,
     bullets:          BulletWorld,
+    particles:        ParticleWorld,
     collision:        CollisionWorld,
     rng:              SimpleRng,
     score:            u32,
@@ -138,6 +217,7 @@ impl GameWorld {
             },
             enemies:          EnemyWorld::new(),
             bullets:          BulletWorld::new(),
+            particles:        ParticleWorld::new(67890),
             collision:        CollisionWorld::new(CELL_SIZE),
             rng:              SimpleRng::new(42),
             score:            0,
@@ -202,6 +282,21 @@ impl GameWorld {
             self.player.invincible_timer = (self.player.invincible_timer - dt).max(0.0);
         }
 
+        // パーティクル更新
+        {
+            let plen = self.particles.len();
+            for i in 0..plen {
+                if !self.particles.alive[i] { continue; }
+                self.particles.positions_x[i] += self.particles.velocities_x[i] * dt;
+                self.particles.positions_y[i] += self.particles.velocities_y[i] * dt;
+                self.particles.velocities_y[i] += 200.0 * dt;
+                self.particles.lifetime[i] -= dt;
+                if self.particles.lifetime[i] <= 0.0 {
+                    self.particles.kill(i);
+                }
+            }
+        }
+
         // プレイヤー vs 敵
         let hit_r = PLAYER_RADIUS + ENEMY_RADIUS;
         let candidates = self.collision.dynamic.query_nearby(px, py, hit_r);
@@ -215,6 +310,8 @@ impl GameWorld {
                 if self.player.invincible_timer <= 0.0 && self.player.hp > 0.0 {
                     self.player.hp = (self.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
                     self.player.invincible_timer = INVINCIBLE_DURATION;
+                    // 赤いパーティクル
+                    self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
                 }
             }
         }
@@ -271,6 +368,11 @@ impl GameWorld {
                         self.score += 10;
                         self.exp   += 5;
                         self.check_level_up();
+                        // 撃破: オレンジパーティクル
+                        self.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0]);
+                    } else {
+                        // ヒット: 黄色パーティクル
+                        self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                     }
                     self.bullets.kill(bi);
                     break;
@@ -338,6 +440,22 @@ impl GameWorld {
             if self.bullets.alive[i] {
                 v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], 2u8));
             }
+        }
+        v
+    }
+
+    fn get_particle_data(&self) -> Vec<(f32, f32, f32, f32, f32, f32, f32)> {
+        let mut v = Vec::with_capacity(self.particles.count);
+        for i in 0..self.particles.len() {
+            if !self.particles.alive[i] { continue; }
+            let alpha = (self.particles.lifetime[i] / self.particles.max_lifetime[i]).clamp(0.0, 1.0);
+            let c = self.particles.color[i];
+            v.push((
+                self.particles.positions_x[i],
+                self.particles.positions_y[i],
+                c[0], c[1], c[2], alpha,
+                self.particles.size[i],
+            ));
         }
         v
     }
@@ -483,8 +601,9 @@ impl ApplicationHandler for App {
                 if let (Some(renderer), Some(window)) =
                     (self.renderer.as_mut(), self.window.as_ref())
                 {
-                    let render_data = self.game.get_render_data();
-                    renderer.update_instances(&render_data);
+                    let render_data   = self.game.get_render_data();
+                    let particle_data = self.game.get_particle_data();
+                    renderer.update_instances(&render_data, &particle_data);
                     let hud = self.game.hud_data(renderer.current_fps);
                     renderer.render(window, &hud);
                 }
