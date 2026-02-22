@@ -1,6 +1,7 @@
 # Elixir / Mix
 /_build/
 /deps/
+/priv/native/
 *.ez
 erl_crash.dump
 .elixir_ls/

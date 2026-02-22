@@ -764,16 +764,62 @@ cargo run --bin game_window
 
 ## Step 6: Elixir プロジェクト + Rustler NIF 連携
 
-**目標**: `mix new` で Elixir プロジェクトを作成し、Rustler NIF で Rust の関数を呼び出す。
+**目標**: `mix new` で Elixir プロジェクトを作成し、Rustler NIF で Rust の関数を Elixir から呼び出す。  
+このステップ完了後、Elixir と Rust が同一プロセス内で通信できる基盤が整う。
 
-### 6.1 Elixir プロジェクトの作成
+### Rustler NIF の仕組み
+
+```
+Elixir プロセス
+  └─ Game.NifBridge.add(1, 2)
+       │  ↓ NIF 呼び出し（関数ポインタ経由）
+       └─ game_native.dll（Rust でコンパイルした cdylib）
+            └─ fn add(a: i64, b: i64) -> i64 { a + b }
+```
+
+- NIF（Native Implemented Function）は BEAM VM が `.dll` / `.so` をロードし、  
+  Erlang 関数として直接呼び出す仕組み。
+- Rustler は `#[rustler::nif]` マクロで Rust 関数を自動的に NIF として登録する。
+- `crate-type = ["cdylib"]` により Rust クレートが動的ライブラリとしてビルドされる。
+
+### 6.1 プロジェクト構造の確認
+
+Step 6 完了後のディレクトリ構造:
+
+```
+elixir_rust/
+├── lib/
+│   ├── game/
+│   │   ├── application.ex      ← Supervisor ツリー（mix が生成）
+│   │   └── nif_bridge.ex       ← NIF ラッパーモジュール（新規作成）
+│   └── game.ex                 ← アプリケーションモジュール（mix が生成）
+├── native/
+│   └── game_native/
+│       ├── Cargo.toml          ← cdylib + rustler 依存を追加
+│       └── src/
+│           ├── lib.rs          ← NIF 関数の実装（新規作成）
+│           ├── main.rs         ← Step 5 までの描画バイナリ（変更なし）
+│           └── renderer/       ← Step 5 までの描画コード（変更なし）
+├── mix.exs                     ← Elixir プロジェクト設定（新規作成）
+├── mix.lock                    ← 依存バージョンのロックファイル（自動生成）
+└── test/
+    └── game_test.exs           ← mix が生成するテンプレート
+```
+
+### 6.2 Elixir プロジェクトの作成
 
 ```powershell
-# リポジトリルートで実行
+# リポジトリルート（elixir_rust/）で実行
+# --sup を付けると Application + Supervisor の雛形も生成される
 mix new . --app game --sup
 ```
 
-### 6.2 mix.exs の設定
+> **注意**: すでに `mix.exs` が存在する場合は上書き確認が出る。  
+> 既存ファイルを保持したい場合は `n` を入力してスキップし、手動で編集する。
+
+### 6.3 mix.exs の設定
+
+`mix.exs` を以下の内容に更新する:
 
 ```elixir
 defmodule Game.MixProject do
@@ -786,11 +832,18 @@ defmodule Game.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      # Windows ビルド出力先の設定
       build_path: build_path(),
     ]
   end
 
+  def application do
+    [
+      extra_applications: [:logger],
+      mod: {Game.Application, []},
+    ]
+  end
+
+  # デバッグ・リリースでビルド出力先を切り替える
   defp build_path do
     case Mix.env() do
       :prod -> "platform/windows/_build/release"
@@ -806,45 +859,180 @@ defmodule Game.MixProject do
 end
 ```
 
-### 6.3 NifBridge モジュールの作成
+### 6.4 Cargo.toml に rustler を追加
 
-```elixir
-# lib/game/nif_bridge.ex
-defmodule Game.NifBridge do
-  use Rustler,
-    otp_app: :game,
-    crate: :game_native
+`native/game_native/Cargo.toml` を以下の内容に更新する（既存の `[lib]` セクションに `rustler` を追加）:
 
-  def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
-end
+```toml
+[package]
+name = "game_native"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "game_native"
+crate-type = ["cdylib"]  # Rustler NIF 用の動的ライブラリ
+
+[[bin]]
+name = "game_window"
+path = "src/main.rs"
+
+[dependencies]
+winit   = "0.30.12"
+wgpu    = "24"
+pollster = "0.3"
+bytemuck = { version = "1", features = ["derive"] }
+image   = "0.25"
+rustler = "0.34"   # ← 追加
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
 ```
 
-### 6.4 Rust 側に NIF 関数を追加
+### 6.5 Rust 側に NIF 関数を実装
 
-`native/game_native/src/lib.rs`:
+`native/game_native/src/lib.rs` を新規作成する:
 
 ```rust
 use rustler::NifResult;
 
+// #[rustler::nif] マクロが付いた関数は自動的に NIF として登録される。
+// 引数・戻り値の型は rustler::Encoder / Decoder が自動変換する。
 #[rustler::nif]
 fn add(a: i64, b: i64) -> NifResult<i64> {
     Ok(a + b)
 }
 
-rustler::init!("Elixir.Game.NifBridge", [add]);
+// Elixir モジュール名を指定する（"Elixir." プレフィックスが必要）
+// #[rustler::nif] が付いた関数は自動検出されるため、関数リストの明示は不要
+rustler::init!("Elixir.Game.NifBridge");
 ```
 
-### 6.5 ビルドと動作確認
+> **`lib.rs` と `main.rs` の関係**  
+> - `lib.rs` → `[lib]` セクションのエントリポイント。`cdylib` としてビルドされ、Elixir が `.dll` としてロードする。  
+> - `main.rs` → `[[bin]]` セクションのエントリポイント。Step 5 までの描画バイナリ。  
+> 両者は独立してビルドされるため、描画コードと NIF コードは互いに影響しない。
+
+### 6.6 NifBridge モジュールの作成
+
+`lib/game/nif_bridge.ex` を新規作成する:
+
+```elixir
+defmodule Game.NifBridge do
+  @moduledoc """
+  Rust NIF のラッパーモジュール。
+  `use Rustler` により、コンパイル時に `native/game_native` クレートが
+  自動的にビルドされ、`.dll` がロードされる。
+  """
+
+  use Rustler,
+    otp_app: :game,
+    crate: :game_native   # Cargo.toml の [package] name と一致させる
+
+  # NIF がロードされていない場合のフォールバック。
+  # 実際の呼び出し時は Rust 側の実装が使われる。
+  def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
+end
+```
+
+### 6.7 Application / Supervisor の確認
+
+`mix new --sup` で生成された `lib/game/application.ex` を確認する:
+
+```elixir
+defmodule Game.Application do
+  use Application
+
+  @impl true
+  def start(_type, _args) do
+    children = [
+      # Step 7 以降でここに GameLoop などを追加する
+    ]
+
+    opts = [strategy: :one_for_one, name: Game.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
+```
+
+現時点では `children` は空のままでよい。NifBridge は Supervisor に登録する必要はなく、  
+`mix compile` 時に自動的にロードされる。
+
+### 6.8 .cargo/config.toml の確認
+
+Rustler が Windows で `.dll` を正しくビルドするために、  
+`native/game_native/.cargo/config.toml` に以下の設定があることを確認する:
+
+```toml
+[build]
+target = "x86_64-pc-windows-msvc"
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+```
+
+> `crt-static` を指定することで、Visual C++ ランタイム（`vcruntime140.dll`）への依存をなくし、  
+> 配布時に追加の DLL が不要になる。
+
+### 6.9 ビルドと動作確認
 
 ```powershell
+# リポジトリルートで実行
+
+# 1. 依存関係の取得（rustler 等が mix.lock に記録される）
 mix deps.get
+
+# 2. コンパイル（Rustler が自動的に cargo build を呼び出す）
+#    初回は Rust クレートのコンパイルが走るため数分かかる
 mix compile
+
+# 3. 対話シェルで動作確認
 iex -S mix
-# iex> Game.NifBridge.add(1, 2)
-# => 3
 ```
 
-**チェックポイント**: `Game.NifBridge.add(1, 2)` が `3` を返せば OK。
+`iex` 起動後、以下を入力して動作を確認する:
+
+```elixir
+# NIF 関数の呼び出し
+iex> Game.NifBridge.add(1, 2)
+3
+
+iex> Game.NifBridge.add(100, -50)
+50
+
+# モジュール情報の確認
+iex> Game.NifBridge.__info__(:functions)
+[add: 2]
+```
+
+### 6.10 よくあるエラーと対処法
+
+| エラーメッセージ | 原因 | 対処法 |
+|---|---|---|
+| `could not compile dependency :rustler` | Rust ツールチェーンが未インストール | `rustup` をインストールし `rustc --version` で確認 |
+| `error: linker 'link.exe' not found` | MSVC ビルドツールが未インストール | Visual Studio Build Tools（C++ ワークロード）をインストール |
+| `nif_not_loaded` | `.dll` のロードに失敗 | `mix compile` のログを確認。`_build/dev/lib/game/priv/` に `.dll` が存在するか確認 |
+| `rustler::init!` のモジュール名不一致 | `"Elixir."` プレフィックスの欠落 | `rustler::init!("Elixir.Game.NifBridge")` と記述する |
+| `cargo build` が `cdylib` を出力しない | `Cargo.toml` の `crate-type` 設定漏れ | `crate-type = ["cdylib"]` を `[lib]` セクションに追加 |
+
+### 6.11 ビルド成果物の確認
+
+```powershell
+# Rustler がビルドした .dll の場所を確認
+# mix.exs に build_path を設定していない場合、デフォルトの _build\dev\ 以下に出力される
+ls _build\dev\lib\game\priv\native\
+# → game_native.dll が存在すれば OK
+```
+
+**チェックポイント**:
+- `mix compile` がエラーなく完了すること
+- `Game.NifBridge.add(1, 2)` が `3` を返すこと
+- `_build/dev/lib/game/priv/native/game_native.dll` が生成されていること
 
 ---
 
