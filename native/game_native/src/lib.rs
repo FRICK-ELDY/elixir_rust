@@ -1,13 +1,15 @@
 mod constants;
 mod physics;
+mod weapon;
 
 use constants::{
-    BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
+    BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS,
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
-    SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_COOLDOWN,
+    SCREEN_HEIGHT, SCREEN_WIDTH,
 };
+use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_SLOTS};
 use physics::rng::SimpleRng;
 use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
@@ -209,80 +211,6 @@ impl BulletWorld {
         self.positions_x.len()
     }
 }
-
-// ─── 武器種別 ─────────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum WeaponKind {
-    /// 基本武器: 最近接敵に向けて弾丸を発射
-    MagicWand,
-    /// 斧: プレイヤーの上方向に放物線を描いて飛ぶ（簡易実装: 上方向に直進）
-    Axe,
-    /// 十字: 上下左右 4 方向に同時発射
-    Cross,
-}
-
-impl WeaponKind {
-    /// 武器ごとの発射クールダウン（秒）
-    pub fn cooldown(&self) -> f32 {
-        match self {
-            WeaponKind::MagicWand => WEAPON_COOLDOWN,
-            WeaponKind::Axe       => 1.5,
-            WeaponKind::Cross     => 2.0,
-        }
-    }
-    /// 武器ごとのダメージ
-    pub fn damage(&self) -> i32 {
-        match self {
-            WeaponKind::MagicWand => BULLET_DAMAGE,
-            WeaponKind::Axe       => 25,
-            WeaponKind::Cross     => 15,
-        }
-    }
-}
-
-// ─── 武器スロット ─────────────────────────────────────────────
-pub struct WeaponSlot {
-    pub kind:           WeaponKind,
-    pub level:          u32,   // 1〜8
-    pub cooldown_timer: f32,
-}
-
-impl WeaponSlot {
-    pub fn new(kind: WeaponKind) -> Self {
-        Self { kind, level: 1, cooldown_timer: 0.0 }
-    }
-
-    /// レベルに応じたクールダウン（レベルが上がるほど速く撃てる）
-    pub fn effective_cooldown(&self) -> f32 {
-        let base = self.kind.cooldown();
-        // Lv1 が基準、Lv8 で 50% 短縮
-        (base * (1.0 - (self.level as f32 - 1.0) * 0.07)).max(base * 0.5)
-    }
-
-    /// レベルに応じたダメージ（レベルが上がるほど強い）
-    pub fn effective_damage(&self) -> i32 {
-        let base = self.kind.damage();
-        base + (self.level as i32 - 1) * (base / 4).max(1)
-    }
-
-    /// レベルに応じた弾丸数
-    pub fn bullet_count(&self) -> usize {
-        match self.kind {
-            WeaponKind::MagicWand => match self.level {
-                1..=2 => 1,
-                3..=4 => 2,
-                5..=6 => 3,
-                _     => 4,
-            },
-            WeaponKind::Cross => match self.level {
-                1..=3 => 4,  // 上下左右
-                _     => 8,  // 斜め追加
-            },
-            _ => 1,
-        }
-    }
-}
-
 
 // ─── パーティクル SoA ──────────────────────────────────────────
 pub struct ParticleWorld {
@@ -876,14 +804,9 @@ fn get_level_up_data(world: ResourceArc<GameWorld>) -> (u32, u32, bool, u32) {
 #[rustler::nif]
 fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
     let w = world.0.lock().unwrap();
-    w.weapon_slots.iter().map(|s| {
-        let name = match s.kind {
-            WeaponKind::MagicWand => "magic_wand".to_string(),
-            WeaponKind::Axe       => "axe".to_string(),
-            WeaponKind::Cross     => "cross".to_string(),
-        };
-        (name, s.level)
-    }).collect()
+    w.weapon_slots.iter()
+        .map(|s| (s.kind.name().to_string(), s.level))
+        .collect()
 }
 
 /// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17）
@@ -901,14 +824,13 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
         _            => WeaponKind::MagicWand,
     };
 
-    const MAX_SLOTS: usize = 6;
     // 同じ武器を選んだ場合はレベルアップ
     if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind == kind) {
-        slot.level = (slot.level + 1).min(8);
-    } else if w.weapon_slots.len() < MAX_SLOTS {
+        slot.level = (slot.level + 1).min(weapon::MAX_WEAPON_LEVEL);
+    } else if w.weapon_slots.len() < MAX_WEAPON_SLOTS {
         w.weapon_slots.push(WeaponSlot::new(kind));
     }
-    // MAX_SLOTS かつ新規武器の場合は何もしない（選択肢に出ないはず）
+    // Slots full + new weapon: no-op (Elixir-side generate_weapon_choices must not offer this)
 
     // レベルアップ処理: レベルを上げ、フラグを解除
     // exp は累積値で管理するためリセットしない

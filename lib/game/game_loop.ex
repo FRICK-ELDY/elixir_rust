@@ -13,6 +13,8 @@ defmodule Game.GameLoop do
   require Logger
 
   @tick_ms 16
+  # Elixir-side fallback: auto-selects after this duration when no UI is connected.
+  # The standalone Rust window uses button/keyboard selection instead.
   @level_up_auto_select_ms 3_000
 
   # ── Public API ──────────────────────────────────────────────────
@@ -27,6 +29,10 @@ defmodule Game.GameLoop do
     start_ms  = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
 
+    # Initial weapon state is derived from Rust (single source of truth).
+    # This way, changing the starting loadout in create_world() is enough.
+    initial_weapon_levels = fetch_weapon_levels(world_ref)
+
     {:ok, %{
       world_ref:           world_ref,
       last_tick:           start_ms,
@@ -34,9 +40,7 @@ defmodule Game.GameLoop do
       start_ms:            start_ms,
       last_spawn_ms:       start_ms,
       phase:               :playing,
-      weapons:             [:magic_wand],
-      # Step 17: 武器レベルマップ %{weapon_atom => level}
-      weapon_levels:       %{magic_wand: 1},
+      weapon_levels:       initial_weapon_levels,
       level_up_entered_ms: nil,
       weapon_choices:      [],
     }}
@@ -56,19 +60,15 @@ defmodule Game.GameLoop do
 
   @impl true
   def handle_cast({:select_weapon, weapon}, %{phase: :level_up} = state) do
-    chosen = to_string(weapon)
-    Game.NifBridge.add_weapon(state.world_ref, chosen)
+    Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
 
-    # Step 17: Rust から最新の武器レベルを取得して状態を同期
+    # Sync weapon levels from Rust (single source of truth)
     new_weapon_levels = fetch_weapon_levels(state.world_ref)
-    new_weapons = Map.keys(new_weapon_levels)
-
     lv = Map.get(new_weapon_levels, weapon, 1)
     Logger.info("[LEVEL UP] Weapon selected: #{Game.LevelSystem.weapon_label(weapon, lv)} -> resuming")
 
     {:noreply, %{state |
       phase:               :playing,
-      weapons:             new_weapons,
       weapon_levels:       new_weapon_levels,
       level_up_entered_ms: nil,
       weapon_choices:      [],
@@ -128,7 +128,7 @@ defmodule Game.GameLoop do
           "EXP: #{exp} | to next: #{exp_to_next} | " <>
           "choices: #{choice_labels}"
         )
-        Logger.info("[LEVEL UP] Auto-select in #{@level_up_auto_select_ms}ms...")
+        Logger.info("[LEVEL UP] Waiting for player selection...")
 
         %{state |
           phase:               :level_up,
@@ -170,10 +170,12 @@ defmodule Game.GameLoop do
 
   defp now_ms, do: System.monotonic_time(:millisecond)
 
-  # Step 17: Rust から武器レベルを取得して %{weapon_atom => level} マップに変換
+  # Converts [{weapon_name_string, level}] from Rust into %{weapon_atom => level}.
+  # String.to_existing_atom/1 is used intentionally: it raises ArgumentError for
+  # any unknown weapon name, preventing atom table exhaustion from unexpected NIF output.
   defp fetch_weapon_levels(world_ref) do
     world_ref
     |> Game.NifBridge.get_weapon_levels()
-    |> Map.new(fn {name, level} -> {String.to_atom(name), level} end)
+    |> Map.new(fn {name, level} -> {String.to_existing_atom(name), level} end)
   end
 end

@@ -4,19 +4,21 @@
 mod constants;
 mod renderer;
 mod physics;
+mod weapon;
 
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
 use constants::{
-    BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
+    BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
-    SCREEN_HEIGHT, SCREEN_WIDTH, WAVES, WEAPON_COOLDOWN,
+    SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
 use renderer::{HudData, Renderer};
+use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -209,47 +211,6 @@ impl ParticleWorld {
 
     fn kill(&mut self, i: usize) {
         if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
-    }
-}
-
-// ─── Step 17: 武器スロット ─────────────────────────────────────
-#[derive(Clone, PartialEq)]
-enum WeaponKind { MagicWand, Axe, Cross }
-
-impl WeaponKind {
-    fn name(&self) -> &'static str {
-        match self { Self::MagicWand => "magic_wand", Self::Axe => "axe", Self::Cross => "cross" }
-    }
-    fn base_cooldown(&self) -> f32 {
-        match self { Self::MagicWand => WEAPON_COOLDOWN, Self::Axe => 1.5, Self::Cross => 2.0 }
-    }
-    fn base_damage(&self) -> i32 {
-        match self { Self::MagicWand => BULLET_DAMAGE, Self::Axe => 25, Self::Cross => 15 }
-    }
-}
-
-struct WeaponSlot {
-    kind:           WeaponKind,
-    level:          u32,
-    cooldown_timer: f32,
-}
-
-impl WeaponSlot {
-    fn new(kind: WeaponKind) -> Self { Self { kind, level: 1, cooldown_timer: 0.0 } }
-    fn effective_cooldown(&self) -> f32 {
-        let b = self.kind.base_cooldown();
-        (b * (1.0 - (self.level as f32 - 1.0) * 0.07)).max(b * 0.5)
-    }
-    fn effective_damage(&self) -> i32 {
-        let b = self.kind.base_damage();
-        b + (self.level as i32 - 1) * (b / 4).max(1)
-    }
-    fn bullet_count(&self) -> usize {
-        match self.kind {
-            WeaponKind::MagicWand => match self.level { 1..=2 => 1, 3..=4 => 2, 5..=6 => 3, _ => 4 },
-            WeaponKind::Cross     => if self.level >= 4 { 8 } else { 4 },
-            _                     => 1,
-        }
     }
 }
 
@@ -540,10 +501,9 @@ impl GameWorld {
             "cross" => WeaponKind::Cross,
             _       => WeaponKind::MagicWand,
         };
-        const MAX_SLOTS: usize = 6;
         if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
-            slot.level = (slot.level + 1).min(8);
-        } else if self.weapon_slots.len() < MAX_SLOTS {
+            slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
+        } else if self.weapon_slots.len() < MAX_WEAPON_SLOTS {
             self.weapon_slots.push(WeaponSlot::new(kind));
         }
         self.level            += 1;

@@ -7,31 +7,35 @@ defmodule Game.LevelSystem do
   """
 
   @all_weapons [:magic_wand, :axe, :cross]
+  # Must match MAX_WEAPON_LEVEL and MAX_WEAPON_SLOTS in native/game_native/src/weapon.rs
+  @max_weapon_level 8
+  @max_weapon_slots 6
 
   @doc """
-  Returns 3 weapon choices for the level-up screen.
+  Returns up to 3 weapon choices for the level-up screen.
 
-  - weapon_levels: %{weapon_atom => level} (0 = not owned)
-  - Prioritises unowned weapons first, then lowest-level weapons.
-  - Weapons already at max level (Lv.8) are excluded.
+  Exclusion rules (must mirror Rust add_weapon logic):
+  - Weapons at max level (Lv.#{@max_weapon_level}) are excluded.
+  - Unowned weapons are excluded when all #{@max_weapon_slots} slots are already filled.
+
+  Sort order: unowned first, then lowest-level first.
   """
   def generate_weapon_choices(weapon_levels) when is_map(weapon_levels) do
+    slots_full? = map_size(weapon_levels) >= @max_weapon_slots
+
     @all_weapons
-    |> Enum.reject(fn w -> Map.get(weapon_levels, w, 0) >= 8 end)
+    |> Enum.reject(fn w ->
+      lv = Map.get(weapon_levels, w, 0)
+      # Exclude max-level weapons
+      lv >= @max_weapon_level or
+      # Exclude unowned weapons when slots are full (Rust would silently no-op)
+      (slots_full? and lv == 0)
+    end)
     |> Enum.sort_by(fn w ->
       lv = Map.get(weapon_levels, w, 0)
-      # 未所持 (0) を最優先、次に低レベル順
       if lv == 0, do: -1, else: lv
     end)
     |> Enum.take(3)
-  end
-
-  # 後方互換: 旧シグネチャ（リスト）でも動作するよう残す
-  def generate_weapon_choices(current_weapons) when is_list(current_weapons) do
-    not_owned = Enum.reject(@all_weapons, &(&1 in current_weapons))
-    candidates =
-      if length(not_owned) >= 3, do: not_owned, else: not_owned ++ @all_weapons
-    candidates |> Enum.uniq() |> Enum.take(3)
   end
 
   @doc "Human-readable weapon name with level for logging."
