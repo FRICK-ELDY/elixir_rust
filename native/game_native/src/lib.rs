@@ -9,6 +9,7 @@ use constants::{
     SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_COOLDOWN,
 };
 use physics::rng::SimpleRng;
+use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
@@ -46,6 +47,9 @@ pub struct EnemyWorld {
     pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
     pub count:        usize,
+    /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
+    pub sep_x:        Vec<f32>,
+    pub sep_y:        Vec<f32>,
 }
 
 impl EnemyWorld {
@@ -59,6 +63,8 @@ impl EnemyWorld {
             hp:           Vec::new(),
             alive:        Vec::new(),
             count:        0,
+            sep_x:        Vec::new(),
+            sep_y:        Vec::new(),
         }
     }
 
@@ -106,10 +112,23 @@ impl EnemyWorld {
                 self.speeds.push(80.0);
                 self.hp.push(30.0);
                 self.alive.push(true);
+                self.sep_x.push(0.0);
+                self.sep_y.push(0.0);
                 self.count += 1;
             }
         }
     }
+}
+
+impl EnemySeparation for EnemyWorld {
+    fn enemy_count(&self) -> usize          { self.positions_x.len() }
+    fn is_alive(&self, i: usize) -> bool    { self.alive[i] }
+    fn pos_x(&self, i: usize) -> f32        { self.positions_x[i] }
+    fn pos_y(&self, i: usize) -> f32        { self.positions_y[i] }
+    fn add_pos_x(&mut self, i: usize, v: f32) { self.positions_x[i] += v; }
+    fn add_pos_y(&mut self, i: usize, v: f32) { self.positions_y[i] += v; }
+    fn sep_buf_x(&mut self) -> &mut Vec<f32>  { &mut self.sep_x }
+    fn sep_buf_y(&mut self) -> &mut Vec<f32>  { &mut self.sep_y }
 }
 
 /// 画面外の四辺いずれかにランダムに配置
@@ -374,77 +393,6 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
         });
 }
 
-/// 敵同士の重なりを解消する分離（Separation）パス
-///
-/// アルゴリズム:
-///   1. Spatial Hash で近隣の敵を列挙
-///   2. 重なっているペアに対して押し出しベクトルを計算し sep_x/sep_y バッファに蓄積
-///   3. バッファを位置に適用
-///
-/// rayon で並列化できないため（書き込みが衝突する）、シングルスレッドで処理する。
-/// 敵数が多くても Spatial Hash により O(n) に近い計算量を維持できる。
-pub fn apply_enemy_separation(enemies: &mut EnemyWorld, dt: f32) {
-    let len = enemies.len();
-    if len < 2 {
-        return;
-    }
-
-    // 分離ベクトルのバッファ（フレームごとに使い捨て）
-    let mut sep_x = vec![0.0f32; len];
-    let mut sep_y = vec![0.0f32; len];
-
-    // Spatial Hash を構築（生存敵のみ）
-    let mut hash = physics::spatial_hash::SpatialHash::new(ENEMY_SEPARATION_RADIUS);
-    for i in 0..len {
-        if enemies.alive[i] {
-            hash.insert(i, enemies.positions_x[i], enemies.positions_y[i]);
-        }
-    }
-
-    // 近隣ペアを検索して押し出しベクトルを蓄積
-    for i in 0..len {
-        if !enemies.alive[i] {
-            continue;
-        }
-        let ix = enemies.positions_x[i];
-        let iy = enemies.positions_y[i];
-
-        let neighbors = hash.query_nearby(ix, iy, ENEMY_SEPARATION_RADIUS);
-        for j in neighbors {
-            if j <= i || !enemies.alive[j] {
-                // j <= i: 各ペアを一度だけ処理（両方向に適用するため）
-                continue;
-            }
-            let jx = enemies.positions_x[j];
-            let jy = enemies.positions_y[j];
-
-            let dx = ix - jx;
-            let dy = iy - jy;
-            let dist_sq = dx * dx + dy * dy;
-
-            if dist_sq < ENEMY_SEPARATION_RADIUS * ENEMY_SEPARATION_RADIUS && dist_sq > 1e-6 {
-                let dist = dist_sq.sqrt();
-                let overlap = ENEMY_SEPARATION_RADIUS - dist;
-                // 正規化した押し出しベクトル × 重なり量 × 強さ
-                let force = overlap * ENEMY_SEPARATION_FORCE * dt;
-                let nx = (dx / dist) * force;
-                let ny = (dy / dist) * force;
-                sep_x[i] += nx;
-                sep_y[i] += ny;
-                sep_x[j] -= nx;
-                sep_y[j] -= ny;
-            }
-        }
-    }
-
-    // バッファを位置に適用
-    for i in 0..len {
-        if enemies.alive[i] {
-            enemies.positions_x[i] += sep_x[i];
-            enemies.positions_y[i] += sep_y[i];
-        }
-    }
-}
 
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
@@ -582,7 +530,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     update_chase_ai(&mut w.enemies, px, py, dt);
 
     // 敵同士の重なりを解消する分離パス
-    apply_enemy_separation(&mut w.enemies, dt);
+    apply_separation(&mut w.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
     // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築

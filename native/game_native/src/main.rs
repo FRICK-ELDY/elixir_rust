@@ -26,6 +26,7 @@ use winit::{
 };
 
 use physics::rng::SimpleRng;
+use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
 
 struct PlayerState {
@@ -42,11 +43,14 @@ struct EnemyWorld {
     hp:           Vec<f32>,
     alive:        Vec<bool>,
     count:        usize,
+    /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
+    sep_x:        Vec<f32>,
+    sep_y:        Vec<f32>,
 }
 
 impl EnemyWorld {
     fn new() -> Self {
-        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0 }
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0, sep_x: Vec::new(), sep_y: Vec::new() }
     }
     fn spawn(&mut self, positions: &[(f32, f32)]) {
         for &(x, y) in positions {
@@ -61,6 +65,8 @@ impl EnemyWorld {
                 self.positions_y.push(y);
                 self.hp.push(30.0);
                 self.alive.push(true);
+                self.sep_x.push(0.0);
+                self.sep_y.push(0.0);
             }
             self.count += 1;
         }
@@ -69,6 +75,17 @@ impl EnemyWorld {
         if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
     }
     fn len(&self) -> usize { self.positions_x.len() }
+}
+
+impl EnemySeparation for EnemyWorld {
+    fn enemy_count(&self) -> usize          { self.positions_x.len() }
+    fn is_alive(&self, i: usize) -> bool    { self.alive[i] }
+    fn pos_x(&self, i: usize) -> f32        { self.positions_x[i] }
+    fn pos_y(&self, i: usize) -> f32        { self.positions_y[i] }
+    fn add_pos_x(&mut self, i: usize, v: f32) { self.positions_x[i] += v; }
+    fn add_pos_y(&mut self, i: usize, v: f32) { self.positions_y[i] += v; }
+    fn sep_buf_x(&mut self) -> &mut Vec<f32>  { &mut self.sep_x }
+    fn sep_buf_y(&mut self) -> &mut Vec<f32>  { &mut self.sep_y }
 }
 
 struct BulletWorld {
@@ -271,51 +288,7 @@ impl GameWorld {
         }
 
         // 敵同士の重なりを解消する分離パス
-        {
-            let len = self.enemies.len();
-            let mut sep_x = vec![0.0f32; len];
-            let mut sep_y = vec![0.0f32; len];
-
-            let mut hash = physics::spatial_hash::SpatialHash::new(ENEMY_SEPARATION_RADIUS);
-            for i in 0..len {
-                if self.enemies.alive[i] {
-                    hash.insert(i, self.enemies.positions_x[i], self.enemies.positions_y[i]);
-                }
-            }
-
-            for i in 0..len {
-                if !self.enemies.alive[i] { continue; }
-                let ix = self.enemies.positions_x[i];
-                let iy = self.enemies.positions_y[i];
-                let neighbors = hash.query_nearby(ix, iy, ENEMY_SEPARATION_RADIUS);
-                for j in neighbors {
-                    if j <= i || !self.enemies.alive[j] { continue; }
-                    let jx = self.enemies.positions_x[j];
-                    let jy = self.enemies.positions_y[j];
-                    let dx = ix - jx;
-                    let dy = iy - jy;
-                    let dist_sq = dx * dx + dy * dy;
-                    if dist_sq < ENEMY_SEPARATION_RADIUS * ENEMY_SEPARATION_RADIUS && dist_sq > 1e-6 {
-                        let dist = dist_sq.sqrt();
-                        let overlap = ENEMY_SEPARATION_RADIUS - dist;
-                        let force = overlap * ENEMY_SEPARATION_FORCE * dt;
-                        let nx = (dx / dist) * force;
-                        let ny = (dy / dist) * force;
-                        sep_x[i] += nx;
-                        sep_y[i] += ny;
-                        sep_x[j] -= nx;
-                        sep_y[j] -= ny;
-                    }
-                }
-            }
-
-            for i in 0..len {
-                if self.enemies.alive[i] {
-                    self.enemies.positions_x[i] += sep_x[i];
-                    self.enemies.positions_y[i] += sep_y[i];
-                }
-            }
-        }
+        apply_separation(&mut self.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
         // 衝突: Spatial Hash 再構築
         self.collision.dynamic.clear();
