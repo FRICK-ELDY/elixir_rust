@@ -20,4 +20,7 @@ defmodule Game.NifBridge do
   # Step 9: 敵スポーン + 描画データ取得
   def spawn_enemies(_world, _kind, _count), do: :erlang.nif_error(:nif_not_loaded)
   def get_render_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 10: プレイヤー HP 取得
+  def get_player_hp(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
