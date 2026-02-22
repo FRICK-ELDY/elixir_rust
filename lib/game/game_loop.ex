@@ -46,7 +46,7 @@ defmodule Game.GameLoop do
       enemy_count    = Game.NifBridge.get_enemy_count(state.world_ref)
       bullet_count   = Game.NifBridge.get_bullet_count(state.world_ref)
       frame_time_ms  = Game.NifBridge.get_frame_time_ms(state.world_ref)
-      budget_warn    = if frame_time_ms > 16.0, do: " ⚠ OVER BUDGET", else: ""
+      budget_warn    = if frame_time_ms > @tick_ms, do: " ⚠ OVER BUDGET", else: ""
       Logger.info(
         "Frame: #{state.frame_count} | " <>
         "Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)}) | " <>

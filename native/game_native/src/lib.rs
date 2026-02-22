@@ -1,7 +1,7 @@
 mod constants;
 mod physics;
 
-use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use constants::{FRAME_BUDGET_MS, PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
 use physics::spatial_hash::CollisionWorld;
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
@@ -472,7 +472,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     // ── Step 12: フレーム時間計測 ────────────────────────────────
     let elapsed_ms = t_start.elapsed().as_secs_f64() * 1000.0;
     w.last_frame_time_ms = elapsed_ms;
-    if elapsed_ms > 16.0 {
+    if elapsed_ms > FRAME_BUDGET_MS {
         eprintln!(
             "[PERF] Frame budget exceeded: {:.2}ms (enemies: {})",
             elapsed_ms,
