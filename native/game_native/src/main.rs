@@ -379,8 +379,9 @@ impl GameWorld {
         let max_cam_y = (MAP_HEIGHT - sh).max(0.0);
         let target_cam_x = target_cam_x.clamp(0.0, max_cam_x);
         let target_cam_y = target_cam_y.clamp(0.0, max_cam_y);
-        self.camera_x += (target_cam_x - self.camera_x) * CAMERA_LERP_SPEED * dt;
-        self.camera_y += (target_cam_y - self.camera_y) * CAMERA_LERP_SPEED * dt;
+        let lerp_t = 1.0 - (-CAMERA_LERP_SPEED * dt).exp();
+        self.camera_x += (target_cam_x - self.camera_x) * lerp_t;
+        self.camera_y += (target_cam_y - self.camera_y) * lerp_t;
 
         // 敵 AI（EnemyKind ごとの速度を使用）
         for i in 0..self.enemies.len() {
