@@ -908,9 +908,9 @@ fn add(a: i64, b: i64) -> NifResult<i64> {
     Ok(a + b)
 }
 
-// 第 1 引数: Elixir モジュール名（"Elixir." プレフィックスが必要）
-// 第 2 引数: 登録する NIF 関数のリスト
-rustler::init!("Elixir.Game.NifBridge", [add]);
+// Elixir モジュール名を指定する（"Elixir." プレフィックスが必要）
+// #[rustler::nif] が付いた関数は自動検出されるため、関数リストの明示は不要
+rustler::init!("Elixir.Game.NifBridge");
 ```
 
 > **`lib.rs` と `main.rs` の関係**  
@@ -1017,7 +1017,7 @@ iex> Game.NifBridge.__info__(:functions)
 | `could not compile dependency :rustler` | Rust ツールチェーンが未インストール | `rustup` をインストールし `rustc --version` で確認 |
 | `error: linker 'link.exe' not found` | MSVC ビルドツールが未インストール | Visual Studio Build Tools（C++ ワークロード）をインストール |
 | `nif_not_loaded` | `.dll` のロードに失敗 | `mix compile` のログを確認。`_build/dev/lib/game/priv/` に `.dll` が存在するか確認 |
-| `rustler::init!` のモジュール名不一致 | `"Elixir."` プレフィックスの欠落 | `rustler::init!("Elixir.Game.NifBridge", ...)` と記述する |
+| `rustler::init!` のモジュール名不一致 | `"Elixir."` プレフィックスの欠落 | `rustler::init!("Elixir.Game.NifBridge")` と記述する |
 | `cargo build` が `cdylib` を出力しない | `Cargo.toml` の `crate-type` 設定漏れ | `crate-type = ["cdylib"]` を `[lib]` セクションに追加 |
 
 ### 6.11 ビルド成果物の確認
