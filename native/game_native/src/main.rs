@@ -1,12 +1,16 @@
+/// Standalone rendering binary.
+/// Runs the full game loop in pure Rust without Elixir/NIF.
+/// Used for renderer development and visual testing.
 mod constants;
 mod renderer;
+mod physics;
 
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use constants::{PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH, SPRITE_SIZE};
-use renderer::Renderer;
+use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use renderer::{HudData, Renderer};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -15,13 +19,405 @@ use winit::{
     window::{Window, WindowId},
 };
 
-#[derive(Default)]
+use physics::spatial_hash::CollisionWorld;
+
+const PLAYER_RADIUS: f32 = PLAYER_SIZE / 2.0;
+const ENEMY_RADIUS:  f32 = 20.0;
+const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
+const INVINCIBLE_DURATION:  f32 = 0.5;
+const CELL_SIZE:     f32 = 80.0;
+const WEAPON_COOLDOWN: f32 = 1.0;
+const BULLET_SPEED:  f32 = 400.0;
+const BULLET_DAMAGE: i32 = 10;
+const BULLET_LIFETIME: f32 = 3.0;
+const BULLET_RADIUS: f32 = 6.0;
+const MAX_ENEMIES: usize = 10_000;
+
+// Wave-based spawn schedule: (start_secs, interval_secs, count)
+const WAVES: &[(f32, f32, usize)] = &[
+    (  0.0, 0.8,   20),
+    ( 10.0, 0.6,   50),
+    ( 30.0, 0.4,  100),
+    ( 60.0, 0.3,  200),
+    (120.0, 0.2,  300),
+];
+
+struct PlayerState {
+    x: f32, y: f32,
+    input_dx: f32, input_dy: f32,
+    hp: f32,
+    max_hp: f32,
+    invincible_timer: f32,
+}
+
+struct EnemyWorld {
+    positions_x:  Vec<f32>,
+    positions_y:  Vec<f32>,
+    hp:           Vec<f32>,
+    alive:        Vec<bool>,
+    count:        usize,
+}
+
+impl EnemyWorld {
+    fn new() -> Self {
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0 }
+    }
+    fn spawn(&mut self, positions: &[(f32, f32)]) {
+        for &(x, y) in positions {
+            let slot = self.alive.iter().position(|&a| !a);
+            if let Some(i) = slot {
+                self.positions_x[i] = x;
+                self.positions_y[i] = y;
+                self.hp[i]    = 30.0;
+                self.alive[i] = true;
+            } else {
+                self.positions_x.push(x);
+                self.positions_y.push(y);
+                self.hp.push(30.0);
+                self.alive.push(true);
+            }
+            self.count += 1;
+        }
+    }
+    fn kill(&mut self, i: usize) {
+        if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
+    }
+    fn len(&self) -> usize { self.positions_x.len() }
+}
+
+struct BulletWorld {
+    positions_x:  Vec<f32>,
+    positions_y:  Vec<f32>,
+    velocities_x: Vec<f32>,
+    velocities_y: Vec<f32>,
+    lifetime:     Vec<f32>,
+    alive:        Vec<bool>,
+    count:        usize,
+}
+
+impl BulletWorld {
+    fn new() -> Self {
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), velocities_x: Vec::new(), velocities_y: Vec::new(), lifetime: Vec::new(), alive: Vec::new(), count: 0 }
+    }
+    fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32) {
+        let slot = self.alive.iter().position(|&a| !a);
+        if let Some(i) = slot {
+            self.positions_x[i]  = x;
+            self.positions_y[i]  = y;
+            self.velocities_x[i] = vx;
+            self.velocities_y[i] = vy;
+            self.lifetime[i]     = BULLET_LIFETIME;
+            self.alive[i]        = true;
+        } else {
+            self.positions_x.push(x);
+            self.positions_y.push(y);
+            self.velocities_x.push(vx);
+            self.velocities_y.push(vy);
+            self.lifetime.push(BULLET_LIFETIME);
+            self.alive.push(true);
+        }
+        self.count += 1;
+    }
+    fn kill(&mut self, i: usize) {
+        if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
+    }
+    fn len(&self) -> usize { self.positions_x.len() }
+}
+
+struct GameWorld {
+    player:           PlayerState,
+    enemies:          EnemyWorld,
+    bullets:          BulletWorld,
+    collision:        CollisionWorld,
+    rng:              SimpleRng,
+    score:            u32,
+    elapsed_seconds:  f32,
+    last_spawn_secs:  f32,
+    weapon_cooldown:  f32,
+    exp:              u32,
+    level:            u32,
+    level_up_pending: bool,
+    weapon_choices:   Vec<String>,
+    level_up_timer:   f32,
+}
+
+impl GameWorld {
+    fn new() -> Self {
+        Self {
+            player: PlayerState {
+                x: SCREEN_WIDTH / 2.0 - PLAYER_SIZE / 2.0,
+                y: SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
+                input_dx: 0.0, input_dy: 0.0,
+                hp: 100.0, max_hp: 100.0,
+                invincible_timer: 0.0,
+            },
+            enemies:          EnemyWorld::new(),
+            bullets:          BulletWorld::new(),
+            collision:        CollisionWorld::new(CELL_SIZE),
+            rng:              SimpleRng::new(42),
+            score:            0,
+            elapsed_seconds:  0.0,
+            last_spawn_secs:  0.0,
+            weapon_cooldown:  0.0,
+            exp:              0,
+            level:            1,
+            level_up_pending: false,
+            weapon_choices:   Vec::new(),
+            level_up_timer:   0.0,
+        }
+    }
+
+    fn step(&mut self, dt: f32) {
+        if self.level_up_pending {
+            self.level_up_timer += dt;
+            if self.level_up_timer >= 3.0 {
+                self.confirm_level_up();
+            }
+            return;
+        }
+
+        self.elapsed_seconds += dt;
+
+        // プレイヤー移動
+        let dx = self.player.input_dx;
+        let dy = self.player.input_dy;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len > 0.001 {
+            self.player.x += (dx / len) * PLAYER_SPEED * dt;
+            self.player.y += (dy / len) * PLAYER_SPEED * dt;
+        }
+        self.player.x = self.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
+        self.player.y = self.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
+
+        let px = self.player.x + PLAYER_RADIUS;
+        let py = self.player.y + PLAYER_RADIUS;
+
+        // 敵 AI
+        for i in 0..self.enemies.len() {
+            if !self.enemies.alive[i] { continue; }
+            let ex = self.enemies.positions_x[i];
+            let ey = self.enemies.positions_y[i];
+            let ddx = px - ex;
+            let ddy = py - ey;
+            let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+            self.enemies.positions_x[i] += (ddx / dist) * 80.0 * dt;
+            self.enemies.positions_y[i] += (ddy / dist) * 80.0 * dt;
+        }
+
+        // 衝突: Spatial Hash 再構築
+        self.collision.dynamic.clear();
+        for i in 0..self.enemies.len() {
+            if self.enemies.alive[i] {
+                self.collision.dynamic.insert(i, self.enemies.positions_x[i], self.enemies.positions_y[i]);
+            }
+        }
+
+        // 無敵タイマー
+        if self.player.invincible_timer > 0.0 {
+            self.player.invincible_timer = (self.player.invincible_timer - dt).max(0.0);
+        }
+
+        // プレイヤー vs 敵
+        let hit_r = PLAYER_RADIUS + ENEMY_RADIUS;
+        let candidates = self.collision.dynamic.query_nearby(px, py, hit_r);
+        for idx in candidates {
+            if !self.enemies.alive[idx] { continue; }
+            let ex = self.enemies.positions_x[idx] + ENEMY_RADIUS;
+            let ey = self.enemies.positions_y[idx] + ENEMY_RADIUS;
+            let ddx = px - ex;
+            let ddy = py - ey;
+            if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                if self.player.invincible_timer <= 0.0 && self.player.hp > 0.0 {
+                    self.player.hp = (self.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
+                    self.player.invincible_timer = INVINCIBLE_DURATION;
+                }
+            }
+        }
+
+        // 武器（Magic Wand）
+        self.weapon_cooldown = (self.weapon_cooldown - dt).max(0.0);
+        if self.weapon_cooldown <= 0.0 {
+            if let Some(ti) = self.find_nearest_enemy(px, py) {
+                let tx  = self.enemies.positions_x[ti] + ENEMY_RADIUS;
+                let ty  = self.enemies.positions_y[ti] + ENEMY_RADIUS;
+                let bdx = tx - px;
+                let bdy = ty - py;
+                let bl  = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
+                self.bullets.spawn(px, py, (bdx / bl) * BULLET_SPEED, (bdy / bl) * BULLET_SPEED);
+                self.weapon_cooldown = WEAPON_COOLDOWN;
+            }
+        }
+
+        // Bullet movement and lifetime
+        let bl = self.bullets.len();
+        for i in 0..bl {
+            if !self.bullets.alive[i] { continue; }
+            self.bullets.positions_x[i] += self.bullets.velocities_x[i] * dt;
+            self.bullets.positions_y[i] += self.bullets.velocities_y[i] * dt;
+            self.bullets.lifetime[i]    -= dt;
+            if self.bullets.lifetime[i] <= 0.0 {
+                self.bullets.kill(i);
+                continue;
+            }
+            let bx = self.bullets.positions_x[i];
+            let by = self.bullets.positions_y[i];
+            if bx < -100.0 || bx > SCREEN_WIDTH + 100.0 || by < -100.0 || by > SCREEN_HEIGHT + 100.0 {
+                self.bullets.kill(i);
+            }
+        }
+
+        // Bullet vs enemy collision
+        let hit_r2 = BULLET_RADIUS + ENEMY_RADIUS;
+        for bi in 0..bl {
+            if !self.bullets.alive[bi] { continue; }
+            let bx = self.bullets.positions_x[bi];
+            let by = self.bullets.positions_y[bi];
+            let nearby = self.collision.dynamic.query_nearby(bx, by, hit_r2);
+            for ei in nearby {
+                if !self.enemies.alive[ei] { continue; }
+                let ex  = self.enemies.positions_x[ei] + ENEMY_RADIUS;
+                let ey  = self.enemies.positions_y[ei] + ENEMY_RADIUS;
+                let ddx = bx - ex;
+                let ddy = by - ey;
+                if ddx * ddx + ddy * ddy < hit_r2 * hit_r2 {
+                    self.enemies.hp[ei] -= BULLET_DAMAGE as f32;
+                    if self.enemies.hp[ei] <= 0.0 {
+                        self.enemies.kill(ei);
+                        self.score += 10;
+                        self.exp   += 5;
+                        self.check_level_up();
+                    }
+                    self.bullets.kill(bi);
+                    break;
+                }
+            }
+        }
+
+        // Wave-based enemy spawn
+        let (wave_interval, wave_count) = current_wave(self.elapsed_seconds);
+        if self.elapsed_seconds - self.last_spawn_secs >= wave_interval
+            && self.enemies.count < MAX_ENEMIES
+        {
+            let to_spawn = wave_count.min(MAX_ENEMIES - self.enemies.count);
+            let positions: Vec<(f32, f32)> = (0..to_spawn)
+                .map(|_| spawn_outside(&mut self.rng))
+                .collect();
+            self.enemies.spawn(&positions);
+            self.last_spawn_secs = self.elapsed_seconds;
+        }
+    }
+
+    fn find_nearest_enemy(&self, px: f32, py: f32) -> Option<usize> {
+        let mut min_d = f32::MAX;
+        let mut nearest = None;
+        for i in 0..self.enemies.len() {
+            if !self.enemies.alive[i] { continue; }
+            let dx = self.enemies.positions_x[i] - px;
+            let dy = self.enemies.positions_y[i] - py;
+            let d  = dx * dx + dy * dy;
+            if d < min_d { min_d = d; nearest = Some(i); }
+        }
+        nearest
+    }
+
+    fn check_level_up(&mut self) {
+        if self.level_up_pending { return; }
+        let required = exp_for_next(self.level);
+        if self.exp >= required {
+            self.level_up_pending = true;
+            self.level_up_timer   = 0.0;
+            self.weapon_choices   = vec![
+                "magic_wand".to_string(),
+                "axe".to_string(),
+                "cross".to_string(),
+            ];
+        }
+    }
+
+    fn confirm_level_up(&mut self) {
+        self.level            += 1;
+        self.level_up_pending  = false;
+        self.level_up_timer    = 0.0;
+        self.weapon_choices.clear();
+    }
+
+    fn get_render_data(&self) -> Vec<(f32, f32, u8)> {
+        let mut v = Vec::with_capacity(1 + self.enemies.len() + self.bullets.len());
+        v.push((self.player.x, self.player.y, 0u8));
+        for i in 0..self.enemies.len() {
+            if self.enemies.alive[i] {
+                v.push((self.enemies.positions_x[i], self.enemies.positions_y[i], 1u8));
+            }
+        }
+        for i in 0..self.bullets.len() {
+            if self.bullets.alive[i] {
+                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], 2u8));
+            }
+        }
+        v
+    }
+
+    fn hud_data(&self, fps: f32) -> HudData {
+        HudData {
+            hp:              self.player.hp,
+            max_hp:          self.player.max_hp,
+            score:           self.score,
+            elapsed_seconds: self.elapsed_seconds,
+            level:           self.level,
+            exp:             self.exp,
+            exp_to_next:     exp_for_next(self.level).saturating_sub(self.exp),
+            enemy_count:     self.enemies.count,
+            bullet_count:    self.bullets.count,
+            fps,
+            level_up_pending: self.level_up_pending,
+            weapon_choices:  self.weapon_choices.clone(),
+        }
+    }
+}
+
+fn current_wave(elapsed_secs: f32) -> (f32, usize) {
+    WAVES.iter()
+        .filter(|&&(start, _, _)| elapsed_secs >= start)
+        .last()
+        .map(|&(_, interval, count)| (interval, count))
+        .unwrap_or((0.8, 20))
+}
+
+fn exp_for_next(level: u32) -> u32 {
+    const TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
+    let idx = level as usize;
+    if idx < TABLE.len() { TABLE[idx] } else { 270 + (idx as u32 - 9) * 50 }
+}
+
+fn spawn_outside(rng: &mut SimpleRng) -> (f32, f32) {
+    let margin = 80.0;
+    match rng.next_u32() % 4 {
+        0 => (rng.next_f32() * SCREEN_WIDTH, -margin),
+        1 => (rng.next_f32() * SCREEN_WIDTH, SCREEN_HEIGHT + margin),
+        2 => (-margin,                        rng.next_f32() * SCREEN_HEIGHT),
+        _ => (SCREEN_WIDTH + margin,          rng.next_f32() * SCREEN_HEIGHT),
+    }
+}
+
+// ─── 簡易 LCG 乱数 ────────────────────────────────────────────
+
+struct SimpleRng(u64);
+impl SimpleRng {
+    fn new(seed: u64) -> Self { Self(seed) }
+    fn next_u32(&mut self) -> u32 {
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (self.0 >> 33) as u32
+    }
+    fn next_f32(&mut self) -> f32 { self.next_u32() as f32 / u32::MAX as f32 }
+}
+
+// ─── winit アプリケーション ────────────────────────────────────
+
 struct App {
-    window:     Option<Arc<Window>>,
-    renderer:   Option<Renderer>,
-    keys_held:  HashSet<KeyCode>,
-    player_x:   f32,
-    player_y:   f32,
+    window:      Option<Arc<Window>>,
+    renderer:    Option<Renderer>,
+    game:        GameWorld,
+    keys_held:   HashSet<KeyCode>,
     last_update: Option<Instant>,
 }
 
@@ -30,9 +426,8 @@ impl App {
         Self {
             window:      None,
             renderer:    None,
+            game:        GameWorld::new(),
             keys_held:   HashSet::new(),
-            player_x:    SCREEN_WIDTH  / 2.0 - SPRITE_SIZE / 2.0,
-            player_y:    SCREEN_HEIGHT / 2.0 - SPRITE_SIZE / 2.0,
             last_update: None,
         }
     }
@@ -45,19 +440,29 @@ impl ApplicationHandler for App {
                 .create_window(
                     Window::default_attributes()
                         .with_title("Elixir x Rust Survivor")
-                        .with_inner_size(winit::dpi::LogicalSize::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)),
+                        .with_inner_size(winit::dpi::LogicalSize::new(
+                            SCREEN_WIDTH as u32,
+                            SCREEN_HEIGHT as u32,
+                        )),
                 )
                 .expect("ウィンドウの作成に失敗しました"),
         );
 
         let renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        self.window   = Some(window);
-        self.renderer = Some(renderer);
+        self.window      = Some(window);
+        self.renderer    = Some(renderer);
         self.last_update = Some(Instant::now());
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // egui にイベントを転送（消費された場合はゲームへ渡さない）
+        if let (Some(renderer), Some(window)) = (self.renderer.as_mut(), self.window.as_ref()) {
+            if renderer.handle_window_event(window, &event) {
+                return;
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
 
@@ -82,33 +487,37 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                // 経過時間を計算してプレイヤーを移動
                 let now = Instant::now();
+
+                // ─── 入力処理 ──────────────────────────────────
+                let mut dx = 0.0f32;
+                let mut dy = 0.0f32;
+                if self.keys_held.contains(&KeyCode::KeyW) || self.keys_held.contains(&KeyCode::ArrowUp)    { dy -= 1.0; }
+                if self.keys_held.contains(&KeyCode::KeyS) || self.keys_held.contains(&KeyCode::ArrowDown)  { dy += 1.0; }
+                if self.keys_held.contains(&KeyCode::KeyA) || self.keys_held.contains(&KeyCode::ArrowLeft)  { dx -= 1.0; }
+                if self.keys_held.contains(&KeyCode::KeyD) || self.keys_held.contains(&KeyCode::ArrowRight) { dx += 1.0; }
+                self.game.player.input_dx = dx;
+                self.game.player.input_dy = dy;
+
+                // ─── ゲームステップ ────────────────────────────
                 if let Some(last) = self.last_update {
-                    let dt = now.duration_since(last).as_secs_f32();
-
-                    let mut dx = 0.0f32;
-                    let mut dy = 0.0f32;
-                    if self.keys_held.contains(&KeyCode::KeyW) || self.keys_held.contains(&KeyCode::ArrowUp)    { dy -= 1.0; }
-                    if self.keys_held.contains(&KeyCode::KeyS) || self.keys_held.contains(&KeyCode::ArrowDown)  { dy += 1.0; }
-                    if self.keys_held.contains(&KeyCode::KeyA) || self.keys_held.contains(&KeyCode::ArrowLeft)  { dx -= 1.0; }
-                    if self.keys_held.contains(&KeyCode::KeyD) || self.keys_held.contains(&KeyCode::ArrowRight) { dx += 1.0; }
-
-                    let len = (dx * dx + dy * dy).sqrt();
-                    if len > 0.001 {
-                        self.player_x += (dx / len) * PLAYER_SPEED * dt;
-                        self.player_y += (dy / len) * PLAYER_SPEED * dt;
-                    }
-
-                    self.player_x = self.player_x.clamp(0.0, SCREEN_WIDTH  - SPRITE_SIZE);
-                    self.player_y = self.player_y.clamp(0.0, SCREEN_HEIGHT - SPRITE_SIZE);
+                    let dt = now.duration_since(last).as_secs_f32().min(0.05);
+                    self.game.step(dt);
                 }
                 self.last_update = Some(now);
 
-                if let Some(renderer) = self.renderer.as_mut() {
-                    renderer.update_player(self.player_x, self.player_y);
-                    renderer.render();
+                // ─── 描画 ──────────────────────────────────────
+                if let (Some(renderer), Some(window)) =
+                    (self.renderer.as_mut(), self.window.as_ref())
+                {
+                    let render_data = self.game.get_render_data();
+                    renderer.update_instances(&render_data);
+
+                    // HudData を構築（FPS は renderer 内部で計測）
+                    let hud = self.game.hud_data(0.0);
+                    renderer.render(window, &hud);
                 }
+
                 if let Some(window) = self.window.as_ref() {
                     window.request_redraw();
                 }
