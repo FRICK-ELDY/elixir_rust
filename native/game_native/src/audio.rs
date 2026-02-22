@@ -57,17 +57,12 @@ impl AudioManager {
     }
 
     /// SE を非同期で再生する（再生後に自動解放）。
-    /// デコードに失敗した場合は静かに無視する。
     pub fn play_se(&self, bytes: &'static [u8]) {
-        let cursor = std::io::Cursor::new(bytes);
-        if let Ok(source) = Decoder::new(cursor) {
-            let sink = Sink::connect_new(&self._stream.mixer());
-            sink.append(source);
-            sink.detach();
-        }
+        self.play_se_with_volume(bytes, 1.0);
     }
 
-    /// SE を指定音量で再生する。
+    /// SE を指定音量で再生する（0.0 = 無音、1.0 = 通常）。
+    /// デコードに失敗した場合は静かに無視する。
     pub fn play_se_with_volume(&self, bytes: &'static [u8], volume: f32) {
         let cursor = std::io::Cursor::new(bytes);
         if let Ok(source) = Decoder::new(cursor) {
