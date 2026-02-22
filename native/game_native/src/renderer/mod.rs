@@ -1,7 +1,5 @@
 use crate::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
-// Step 25: GamePhase を HudData に含める
-#[allow(unused_imports)]
-use crate::GamePhase;
+use crate::{GamePhase, ELITE_RENDER_KIND_OFFSET, ELITE_SIZE_MULTIPLIER};
 use crate::item::{RENDER_KIND_GEM, RENDER_KIND_MAGNET, RENDER_KIND_POTION};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -619,10 +617,10 @@ impl Renderer {
                         color_tint: [1.0, 1.0, 1.0, 1.0],
                     }
                 }
-                // Step 25: エリート敵（kind = base + 20）: 赤みがかった色で描画
+                // Step 25: エリート敵（kind = base_kind + ELITE_RENDER_KIND_OFFSET）: 赤みがかった色で描画
                 21 | 22 | 23 => {
-                    let base = kind - 20;
-                    let sz = enemy_sprite_size(base) * 1.2;
+                    let base = kind - ELITE_RENDER_KIND_OFFSET;
+                    let sz = enemy_sprite_size(base) * ELITE_SIZE_MULTIPLIER;
                     let (uv_off, uv_sz) = enemy_anim_uv(base, anim_frame);
                     SpriteInstance {
                         position:   [x - sz * 0.1, y - sz * 0.1],
@@ -875,169 +873,166 @@ impl Renderer {
 /// - タイトル画面「Start」: "__start__"
 /// - ゲームオーバー「Retry」: "__retry__"
 fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> {
-    let mut chosen: Option<String> = None;
-
-    // Step 25: タイトル画面
-    if hud.phase == GamePhase::Title {
-        egui::Area::new(egui::Id::new("title"))
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                egui::Frame::new()
-                    .fill(egui::Color32::from_rgba_unmultiplied(5, 5, 20, 230))
-                    .inner_margin(egui::Margin::symmetric(60, 40))
-                    .corner_radius(16.0)
-                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 160, 255)))
-                    .show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new("Elixir x Rust Survivor")
-                                    .color(egui::Color32::from_rgb(120, 200, 255))
-                                    .size(36.0)
-                                    .strong(),
-                            );
-                            ui.add_space(8.0);
-                            ui.label(
-                                egui::RichText::new("Survive as long as possible!")
-                                    .color(egui::Color32::from_rgb(180, 200, 220))
-                                    .size(16.0),
-                            );
-                            ui.add_space(4.0);
-                            ui.label(
-                                egui::RichText::new("WASD / Arrow Keys: Move")
-                                    .color(egui::Color32::from_rgb(150, 170, 190))
-                                    .size(13.0),
-                            );
-                            ui.label(
-                                egui::RichText::new("1/2/3: Choose weapon on level up")
-                                    .color(egui::Color32::from_rgb(150, 170, 190))
-                                    .size(13.0),
-                            );
-                            ui.label(
-                                egui::RichText::new("Esc: Skip level up")
-                                    .color(egui::Color32::from_rgb(150, 170, 190))
-                                    .size(13.0),
-                            );
-                            ui.add_space(24.0);
-                            let btn = egui::Button::new(
-                                egui::RichText::new("  START GAME  ")
-                                    .size(22.0)
-                                    .strong(),
-                            )
-                            .fill(egui::Color32::from_rgb(40, 100, 200))
-                            .min_size(egui::vec2(200.0, 50.0));
-                            if ui.add(btn).clicked() {
-                                chosen = Some("__start__".to_string());
-                            }
-                        });
-                    });
-            });
-        return chosen;
+    match hud.phase {
+        GamePhase::Title    => build_title_ui(ctx),
+        GamePhase::GameOver => build_game_over_ui(ctx, hud),
+        GamePhase::Playing  => build_playing_ui(ctx, hud, fps),
     }
+}
 
-    // Step 25: ゲームオーバー画面
-    if hud.phase == GamePhase::GameOver {
-        egui::Area::new(egui::Id::new("gameover"))
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                egui::Frame::new()
-                    .fill(egui::Color32::from_rgba_unmultiplied(20, 5, 5, 235))
-                    .inner_margin(egui::Margin::symmetric(50, 35))
-                    .corner_radius(16.0)
-                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 60, 60)))
-                    .show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
+/// タイトル画面（操作説明 + START ボタン）
+fn build_title_ui(ctx: &egui::Context) -> Option<String> {
+    let mut chosen = None;
+    egui::Area::new(egui::Id::new("title"))
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(5, 5, 20, 230))
+                .inner_margin(egui::Margin::symmetric(60, 40))
+                .corner_radius(16.0)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 160, 255)))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("Elixir x Rust Survivor")
+                                .color(egui::Color32::from_rgb(120, 200, 255))
+                                .size(36.0)
+                                .strong(),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new("Survive as long as possible!")
+                                .color(egui::Color32::from_rgb(180, 200, 220))
+                                .size(16.0),
+                        );
+                        ui.add_space(4.0);
+                        for line in &[
+                            "WASD / Arrow Keys: Move",
+                            "1/2/3: Choose weapon on level up",
+                            "Esc: Skip level up",
+                        ] {
                             ui.label(
-                                egui::RichText::new("GAME OVER")
-                                    .color(egui::Color32::from_rgb(255, 80, 80))
-                                    .size(40.0)
-                                    .strong(),
+                                egui::RichText::new(*line)
+                                    .color(egui::Color32::from_rgb(150, 170, 190))
+                                    .size(13.0),
                             );
-                            ui.add_space(16.0);
-                            let total_s = hud.elapsed_seconds as u32;
-                            let m = total_s / 60;
-                            let s = total_s % 60;
-                            ui.label(
-                                egui::RichText::new(format!("Survived:  {:02}:{:02}", m, s))
-                                    .color(egui::Color32::from_rgb(220, 220, 255))
-                                    .size(18.0),
-                            );
-                            ui.label(
-                                egui::RichText::new(format!("Score:     {}", hud.score))
-                                    .color(egui::Color32::from_rgb(255, 220, 80))
-                                    .size(18.0)
-                                    .strong(),
-                            );
-                            ui.label(
-                                egui::RichText::new(format!("Kills:     {}", hud.kill_count))
-                                    .color(egui::Color32::from_rgb(200, 230, 200))
-                                    .size(18.0),
-                            );
-                            ui.label(
-                                egui::RichText::new(format!("Level:     {}", hud.level))
-                                    .color(egui::Color32::from_rgb(180, 200, 255))
-                                    .size(18.0),
-                            );
-                            ui.add_space(20.0);
-                            let btn = egui::Button::new(
-                                egui::RichText::new("  RETRY  ")
-                                    .size(20.0)
-                                    .strong(),
-                            )
-                            .fill(egui::Color32::from_rgb(160, 40, 40))
-                            .min_size(egui::vec2(160.0, 44.0));
-                            if ui.add(btn).clicked() {
-                                chosen = Some("__retry__".to_string());
-                            }
-                        });
+                        }
+                        ui.add_space(24.0);
+                        let btn = egui::Button::new(
+                            egui::RichText::new("  START GAME  ").size(22.0).strong(),
+                        )
+                        .fill(egui::Color32::from_rgb(40, 100, 200))
+                        .min_size(egui::vec2(200.0, 50.0));
+                        if ui.add(btn).clicked() {
+                            chosen = Some("__start__".to_string());
+                        }
                     });
-            });
-        return chosen;
-    }
+                });
+        });
+    chosen
+}
 
-    // Step 25: 画面フラッシュ（プレイヤーダメージ時に赤いオーバーレイ）
-    if hud.screen_flash_alpha > 0.0 {
-        let alpha = (hud.screen_flash_alpha * 255.0) as u8;
-        egui::Area::new(egui::Id::new("screen_flash"))
-            .anchor(egui::Align2::LEFT_TOP, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Background)
-            .show(ctx, |ui| {
-                let screen_rect = ui.ctx().screen_rect();
-                ui.painter().rect_filled(
-                    screen_rect,
-                    0.0,
-                    egui::Color32::from_rgba_unmultiplied(200, 30, 30, alpha),
+/// ゲームオーバー画面（スコア・生存時間・撃破数 + RETRY ボタン）
+fn build_game_over_ui(ctx: &egui::Context, hud: &HudData) -> Option<String> {
+    let mut chosen = None;
+    egui::Area::new(egui::Id::new("gameover"))
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(20, 5, 5, 235))
+                .inner_margin(egui::Margin::symmetric(50, 35))
+                .corner_radius(16.0)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 60, 60)))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("GAME OVER")
+                                .color(egui::Color32::from_rgb(255, 80, 80))
+                                .size(40.0)
+                                .strong(),
+                        );
+                        ui.add_space(16.0);
+                        let total_s = hud.elapsed_seconds as u32;
+                        let (m, s) = (total_s / 60, total_s % 60);
+                        for (text, color) in &[
+                            (format!("Survived:  {:02}:{:02}", m, s), egui::Color32::from_rgb(220, 220, 255)),
+                            (format!("Score:     {}", hud.score),     egui::Color32::from_rgb(255, 220, 80)),
+                            (format!("Kills:     {}", hud.kill_count), egui::Color32::from_rgb(200, 230, 200)),
+                            (format!("Level:     {}", hud.level),     egui::Color32::from_rgb(180, 200, 255)),
+                        ] {
+                            ui.label(egui::RichText::new(text).color(*color).size(18.0));
+                        }
+                        ui.add_space(20.0);
+                        let btn = egui::Button::new(
+                            egui::RichText::new("  RETRY  ").size(20.0).strong(),
+                        )
+                        .fill(egui::Color32::from_rgb(160, 40, 40))
+                        .min_size(egui::vec2(160.0, 44.0));
+                        if ui.add(btn).clicked() {
+                            chosen = Some("__retry__".to_string());
+                        }
+                    });
+                });
+        });
+    chosen
+}
+
+/// プレイ中の全 HUD（フラッシュ・ポップアップ・ステータスバー・ボス HP・レベルアップ）
+fn build_playing_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> {
+    build_screen_flash_ui(ctx, hud);
+    build_score_popups_ui(ctx, hud);
+    build_playing_hud_ui(ctx, hud, fps);
+    build_boss_hp_bar_ui(ctx, hud);
+    build_level_up_ui(ctx, hud)
+}
+
+/// 画面フラッシュ（プレイヤーダメージ時に赤いオーバーレイ）
+fn build_screen_flash_ui(ctx: &egui::Context, hud: &HudData) {
+    if hud.screen_flash_alpha <= 0.0 { return; }
+    let alpha = (hud.screen_flash_alpha * 255.0) as u8;
+    egui::Area::new(egui::Id::new("screen_flash"))
+        .anchor(egui::Align2::LEFT_TOP, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Background)
+        .show(ctx, |ui| {
+            let screen_rect = ui.ctx().screen_rect();
+            ui.painter().rect_filled(
+                screen_rect,
+                0.0,
+                egui::Color32::from_rgba_unmultiplied(200, 30, 30, alpha),
+            );
+        });
+}
+
+/// スコアポップアップ（ワールド座標 → スクリーン座標変換して描画）
+fn build_score_popups_ui(ctx: &egui::Context, hud: &HudData) {
+    if hud.score_popups.is_empty() { return; }
+    egui::Area::new(egui::Id::new("score_popups"))
+        .anchor(egui::Align2::LEFT_TOP, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            let painter = ui.painter();
+            for &(wx, wy, value, lifetime) in &hud.score_popups {
+                let sx = wx - hud.camera_x;
+                let sy = wy - hud.camera_y;
+                let alpha = (lifetime / 0.8).clamp(0.0, 1.0);
+                let color = egui::Color32::from_rgba_unmultiplied(
+                    255, 230, 50, (alpha * 220.0) as u8,
                 );
-            });
-    }
+                painter.text(
+                    egui::pos2(sx, sy),
+                    egui::Align2::CENTER_CENTER,
+                    format!("+{}", value),
+                    egui::FontId::proportional(14.0),
+                    color,
+                );
+            }
+        });
+}
 
-    // Step 25: スコアポップアップ（ワールド座標 → スクリーン座標変換）
-    if !hud.score_popups.is_empty() {
-        egui::Area::new(egui::Id::new("score_popups"))
-            .anchor(egui::Align2::LEFT_TOP, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                let painter = ui.painter();
-                for &(wx, wy, value, lifetime) in &hud.score_popups {
-                    // ワールド座標 → スクリーン座標（カメラオフセットを引く）
-                    let sx = wx - hud.camera_x;
-                    let sy = wy - hud.camera_y;
-                    let alpha = (lifetime / 0.8).clamp(0.0, 1.0);
-                    let color = egui::Color32::from_rgba_unmultiplied(
-                        255, 230, 50, (alpha * 220.0) as u8,
-                    );
-                    painter.text(
-                        egui::pos2(sx, sy),
-                        egui::Align2::CENTER_CENTER,
-                        format!("+{}", value),
-                        egui::FontId::proportional(14.0),
-                        color,
-                    );
-                }
-            });
-    }
-
+/// 上部ステータスバー（HP・EXP・スコア・タイマー・武器）と右上デバッグ情報
+fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
     // 上部 HUD バー
     egui::Area::new(egui::Id::new("hud_top"))
         .anchor(egui::Align2::LEFT_TOP, egui::vec2(8.0, 8.0))
@@ -1118,8 +1113,7 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
 
                         // スコア・タイマー
                         let total_s = hud.elapsed_seconds as u32;
-                        let m = total_s / 60;
-                        let s = total_s % 60;
+                        let (m, s) = (total_s / 60, total_s % 60);
                         ui.label(
                             egui::RichText::new(format!("Score: {}", hud.score))
                                 .color(egui::Color32::from_rgb(255, 220, 100))
@@ -1130,7 +1124,7 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                                 .color(egui::Color32::WHITE),
                         );
 
-                        // Step 17: weapon slot display
+                        // 武器スロット
                         if !hud.weapon_levels.is_empty() {
                             ui.separator();
                             for (name, lv) in &hud.weapon_levels {
@@ -1171,7 +1165,6 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                         egui::RichText::new(format!("Items: {}", hud.item_count))
                             .color(egui::Color32::from_rgb(150, 230, 150)),
                     );
-                    // Step 20: カメラ座標デバッグ
                     ui.label(
                         egui::RichText::new(format!("Cam: ({:.0}, {:.0})", hud.camera_x, hud.camera_y))
                             .color(egui::Color32::from_rgb(180, 180, 255)),
@@ -1185,95 +1178,96 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                     }
                 });
         });
+}
 
-    // Step 24: ボス HP バー（画面上部中央）
-    if let Some(ref boss) = hud.boss_info {
-        let boss_ratio = if boss.max_hp > 0.0 {
-            (boss.hp / boss.max_hp).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        egui::Area::new(egui::Id::new("boss_hp_bar"))
-            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 8.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                egui::Frame::new()
-                    .fill(egui::Color32::from_rgba_unmultiplied(20, 0, 30, 220))
-                    .inner_margin(egui::Margin::symmetric(16, 10))
-                    .corner_radius(8.0)
-                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 0, 255)))
-                    .show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new(format!("👹 {}", boss.name))
-                                    .color(egui::Color32::from_rgb(255, 80, 80))
-                                    .size(18.0)
-                                    .strong(),
-                            );
-                            ui.add_space(4.0);
-                            let (bar_rect, _) = ui.allocate_exact_size(
-                                egui::vec2(360.0, 22.0),
-                                egui::Sense::hover(),
-                            );
-                            let painter = ui.painter();
-                            painter.rect_filled(bar_rect, 6.0, egui::Color32::from_rgb(40, 10, 10));
-                            let fill_w = bar_rect.width() * boss_ratio;
-                            let fill_rect = egui::Rect::from_min_size(
-                                bar_rect.min,
-                                egui::vec2(fill_w, bar_rect.height()),
-                            );
-                            let bar_color = if boss_ratio > 0.5 {
-                                egui::Color32::from_rgb(180, 0, 220)
-                            } else if boss_ratio > 0.25 {
-                                egui::Color32::from_rgb(220, 60, 60)
-                            } else {
-                                egui::Color32::from_rgb(255, 30, 30)
-                            };
-                            painter.rect_filled(fill_rect, 6.0, bar_color);
-                            ui.label(
-                                egui::RichText::new(format!("{:.0} / {:.0}", boss.hp, boss.max_hp))
-                                    .color(egui::Color32::from_rgb(255, 200, 255))
-                                    .size(12.0),
-                            );
-                        });
+/// ボス HP バー（画面上部中央）
+fn build_boss_hp_bar_ui(ctx: &egui::Context, hud: &HudData) {
+    let Some(ref boss) = hud.boss_info else { return };
+    let boss_ratio = if boss.max_hp > 0.0 {
+        (boss.hp / boss.max_hp).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    egui::Area::new(egui::Id::new("boss_hp_bar"))
+        .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 8.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(20, 0, 30, 220))
+                .inner_margin(egui::Margin::symmetric(16, 10))
+                .corner_radius(8.0)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 0, 255)))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!("👹 {}", boss.name))
+                                .color(egui::Color32::from_rgb(255, 80, 80))
+                                .size(18.0)
+                                .strong(),
+                        );
+                        ui.add_space(4.0);
+                        let (bar_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(360.0, 22.0),
+                            egui::Sense::hover(),
+                        );
+                        let painter = ui.painter();
+                        painter.rect_filled(bar_rect, 6.0, egui::Color32::from_rgb(40, 10, 10));
+                        let fill_w = bar_rect.width() * boss_ratio;
+                        let fill_rect = egui::Rect::from_min_size(
+                            bar_rect.min,
+                            egui::vec2(fill_w, bar_rect.height()),
+                        );
+                        let bar_color = if boss_ratio > 0.5 {
+                            egui::Color32::from_rgb(180, 0, 220)
+                        } else if boss_ratio > 0.25 {
+                            egui::Color32::from_rgb(220, 60, 60)
+                        } else {
+                            egui::Color32::from_rgb(255, 30, 30)
+                        };
+                        painter.rect_filled(fill_rect, 6.0, bar_color);
+                        ui.label(
+                            egui::RichText::new(format!("{:.0} / {:.0}", boss.hp, boss.max_hp))
+                                .color(egui::Color32::from_rgb(255, 200, 255))
+                                .size(12.0),
+                        );
                     });
-            });
-    }
+                });
+        });
+}
 
-    // レベルアップ画面
-    if hud.level_up_pending {
-        egui::Area::new(egui::Id::new("level_up"))
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                egui::Frame::new()
-                    .fill(egui::Color32::from_rgba_unmultiplied(10, 10, 40, 240))
-                    .inner_margin(egui::Margin::symmetric(40, 30))
-                    .corner_radius(12.0)
-                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 220, 50)))
-                    .show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new(format!("*** LEVEL UP!  Lv.{} ***", hud.level))
-                                    .color(egui::Color32::from_rgb(255, 220, 50))
-                                    .size(28.0)
-                                    .strong(),
-                            );
-                            ui.add_space(8.0);
-
-                            let result = if hud.weapon_choices.is_empty() {
-                                build_max_level_ui(ui)
-                            } else {
-                                build_weapon_choice_ui(ui, hud)
-                            };
-                            if result.is_some() {
-                                chosen = result;
-                            }
-                        });
+/// レベルアップ選択画面
+fn build_level_up_ui(ctx: &egui::Context, hud: &HudData) -> Option<String> {
+    if !hud.level_up_pending { return None; }
+    let mut chosen = None;
+    egui::Area::new(egui::Id::new("level_up"))
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(10, 10, 40, 240))
+                .inner_margin(egui::Margin::symmetric(40, 30))
+                .corner_radius(12.0)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 220, 50)))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!("*** LEVEL UP!  Lv.{} ***", hud.level))
+                                .color(egui::Color32::from_rgb(255, 220, 50))
+                                .size(28.0)
+                                .strong(),
+                        );
+                        ui.add_space(8.0);
+                        let result = if hud.weapon_choices.is_empty() {
+                            build_max_level_ui(ui)
+                        } else {
+                            build_weapon_choice_ui(ui, hud)
+                        };
+                        if result.is_some() {
+                            chosen = result;
+                        }
                     });
-            });
-    }
-
+                });
+        });
     chosen
 }
 

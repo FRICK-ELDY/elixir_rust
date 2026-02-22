@@ -291,7 +291,17 @@ impl EnemySeparation for EnemyWorld {
 
 const BULLET_KIND_NORMAL:   u8 = 4;
 const BULLET_KIND_FIREBALL: u8 = 8;
-// 11=SlimeKing, 12=BatLord, 13=StoneGolem（ボス render_kind と共有）
+
+// Step 25: 画面フラッシュ定数
+const SCREEN_FLASH_DURATION:  f32 = 0.18; // フラッシュの持続時間（秒）
+const SCREEN_FLASH_MAX_ALPHA: f32 = 0.5;  // フラッシュの最大アルファ値
+
+// Step 25: エリート敵レンダリング定数（renderer/mod.rs からも参照）
+pub const ELITE_SIZE_MULTIPLIER: f32 = 1.2; // 通常敵に対するサイズ倍率
+// ボス render_kind: 11=SlimeKing, 12=BatLord, 13=StoneGolem
+// エリート敵は通常敵の render_kind にこのオフセットを加算して区別する（21/22/23）
+// ボスの 11/12/13 と衝突しないよう 20 を選択
+pub const ELITE_RENDER_KIND_OFFSET: u8 = 20;
 const BULLET_KIND_ROCK:     u8 = 14; // StoneGolem の岩弾
 
 struct BulletWorld {
@@ -528,12 +538,24 @@ struct SoundEvents {
 
 impl GameWorld {
     fn new() -> Self {
-        // プレイヤーはマップ中央からスタート
+        let mut world = Self::initial_state(SCREEN_WIDTH, SCREEN_HEIGHT);
+        world.phase = GamePhase::Title;
+        world
+    }
+
+    /// ゲームをリセットしてプレイ状態に移行する
+    fn reset(&mut self) {
+        let (sw, sh) = (self.screen_w, self.screen_h);
+        *self = Self::initial_state(sw, sh);
+    }
+
+    /// ゲーム状態を初期化して返す共通ヘルパー。
+    /// `phase` は呼び出し元が必要に応じて上書きする（デフォルトは Playing）。
+    fn initial_state(screen_w: f32, screen_h: f32) -> Self {
         let start_x = MAP_WIDTH  / 2.0 - PLAYER_SIZE / 2.0;
         let start_y = MAP_HEIGHT / 2.0 - PLAYER_SIZE / 2.0;
-        // カメラ初期位置: プレイヤーが画面中央に来るように（初期ウィンドウサイズ基準）
-        let cam_x = start_x + PLAYER_SIZE / 2.0 - SCREEN_WIDTH  / 2.0;
-        let cam_y = start_y + PLAYER_SIZE / 2.0 - SCREEN_HEIGHT / 2.0;
+        let cam_x = start_x + PLAYER_SIZE / 2.0 - screen_w / 2.0;
+        let cam_y = start_y + PLAYER_SIZE / 2.0 - screen_h / 2.0;
         Self {
             player: PlayerState {
                 x: start_x,
@@ -561,57 +583,17 @@ impl GameWorld {
             weapon_choices:   Vec::new(),
             camera_x:         cam_x,
             camera_y:         cam_y,
-            screen_w:         SCREEN_WIDTH,
-            screen_h:         SCREEN_HEIGHT,
+            screen_w,
+            screen_h,
             boss:             None,
             next_boss_index:  0,
             boss_spawned:     false,
-            phase:            GamePhase::Title,
+            phase:            GamePhase::Playing,
             screen_flash_timer: 0.0,
             hitstop_timer:    0.0,
             score_popups:     Vec::new(),
             kill_count:       0,
         }
-    }
-
-    /// ゲームをリセットしてプレイ状態に移行する
-    fn reset(&mut self) {
-        let start_x = MAP_WIDTH  / 2.0 - PLAYER_SIZE / 2.0;
-        let start_y = MAP_HEIGHT / 2.0 - PLAYER_SIZE / 2.0;
-        let cam_x = start_x + PLAYER_SIZE / 2.0 - self.screen_w / 2.0;
-        let cam_y = start_y + PLAYER_SIZE / 2.0 - self.screen_h / 2.0;
-        self.player = PlayerState {
-            x: start_x, y: start_y,
-            input_dx: 0.0, input_dy: 0.0,
-            hp: 100.0, max_hp: 100.0,
-            invincible_timer: 0.0,
-            anim_timer: 0.0, anim_frame: 0,
-        };
-        self.enemies          = EnemyWorld::new();
-        self.bullets          = BulletWorld::new();
-        self.particles        = ParticleWorld::new(67890);
-        self.items            = ItemWorld::new();
-        self.magnet_timer     = 0.0;
-        self.collision        = CollisionWorld::new(CELL_SIZE);
-        self.rng              = SimpleRng::new(42);
-        self.score            = 0;
-        self.elapsed_seconds  = 0.0;
-        self.last_spawn_secs  = 0.0;
-        self.weapon_slots     = vec![WeaponSlot::new(WeaponKind::MagicWand)];
-        self.exp              = 0;
-        self.level            = 1;
-        self.level_up_pending = false;
-        self.weapon_choices.clear();
-        self.camera_x         = cam_x;
-        self.camera_y         = cam_y;
-        self.boss             = None;
-        self.next_boss_index  = 0;
-        self.boss_spawned     = false;
-        self.phase            = GamePhase::Playing;
-        self.screen_flash_timer = 0.0;
-        self.hitstop_timer    = 0.0;
-        self.score_popups.clear();
-        self.kill_count       = 0;
     }
 
     /// ウィンドウリサイズ時に画面サイズを更新する（Step 20）
@@ -781,7 +763,7 @@ impl GameWorld {
                     // 赤いパーティクル
                     self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
                     // Step 25: 画面フラッシュ
-                    self.screen_flash_timer = 0.18;
+                    self.screen_flash_timer = SCREEN_FLASH_DURATION;
                     se.player_hurt = true;
                     // HP が 0 になったらゲームオーバー
                     if self.player.hp <= 0.0 {
@@ -1486,8 +1468,7 @@ impl GameWorld {
         for i in 0..self.enemies.len() {
             if self.enemies.alive[i] {
                 let base_kind = self.enemies.kinds[i].render_kind();
-                // エリート敵は +20 でマーク（ボスの 11/12/13 と衝突しないよう +20）
-                let kind = if self.enemies.is_elite[i] { base_kind + 20 } else { base_kind };
+                let kind = if self.enemies.is_elite[i] { base_kind + ELITE_RENDER_KIND_OFFSET } else { base_kind };
                 v.push((
                     self.enemies.positions_x[i],
                     self.enemies.positions_y[i],
@@ -1564,7 +1545,7 @@ impl GameWorld {
             // Step 25
             phase:           self.phase,
             screen_flash_alpha: if self.screen_flash_timer > 0.0 {
-                (self.screen_flash_timer / 0.18).clamp(0.0, 1.0) * 0.5
+                (self.screen_flash_timer / SCREEN_FLASH_DURATION).clamp(0.0, 1.0) * SCREEN_FLASH_MAX_ALPHA
             } else { 0.0 },
             score_popups:    self.score_popups.iter()
                 .map(|p| (p.x, p.y, p.value, p.lifetime))
