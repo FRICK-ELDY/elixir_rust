@@ -1,6 +1,6 @@
 """
-アトラス画像生成スクリプト（Step 23: スプライトアニメーション対応版）
-1280x64 px の RGBA PNG を生成する:
+アトラス画像生成スクリプト（Step 24: ボスエネミー対応版）
+1600x64 px の RGBA PNG を生成する:
 
   アニメーションキャラクター（各 64x64、複数フレーム）:
   [   0.. 255] プレイヤー歩行 4 フレーム（各 64x64）
@@ -17,13 +17,19 @@
   [1088..1151] Fireball 弾丸（赤橙の炎球）
   [1152..1215] Lightning 弾丸（水色の電撃球）
   [1216..1279] Whip エフェクト（黄緑の弧状）
+
+  Step 24: ボスエネミー（各 64x64）:
+  [1280..1343] Slime King（巨大スライム・王冠付き）
+  [1344..1407] Bat Lord（巨大コウモリ・赤い目）
+  [1408..1471] Stone Golem（巨大石ゴーレム・紫のオーラ）
+  [1472..1535] 岩弾（Stone Golem の範囲攻撃）
 """
 
 import struct
 import zlib
 import math
 
-W, H = 1280, 64
+W, H = 1600, 64
 
 pixels = bytearray(W * H * 4)
 
@@ -230,6 +236,110 @@ for dy in range(-2, 3):
         if (dx / 8.0)**2 + (dy / 2.0)**2 <= 1.0:
             set_pixel(1248 + dx, 32 + dy, 220, 255, 180)
 
+# ─── Step 24: Slime King [1280..1343] ───────────────────────────────
+def draw_slime_king(ox):
+    """Slime King: 巨大スライム + 王冠"""
+    # 胴体（大きめ・濃い緑）
+    fill_rect(ox+2,  14, ox+62, 60, 20, 120, 20)
+    fill_rect(ox+4,  16, ox+60, 58, 40, 170, 40)
+    fill_rect(ox+6,  18, ox+58, 56, 60, 200, 60)
+    # ハイライト
+    fill_rect(ox+8,  18, ox+30, 30, 120, 240, 120)
+    # 目（大きく・白目 + 黒瞳）
+    fill_rect(ox+10, 28, ox+26, 44, 255, 255, 255)
+    fill_rect(ox+38, 28, ox+54, 44, 255, 255, 255)
+    fill_rect(ox+14, 32, ox+22, 40, 20, 20, 20)
+    fill_rect(ox+42, 32, ox+50, 40, 20, 20, 20)
+    # 王冠（金色）
+    fill_rect(ox+6,  4,  ox+58, 16, 200, 160, 0)
+    fill_rect(ox+8,  6,  ox+56, 14, 255, 210, 0)
+    # 王冠の突起（3本）
+    fill_rect(ox+8,  0,  ox+16, 8,  200, 160, 0)
+    fill_rect(ox+28, 0,  ox+36, 6,  200, 160, 0)
+    fill_rect(ox+48, 0,  ox+56, 8,  200, 160, 0)
+    fill_rect(ox+10, 2,  ox+14, 6,  255, 210, 0)
+    fill_rect(ox+30, 2,  ox+34, 4,  255, 210, 0)
+    fill_rect(ox+50, 2,  ox+54, 6,  255, 210, 0)
+    # 宝石（赤）
+    fill_rect(ox+11, 2,  ox+13, 4,  255, 60, 60)
+    fill_rect(ox+31, 2,  ox+33, 3,  255, 60, 60)
+    fill_rect(ox+51, 2,  ox+53, 4,  255, 60, 60)
+
+draw_slime_king(1280)
+
+# ─── Step 24: Bat Lord [1344..1407] ─────────────────────────────────
+def draw_bat_lord(ox):
+    """Bat Lord: 巨大コウモリ + 赤い目 + 紫のオーラ"""
+    cx = ox + 32
+    # オーラ（薄い紫）
+    fill_circle(cx, 36, 28, 80, 0, 100, 80)
+    # 胴体（大きく・濃い紫）
+    fill_circle(cx, 36, 18, 80, 10, 120)
+    fill_circle(cx, 36, 15, 120, 20, 170)
+    fill_circle(cx, 36, 12, 150, 40, 200)
+    # 翼（大きく・ダーク紫）
+    fill_rect(cx-30, 10, cx-10, 42, 60, 10, 90)
+    fill_rect(cx-28, 12, cx-12, 40, 90, 20, 130)
+    fill_rect(cx+10, 10, cx+30, 42, 60, 10, 90)
+    fill_rect(cx+12, 12, cx+28, 40, 90, 20, 130)
+    # 翼の先端
+    fill_rect(cx-32, 8,  cx-26, 18, 60, 10, 90)
+    fill_rect(cx+26, 8,  cx+32, 18, 60, 10, 90)
+    # 耳（大きく）
+    fill_rect(cx-14, 14, cx-8,  26, 100, 20, 140)
+    fill_rect(cx+8,  14, cx+14, 26, 100, 20, 140)
+    # 目（赤く光る・大きい）
+    fill_rect(cx-10, 28, cx-4,  36, 255, 40, 40)
+    fill_rect(cx+4,  28, cx+10, 36, 255, 40, 40)
+    fill_circle(cx-7, 32, 2, 255, 100, 100)
+    fill_circle(cx+7, 32, 2, 255, 100, 100)
+    # 牙
+    fill_rect(cx-8, 44, cx-5, 52, 240, 240, 240)
+    fill_rect(cx+5, 44, cx+8, 52, 240, 240, 240)
+
+draw_bat_lord(1344)
+
+# ─── Step 24: Stone Golem [1408..1471] ──────────────────────────────
+def draw_stone_golem(ox):
+    """Stone Golem: 巨大石ゴーレム + 紫のオーラ"""
+    # オーラ（薄い紫）
+    fill_rect(ox+0,  0,  ox+64, 64, 40, 0, 60, 60)
+    # 胴体（大きく・濃い灰）
+    fill_rect(ox+2,  2,  ox+62, 60, 60, 60, 60)
+    fill_rect(ox+4,  4,  ox+60, 58, 90, 90, 90)
+    fill_rect(ox+6,  6,  ox+58, 56, 110, 110, 110)
+    # 岩の質感（クラック）
+    fill_rect(ox+8,  18, ox+56, 20, 60, 60, 60)
+    fill_rect(ox+8,  36, ox+56, 38, 60, 60, 60)
+    fill_rect(ox+24, 6,  ox+26, 56, 60, 60, 60)
+    fill_rect(ox+38, 6,  ox+40, 56, 60, 60, 60)
+    # ハイライト
+    fill_rect(ox+6,  6,  ox+24, 18, 150, 150, 150)
+    fill_rect(ox+40, 6,  ox+58, 18, 130, 130, 130)
+    # 目（紫に光る・大きい）
+    fill_rect(ox+8,  22, ox+22, 34, 180, 0, 255)
+    fill_rect(ox+42, 22, ox+56, 34, 180, 0, 255)
+    fill_rect(ox+11, 25, ox+19, 31, 220, 100, 255)
+    fill_rect(ox+45, 25, ox+53, 31, 220, 100, 255)
+    # 瞳
+    fill_rect(ox+13, 26, ox+17, 30, 255, 200, 255)
+    fill_rect(ox+47, 26, ox+51, 30, 255, 200, 255)
+
+draw_stone_golem(1408)
+
+# ─── Step 24: 岩弾（Stone Golem の範囲攻撃）[1472..1535] ────────────
+def draw_rock_bullet(ox):
+    """岩弾: 灰色の岩"""
+    cx = ox + 32
+    fill_circle(cx, 32, 16, 70, 70, 70)
+    fill_circle(cx, 32, 13, 100, 100, 100)
+    fill_circle(cx, 32, 10, 120, 120, 120)
+    fill_rect(cx-8, 22, cx-2, 28, 140, 140, 140)
+    fill_rect(cx+2, 28, cx+8, 34, 80, 80, 80)
+    fill_rect(cx-4, 34, cx+2, 40, 90, 90, 90)
+
+draw_rock_bullet(1472)
+
 # ─── PNG エンコード ───────────────────────────────────────────────────
 def make_png(width, height, rgba_data):
     def chunk(name, data):
@@ -267,3 +377,7 @@ print("  [1024..1087] Magnet (yellow U-shape)")
 print("  [1088..1151] Fireball bullet (red-orange flame)")
 print("  [1152..1215] Lightning bullet (cyan electric)")
 print("  [1216..1279] Whip effect (yellow-green arc)")
+print("  [1280..1343] Slime King boss (giant slime + crown)")
+print("  [1344..1407] Bat Lord boss (giant bat + red eyes)")
+print("  [1408..1471] Stone Golem boss (giant golem + purple aura)")
+print("  [1472..1535] Rock bullet (Stone Golem attack)")

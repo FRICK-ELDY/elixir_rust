@@ -55,4 +55,18 @@ defmodule Game.NifBridge do
 
   # Step 19: 磁石エフェクト残り時間（秒）を取得
   def get_magnet_timer(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 24/25: ボス・エリート敵・ゲーム状態管理
+
+  # ボスをスポーンする（kind: :slime_king | :bat_lord | :stone_golem）
+  def spawn_boss(_world, _kind), do: :erlang.nif_error(:nif_not_loaded)
+
+  # ボスの状態を返す: {:alive, hp, max_hp} | {:none, 0.0, 0.0}
+  def get_boss_info(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # プレイヤーが死亡しているかを返す（HP == 0 で true）
+  def is_player_dead(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # エリート敵をスポーンする（hp_multiplier: HP 倍率）
+  def spawn_elite_enemy(_world, _kind, _count, _hp_multiplier), do: :erlang.nif_error(:nif_not_loaded)
 end

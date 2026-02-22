@@ -18,6 +18,9 @@ defmodule Game.SpawnSystem do
     0–30s   : Slime only
     30–60s  : Slime + Bat
     60s+    : Slime + Bat + Golem
+
+  Step 25 (難易度エスカレーション) - Elite enemies by elapsed time:
+    600s (10分)+ : 通常スポーンの一部がエリート敵（HP 3倍）に置き換わる
   """
 
   @max_enemies 300
@@ -30,6 +33,12 @@ defmodule Game.SpawnSystem do
     {120, 1000,  12},   # 120〜180s: 12体 / 1秒（激化）
     {180,  800,  15},   # 180s〜:   15体 / 0.8秒（最終盤）
   ]
+
+  # エリート敵出現開始時間（秒）
+  @elite_start_sec 600
+
+  # エリート敵の HP 倍率
+  @elite_hp_multiplier 3.0
 
   @doc """
   Spawns enemies according to the current wave schedule.
@@ -48,12 +57,35 @@ defmodule Game.SpawnSystem do
       if current < @max_enemies do
         to_spawn = min(count, @max_enemies - current)
         kind = enemy_kind_for_wave(elapsed_sec)
-        Game.NifBridge.spawn_enemies(world_ref, kind, to_spawn)
+
+        # Step 25: 10分以降はスポーンの一部をエリート敵に置き換える
+        if elapsed_sec >= @elite_start_sec do
+          spawn_with_elites(world_ref, kind, to_spawn)
+        else
+          Game.NifBridge.spawn_enemies(world_ref, kind, to_spawn)
+        end
       end
 
       elapsed_ms
     else
       last_spawn_ms
+    end
+  end
+
+  @doc """
+  通常敵とエリート敵を混在スポーンする。
+  10分以降: スポーン数の 30% をエリート敵（HP 3倍）にする。
+  """
+  def spawn_with_elites(world_ref, kind, count) do
+    elite_count   = max(1, div(count * 3, 10))   # 30% をエリートに
+    normal_count  = count - elite_count
+
+    if normal_count > 0 do
+      Game.NifBridge.spawn_enemies(world_ref, kind, normal_count)
+    end
+
+    if elite_count > 0 do
+      Game.NifBridge.spawn_elite_enemy(world_ref, kind, elite_count, @elite_hp_multiplier)
     end
   end
 
@@ -91,11 +123,12 @@ defmodule Game.SpawnSystem do
   """
   def wave_label(elapsed_sec) do
     cond do
-      elapsed_sec <  30 -> "Wave 1 - Tutorial"
-      elapsed_sec <  60 -> "Wave 2 - Warming Up (Bat added)"
-      elapsed_sec < 120 -> "Wave 3 - Getting Serious (Golem added)"
-      elapsed_sec < 180 -> "Wave 4 - Intense"
-      true              -> "Wave 5 - Max"
+      elapsed_sec <  30  -> "Wave 1 - Tutorial"
+      elapsed_sec <  60  -> "Wave 2 - Warming Up (Bat added)"
+      elapsed_sec < 120  -> "Wave 3 - Getting Serious (Golem added)"
+      elapsed_sec < 180  -> "Wave 4 - Intense"
+      elapsed_sec < 600  -> "Wave 5 - Max"
+      true               -> "Wave 6 - ELITE (HP x3)"
     end
   end
 end
