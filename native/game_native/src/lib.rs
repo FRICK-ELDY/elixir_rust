@@ -912,6 +912,16 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     ok()
 }
 
+/// 武器選択をスキップしてレベルアップ待機を解除する
+/// 全武器がMaxLvの場合など、選択肢がない状態で呼び出す
+#[rustler::nif]
+fn skip_level_up(world: ResourceArc<GameWorld>) -> Atom {
+    let mut w = world.0.lock().unwrap();
+    w.level += 1;
+    w.level_up_pending = false;
+    ok()
+}
+
 // ─── ローダー ─────────────────────────────────────────────────
 
 #[allow(non_local_definitions)]

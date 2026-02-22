@@ -59,6 +59,17 @@ defmodule Game.GameLoop do
   end
 
   @impl true
+  def handle_cast({:select_weapon, :__skip__}, %{phase: :level_up} = state) do
+    Game.NifBridge.skip_level_up(state.world_ref)
+    Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
+    {:noreply, %{state |
+      phase:               :playing,
+      level_up_entered_ms: nil,
+      weapon_choices:      [],
+    }}
+  end
+
+  @impl true
   def handle_cast({:select_weapon, weapon}, %{phase: :level_up} = state) do
     Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
 
@@ -86,7 +97,7 @@ defmodule Game.GameLoop do
 
     elapsed_in_level_up = now - (state.level_up_entered_ms || now)
     if elapsed_in_level_up >= @level_up_auto_select_ms do
-      chosen = List.first(state.weapon_choices, :magic_wand)
+      chosen = List.first(state.weapon_choices) || :__skip__
       GenServer.cast(self(), {:select_weapon, chosen})
     end
 
@@ -117,24 +128,31 @@ defmodule Game.GameLoop do
         # Step 17: weapon_levels マップを使って選択肢を生成
         choices = Game.LevelSystem.generate_weapon_choices(state.weapon_levels)
 
-        choice_labels =
-          Enum.map_join(choices, " / ", fn w ->
-            lv = Map.get(state.weapon_levels, w, 0)
-            Game.LevelSystem.weapon_label(w, lv)
-          end)
+        if choices == [] do
+          # 全武器がMaxLvの場合は選択肢なし → 即スキップしてゲーム再開
+          Logger.info("[LEVEL UP] All weapons at max level — skipping weapon selection")
+          Game.NifBridge.skip_level_up(state.world_ref)
+          state
+        else
+          choice_labels =
+            Enum.map_join(choices, " / ", fn w ->
+              lv = Map.get(state.weapon_levels, w, 0)
+              Game.LevelSystem.weapon_label(w, lv)
+            end)
 
-        Logger.info(
-          "[LEVEL UP] Level #{level} -> #{level + 1} | " <>
-          "EXP: #{exp} | to next: #{exp_to_next} | " <>
-          "choices: #{choice_labels}"
-        )
-        Logger.info("[LEVEL UP] Waiting for player selection...")
+          Logger.info(
+            "[LEVEL UP] Level #{level} -> #{level + 1} | " <>
+            "EXP: #{exp} | to next: #{exp_to_next} | " <>
+            "choices: #{choice_labels}"
+          )
+          Logger.info("[LEVEL UP] Waiting for player selection...")
 
-        %{state |
-          phase:               :level_up,
-          weapon_choices:      choices,
-          level_up_entered_ms: now,
-        }
+          %{state |
+            phase:               :level_up,
+            weapon_choices:      choices,
+            level_up_entered_ms: now,
+          }
+        end
       else
         state
       end
