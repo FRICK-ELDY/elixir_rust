@@ -524,12 +524,13 @@ impl GameWorld {
         // Step 23: プレイヤーアニメーション更新（歩行中のみ進める）
         {
             const PLAYER_ANIM_FPS: f32 = 8.0;
+            const PLAYER_ANIM_INTERVAL: f32 = 1.0 / PLAYER_ANIM_FPS;
             let is_moving = self.player.input_dx * self.player.input_dx
                 + self.player.input_dy * self.player.input_dy > 0.0001;
             if is_moving {
                 self.player.anim_timer += dt;
-                if self.player.anim_timer >= 1.0 / PLAYER_ANIM_FPS {
-                    self.player.anim_timer = 0.0;
+                if self.player.anim_timer >= PLAYER_ANIM_INTERVAL {
+                    self.player.anim_timer -= PLAYER_ANIM_INTERVAL;
                     self.player.anim_frame = (self.player.anim_frame + 1) % 4;
                 }
             } else {
@@ -543,10 +544,10 @@ impl GameWorld {
             let elen = self.enemies.len();
             for i in 0..elen {
                 if !self.enemies.alive[i] { continue; }
-                let fps = self.enemies.kinds[i].anim_fps();
+                let interval = 1.0 / self.enemies.kinds[i].anim_fps();
                 self.enemies.anim_timers[i] += dt;
-                if self.enemies.anim_timers[i] >= 1.0 / fps {
-                    self.enemies.anim_timers[i] = 0.0;
+                if self.enemies.anim_timers[i] >= interval {
+                    self.enemies.anim_timers[i] -= interval;
                     let max_frame = self.enemies.kinds[i].frame_count();
                     self.enemies.anim_frames[i] = (self.enemies.anim_frames[i] + 1) % max_frame;
                 }
