@@ -64,6 +64,14 @@ impl EnemyKind {
     fn render_kind(self) -> u8 {
         match self { Self::Slime => 1, Self::Bat => 2, Self::Golem => 3 }
     }
+    /// Step 23: アニメーション FPS
+    fn anim_fps(self) -> f32 {
+        match self { Self::Slime => 6.0, Self::Bat => 12.0, Self::Golem => 4.0 }
+    }
+    /// Step 23: アニメーションフレーム数
+    fn frame_count(self) -> u8 {
+        match self { Self::Slime => 4, Self::Bat => 2, Self::Golem => 2 }
+    }
     fn for_elapsed(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> Self {
         if elapsed_secs < 30.0 {
             Self::Slime
@@ -97,6 +105,10 @@ struct PlayerState {
     hp: f32,
     max_hp: f32,
     invincible_timer: f32,
+    /// Step 23: アニメーションタイマー（秒）
+    anim_timer: f32,
+    /// Step 23: 現在のアニメーションフレーム番号（0〜3）
+    anim_frame: u8,
 }
 
 struct EnemyWorld {
@@ -111,6 +123,10 @@ struct EnemyWorld {
     sep_y:        Vec<f32>,
     /// 近隣クエリ結果の再利用バッファ（毎フレームのヒープアロケーションを回避）
     neighbor_buf: Vec<usize>,
+    /// Step 23: アニメーションタイマー（秒）
+    anim_timers:  Vec<f32>,
+    /// Step 23: 現在のアニメーションフレーム番号
+    anim_frames:  Vec<u8>,
 }
 
 impl EnemyWorld {
@@ -125,6 +141,8 @@ impl EnemyWorld {
             sep_x:        Vec::new(),
             sep_y:        Vec::new(),
             neighbor_buf: Vec::new(),
+            anim_timers:  Vec::new(),
+            anim_frames:  Vec::new(),
         }
     }
     fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
@@ -132,11 +150,13 @@ impl EnemyWorld {
         for &(x, y) in positions {
             let slot = self.alive.iter().position(|&a| !a);
             if let Some(i) = slot {
-                self.positions_x[i] = x;
-                self.positions_y[i] = y;
-                self.hp[i]    = max_hp;
-                self.alive[i] = true;
-                self.kinds[i] = kind;
+                self.positions_x[i]  = x;
+                self.positions_y[i]  = y;
+                self.hp[i]           = max_hp;
+                self.alive[i]        = true;
+                self.kinds[i]        = kind;
+                self.anim_timers[i]  = 0.0;
+                self.anim_frames[i]  = 0;
             } else {
                 self.positions_x.push(x);
                 self.positions_y.push(y);
@@ -145,6 +165,8 @@ impl EnemyWorld {
                 self.kinds.push(kind);
                 self.sep_x.push(0.0);
                 self.sep_y.push(0.0);
+                self.anim_timers.push(0.0);
+                self.anim_frames.push(0);
             }
             self.count += 1;
         }
@@ -383,6 +405,8 @@ impl GameWorld {
                 input_dx: 0.0, input_dy: 0.0,
                 hp: 100.0, max_hp: 100.0,
                 invincible_timer: 0.0,
+                anim_timer: 0.0,
+                anim_frame: 0,
             },
             enemies:          EnemyWorld::new(),
             bullets:          BulletWorld::new(),
@@ -493,6 +517,39 @@ impl GameWorld {
                 self.particles.lifetime[i] -= dt;
                 if self.particles.lifetime[i] <= 0.0 {
                     self.particles.kill(i);
+                }
+            }
+        }
+
+        // Step 23: プレイヤーアニメーション更新（歩行中のみ進める）
+        {
+            const PLAYER_ANIM_FPS: f32 = 8.0;
+            const PLAYER_ANIM_INTERVAL: f32 = 1.0 / PLAYER_ANIM_FPS;
+            let is_moving = self.player.input_dx * self.player.input_dx
+                + self.player.input_dy * self.player.input_dy > 0.0001;
+            if is_moving {
+                self.player.anim_timer += dt;
+                if self.player.anim_timer >= PLAYER_ANIM_INTERVAL {
+                    self.player.anim_timer -= PLAYER_ANIM_INTERVAL;
+                    self.player.anim_frame = (self.player.anim_frame + 1) % 4;
+                }
+            } else {
+                self.player.anim_frame = 0;
+                self.player.anim_timer = 0.0;
+            }
+        }
+
+        // Step 23: 敵アニメーション更新
+        {
+            let elen = self.enemies.len();
+            for i in 0..elen {
+                if !self.enemies.alive[i] { continue; }
+                let interval = 1.0 / self.enemies.kinds[i].anim_fps();
+                self.enemies.anim_timers[i] += dt;
+                if self.enemies.anim_timers[i] >= interval {
+                    self.enemies.anim_timers[i] -= interval;
+                    let max_frame = self.enemies.kinds[i].frame_count();
+                    self.enemies.anim_frames[i] = (self.enemies.anim_frames[i] + 1) % max_frame;
                 }
             }
         }
@@ -928,21 +985,23 @@ impl GameWorld {
         (self.camera_x, self.camera_y)
     }
 
-    fn get_render_data(&self) -> Vec<(f32, f32, u8)> {
+    /// Step 23: (x, y, kind, anim_frame) を返す
+    fn get_render_data(&self) -> Vec<(f32, f32, u8, u8)> {
         let mut v = Vec::with_capacity(1 + self.enemies.len() + self.bullets.len());
-        v.push((self.player.x, self.player.y, 0u8));
+        v.push((self.player.x, self.player.y, 0u8, self.player.anim_frame));
         for i in 0..self.enemies.len() {
             if self.enemies.alive[i] {
                 v.push((
                     self.enemies.positions_x[i],
                     self.enemies.positions_y[i],
                     self.enemies.kinds[i].render_kind(),
+                    self.enemies.anim_frames[i],
                 ));
             }
         }
         for i in 0..self.bullets.len() {
             if self.bullets.alive[i] {
-                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], self.bullets.render_kind[i]));
+                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], self.bullets.render_kind[i], 0u8));
             }
         }
         v
@@ -1182,7 +1241,7 @@ impl ApplicationHandler for App {
                 if let (Some(renderer), Some(window)) =
                     (self.renderer.as_mut(), self.window.as_ref())
                 {
-                    let render_data    = self.game.get_render_data();
+                    let render_data    = self.game.get_render_data();   // Step 23: (x,y,kind,anim_frame)
                     let particle_data  = self.game.get_particle_data();
                     let item_data      = self.game.get_item_data();
                     let camera_offset  = self.game.camera_offset();
