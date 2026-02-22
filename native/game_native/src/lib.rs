@@ -50,6 +50,8 @@ pub struct EnemyWorld {
     /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
     pub sep_x:        Vec<f32>,
     pub sep_y:        Vec<f32>,
+    /// 近隣クエリ結果の再利用バッファ（毎フレームのヒープアロケーションを回避）
+    pub neighbor_buf: Vec<usize>,
 }
 
 impl EnemyWorld {
@@ -65,6 +67,7 @@ impl EnemyWorld {
             count:        0,
             sep_x:        Vec::new(),
             sep_y:        Vec::new(),
+            neighbor_buf: Vec::new(),
         }
     }
 
@@ -129,6 +132,7 @@ impl EnemySeparation for EnemyWorld {
     fn add_pos_y(&mut self, i: usize, v: f32) { self.positions_y[i] += v; }
     fn sep_buf_x(&mut self) -> &mut Vec<f32>  { &mut self.sep_x }
     fn sep_buf_y(&mut self) -> &mut Vec<f32>  { &mut self.sep_y }
+    fn neighbor_buf(&mut self) -> &mut Vec<usize> { &mut self.neighbor_buf }
 }
 
 /// 画面外の四辺いずれかにランダムに配置

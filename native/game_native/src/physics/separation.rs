@@ -14,6 +14,8 @@ pub trait EnemySeparation {
     fn add_pos_y(&mut self, i: usize, v: f32);
     fn sep_buf_x(&mut self) -> &mut Vec<f32>;
     fn sep_buf_y(&mut self) -> &mut Vec<f32>;
+    /// 近隣クエリ結果の再利用バッファ（毎フレームのヒープアロケーションを回避）
+    fn neighbor_buf(&mut self) -> &mut Vec<usize>;
 }
 
 /// 分離パスを実行する。
@@ -58,8 +60,12 @@ pub fn apply_separation<W: EnemySeparation>(
         let ix = world.pos_x(i);
         let iy = world.pos_y(i);
 
-        let neighbors = hash.query_nearby(ix, iy, separation_radius);
-        for j in neighbors {
+        // neighbor_buf を再利用してヒープアロケーションを回避
+        hash.query_nearby_into(ix, iy, separation_radius, world.neighbor_buf());
+        // buf の借用を解放するため長さだけ取り出してインデックスアクセス
+        let nb_len = world.neighbor_buf().len();
+        for ni in 0..nb_len {
+            let j = world.neighbor_buf()[ni];
             if j <= i || !world.is_alive(j) {
                 // j <= i: 各ペアを一度だけ処理（両方向に適用するため）
                 continue;

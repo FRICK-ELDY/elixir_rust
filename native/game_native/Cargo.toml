@@ -12,6 +12,7 @@ name = "game_window"
 path = "src/main.rs"
 
 [dependencies]
+rustc-hash = "2"
 winit = "0.30.12"
 wgpu = "24"
 pollster = "0.3"
