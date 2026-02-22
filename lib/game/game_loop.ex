@@ -41,18 +41,21 @@ defmodule Game.GameLoop do
       Game.SpawnSystem.maybe_spawn(state.world_ref, elapsed, state.last_spawn_ms)
 
     if rem(state.frame_count, 60) == 0 do
-      {px, py}       = Game.NifBridge.get_player_pos(state.world_ref)
-      hp             = Game.NifBridge.get_player_hp(state.world_ref)
-      enemy_count    = Game.NifBridge.get_enemy_count(state.world_ref)
-      bullet_count   = Game.NifBridge.get_bullet_count(state.world_ref)
-      frame_time_ms  = Game.NifBridge.get_frame_time_ms(state.world_ref)
-      budget_warn    = if frame_time_ms > @tick_ms, do: " ⚠ OVER BUDGET", else: ""
+      {px, py}                        = Game.NifBridge.get_player_pos(state.world_ref)
+      {hp, max_hp, score, elapsed_s}  = Game.NifBridge.get_hud_data(state.world_ref)
+      enemy_count                     = Game.NifBridge.get_enemy_count(state.world_ref)
+      bullet_count                    = Game.NifBridge.get_bullet_count(state.world_ref)
+      frame_time_ms                   = Game.NifBridge.get_frame_time_ms(state.world_ref)
+      budget_warn                     = if frame_time_ms > @tick_ms, do: " ⚠ OVER BUDGET", else: ""
+
+      hp_bar   = hud_hp_bar(hp, max_hp)
+      time_str = format_time(elapsed_s)
+
       Logger.info(
-        "Frame: #{state.frame_count} | " <>
+        "[HUD] #{hp_bar} HP: #{Float.round(hp, 1)}/#{trunc(max_hp)} | " <>
+        "Score: #{score} | Time: #{time_str} | " <>
+        "Enemies: #{enemy_count} | Bullets: #{bullet_count} | " <>
         "Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)}) | " <>
-        "HP: #{Float.round(hp, 1)} | " <>
-        "Enemies: #{enemy_count} | " <>
-        "Bullets: #{bullet_count} | " <>
         "PhysicsTime: #{Float.round(frame_time_ms, 2)}ms#{budget_warn}"
       )
     end
@@ -68,4 +71,22 @@ defmodule Game.GameLoop do
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)
+
+  # ── Step 13: HUD ヘルパー ──────────────────────────────────────
+
+  @bar_length 20
+
+  defp hud_hp_bar(hp, max_hp) when max_hp > 0 do
+    filled = round(hp / max_hp * @bar_length) |> max(0) |> min(@bar_length)
+    empty  = @bar_length - filled
+    "[" <> String.duplicate("#", filled) <> String.duplicate("-", empty) <> "]"
+  end
+  defp hud_hp_bar(_, _), do: "[" <> String.duplicate("-", @bar_length) <> "]"
+
+  defp format_time(seconds) do
+    total_s = trunc(seconds)
+    m = div(total_s, 60)
+    s = rem(total_s, 60)
+    :io_lib.format("~2..0B:~2..0B", [m, s]) |> IO.iodata_to_binary()
+  end
 end
