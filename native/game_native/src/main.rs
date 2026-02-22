@@ -37,6 +37,7 @@ struct PlayerState {
     invincible_timer: f32,
 }
 
+#[derive(Default)]
 struct EnemyWorld {
     positions_x:  Vec<f32>,
     positions_y:  Vec<f32>,
@@ -52,7 +53,7 @@ struct EnemyWorld {
 
 impl EnemyWorld {
     fn new() -> Self {
-        Self { positions_x: Vec::new(), positions_y: Vec::new(), hp: Vec::new(), alive: Vec::new(), count: 0, sep_x: Vec::new(), sep_y: Vec::new(), neighbor_buf: Vec::new() }
+        Self::default()
     }
     fn spawn(&mut self, positions: &[(f32, f32)]) {
         for &(x, y) in positions {
