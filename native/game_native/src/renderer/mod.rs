@@ -94,6 +94,8 @@ pub struct HudData {
     pub fps:              f32,
     pub level_up_pending: bool,
     pub weapon_choices:   Vec<String>,
+    /// Step 17: 装備中の武器レベル [(weapon_name, level)]
+    pub weapon_levels:    Vec<(String, u32)>,
 }
 
 // ─── Renderer ─────────────────────────────────────────────────
@@ -475,7 +477,8 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self, window: &Window, hud: &HudData) {
+    /// HUD を描画し、レベルアップ画面でボタンが押された場合は選択された武器名を返す
+    pub fn render(&mut self, window: &Window, hud: &HudData) -> Option<String> {
         // ─── FPS 計測 ────────────────────────────────────────────
         self.frame_count += 1;
         let elapsed = self.fps_timer.elapsed();
@@ -490,11 +493,11 @@ impl Renderer {
             Ok(t) => t,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                 self.surface.configure(&self.device, &self.config);
-                return;
+                return None;
             }
             Err(e) => {
                 eprintln!("Surface error: {e:?}");
-                return;
+                return None;
             }
         };
 
@@ -538,8 +541,9 @@ impl Renderer {
 
         // ─── egui HUD パス ───────────────────────────────────────
         let raw_input = self.egui_winit.take_egui_input(window);
+        let mut chosen_weapon: Option<String> = None;
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
-            build_hud_ui(ctx, hud, self.current_fps);
+            chosen_weapon = build_hud_ui(ctx, hud, self.current_fps);
         });
 
         self.egui_winit.handle_platform_output(window, full_output.platform_output);
@@ -586,12 +590,16 @@ impl Renderer {
 
         self.queue.submit([encoder.finish()]);
         output.present();
+
+        chosen_weapon
     }
 }
 
 // ─── HUD UI 構築 ───────────────────────────────────────────────
 
-fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
+/// HUD を描画し、レベルアップ画面でボタンが押された場合は選択された武器名を返す
+fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> {
+    let mut chosen: Option<String> = None;
     // 上部 HUD バー
     egui::Area::new(egui::Id::new("hud_top"))
         .anchor(egui::Align2::LEFT_TOP, egui::vec2(8.0, 8.0))
@@ -683,6 +691,18 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
                             egui::RichText::new(format!("{:02}:{:02}", m, s))
                                 .color(egui::Color32::WHITE),
                         );
+
+                        // Step 17: weapon slot display
+                        if !hud.weapon_levels.is_empty() {
+                            ui.separator();
+                            for (name, lv) in &hud.weapon_levels {
+                                ui.label(
+                                    egui::RichText::new(format!("[{}] Lv.{lv}", weapon_short_name(name)))
+                                        .color(egui::Color32::from_rgb(180, 230, 255))
+                                        .strong(),
+                                );
+                            }
+                        }
                     });
                 });
         });
@@ -719,19 +739,19 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 egui::Frame::new()
-                    .fill(egui::Color32::from_rgba_unmultiplied(10, 10, 40, 230))
+                    .fill(egui::Color32::from_rgba_unmultiplied(10, 10, 40, 240))
                     .inner_margin(egui::Margin::symmetric(40, 30))
                     .corner_radius(12.0)
                     .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 220, 50)))
                     .show(ui, |ui| {
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new(format!("** LEVEL UP! Lv.{} **", hud.level))
+                                egui::RichText::new(format!("*** LEVEL UP!  Lv.{} ***", hud.level))
                                     .color(egui::Color32::from_rgb(255, 220, 50))
                                     .size(28.0)
                                     .strong(),
                             );
-                            ui.add_space(12.0);
+                            ui.add_space(8.0);
                             ui.label(
                                 egui::RichText::new("Choose a weapon")
                                     .color(egui::Color32::WHITE)
@@ -740,39 +760,155 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
                             ui.add_space(16.0);
                             ui.horizontal(|ui| {
                                 for choice in &hud.weapon_choices {
-                                    egui::Frame::new()
-                                        .fill(egui::Color32::from_rgb(30, 30, 80))
-                                        .inner_margin(egui::Margin::symmetric(16, 12))
-                                        .corner_radius(8.0)
-                                        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 200)))
-                                        .show(ui, |ui| {
+                                    // 現在のレベルを取得（0 = 未所持）
+                                    let current_lv = hud.weapon_levels
+                                        .iter()
+                                        .find(|(n, _)| n == choice)
+                                        .map(|(_, lv)| *lv)
+                                        .unwrap_or(0);
+                                    let is_upgrade = current_lv > 0;
+                                    let next_lv    = current_lv + 1;
+
+                                    let border_color = if is_upgrade {
+                                        egui::Color32::from_rgb(255, 180, 50)   // 強化: 金色
+                                    } else {
+                                        egui::Color32::from_rgb(100, 180, 255)  // 新規: 青色
+                                    };
+                                    let bg_color = if is_upgrade {
+                                        egui::Color32::from_rgb(50, 35, 10)
+                                    } else {
+                                        egui::Color32::from_rgb(15, 30, 60)
+                                    };
+
+                                    let frame = egui::Frame::new()
+                                        .fill(bg_color)
+                                        .inner_margin(egui::Margin::symmetric(16, 14))
+                                        .corner_radius(10.0)
+                                        .stroke(egui::Stroke::new(2.0, border_color));
+
+                                    let response = frame.show(ui, |ui| {
+                                        ui.set_min_width(140.0);
+                                        ui.vertical_centered(|ui| {
+                                            // weapon name
                                             ui.label(
-                                                egui::RichText::new(weapon_display_name(choice))
-                                                    .color(egui::Color32::from_rgb(180, 200, 255))
-                                                    .size(14.0)
+                                                egui::RichText::new(weapon_short_name(choice))
+                                                    .color(egui::Color32::from_rgb(220, 230, 255))
+                                                    .size(16.0)
                                                     .strong(),
                                             );
-                                        });
-                                    ui.add_space(8.0);
+                                            ui.add_space(4.0);
+
+                                            // level display
+                                            let lv_text = if is_upgrade {
+                                                format!("Lv.{current_lv} -> Lv.{next_lv}")
+                                            } else {
+                                                "NEW!".to_string()
+                                            };
+                                            let lv_color = if is_upgrade {
+                                                egui::Color32::from_rgb(255, 200, 80)
+                                            } else {
+                                                egui::Color32::from_rgb(100, 255, 150)
+                                            };
+                                            ui.label(
+                                                egui::RichText::new(lv_text)
+                                                    .color(lv_color)
+                                                    .size(13.0)
+                                                    .strong(),
+                                            );
+                                            ui.add_space(6.0);
+
+                                            // upgrade description
+                                            for line in weapon_upgrade_desc(choice, current_lv) {
+                                                ui.label(
+                                                    egui::RichText::new(line)
+                                                        .color(egui::Color32::from_rgb(180, 200, 180))
+                                                        .size(11.0),
+                                                );
+                                            }
+                                            ui.add_space(8.0);
+
+                                            // select button
+                                            let btn = egui::Button::new(
+                                                egui::RichText::new("Select  [1/2/3]")
+                                                    .size(13.0)
+                                                    .strong(),
+                                            )
+                                            .fill(border_color)
+                                            .min_size(egui::vec2(110.0, 28.0));
+                                            ui.add(btn)
+                                        }).inner
+                                    });
+
+                                    if response.inner.clicked() {
+                                        chosen = Some(choice.clone());
+                                    }
+                                    ui.add_space(12.0);
                                 }
                             });
-                            ui.add_space(8.0);
-                            ui.label(
-                                egui::RichText::new("(Auto-select in 3s)")
-                                    .color(egui::Color32::from_rgb(150, 150, 150))
-                                    .size(12.0),
-                            );
                         });
                     });
             });
     }
+
+    chosen
 }
 
-fn weapon_display_name(name: &str) -> &str {
+fn weapon_short_name(name: &str) -> &str {
     match name {
-        "magic_wand" => "Magic Wand\nAuto-aim nearest enemy",
-        "axe"        => "Axe\nThrow upward",
-        "cross"      => "Cross\nFire in 4 directions",
+        "magic_wand" => "Magic Wand",
+        "axe"        => "Axe",
+        "cross"      => "Cross",
         _            => name,
     }
 }
+
+/// Returns upgrade description lines for the level-up card
+fn weapon_upgrade_desc(name: &str, current_lv: u32) -> Vec<String> {
+    let next = current_lv + 1;
+    match name {
+        "magic_wand" => {
+            let mut lines = vec![
+                format!("DMG: {} -> {}", magic_wand_dmg(current_lv), magic_wand_dmg(next)),
+                format!("CD:  {:.1}s -> {:.1}s", magic_wand_cd(current_lv), magic_wand_cd(next)),
+            ];
+            let bullets_now  = magic_wand_bullets(current_lv);
+            let bullets_next = magic_wand_bullets(next);
+            if bullets_next > bullets_now {
+                lines.push(format!("Shots: {} -> {} (+)", bullets_now, bullets_next));
+            } else {
+                lines.push(format!("Shots: {}", bullets_now));
+            }
+            lines
+        }
+        "axe" => vec![
+            format!("DMG: {} -> {}", axe_dmg(current_lv), axe_dmg(next)),
+            format!("CD:  {:.1}s -> {:.1}s", axe_cd(current_lv), axe_cd(next)),
+            "Throws upward".to_string(),
+        ],
+        "cross" => {
+            let dirs_now  = if current_lv == 0 || current_lv <= 3 { 4 } else { 8 };
+            let dirs_next = if next <= 3 { 4 } else { 8 };
+            let mut lines = vec![
+                format!("DMG: {} -> {}", cross_dmg(current_lv), cross_dmg(next)),
+                format!("CD:  {:.1}s -> {:.1}s", cross_cd(current_lv), cross_cd(next)),
+            ];
+            if dirs_next > dirs_now {
+                lines.push(format!("Dirs: {} -> {} (+)", dirs_now, dirs_next));
+            } else {
+                lines.push(format!("{}-way fire", dirs_now));
+            }
+            lines
+        }
+        _ => vec!["Upgrade weapon".to_string()],
+    }
+}
+
+fn magic_wand_dmg(lv: u32) -> i32 { let b = 10i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn magic_wand_cd(lv: u32) -> f32  { let b = 0.8f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+fn magic_wand_bullets(lv: u32) -> u32 { match lv { 0..=2 => 1, 3..=4 => 2, 5..=6 => 3, _ => 4 } }
+
+fn axe_dmg(lv: u32) -> i32 { let b = 25i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn axe_cd(lv: u32) -> f32  { let b = 1.5f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+
+fn cross_dmg(lv: u32) -> i32 { let b = 15i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn cross_cd(lv: u32) -> f32  { let b = 2.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }

@@ -1,13 +1,15 @@
 mod constants;
 mod physics;
+mod weapon;
 
 use constants::{
-    BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
+    BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS,
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
-    SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_COOLDOWN,
+    SCREEN_HEIGHT, SCREEN_WIDTH,
 };
+use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_SLOTS};
 use physics::rng::SimpleRng;
 use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
@@ -209,49 +211,6 @@ impl BulletWorld {
         self.positions_x.len()
     }
 }
-
-// ─── 武器種別 ─────────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum WeaponKind {
-    /// 基本武器: 最近接敵に向けて弾丸を発射
-    MagicWand,
-    /// 斧: プレイヤーの上方向に放物線を描いて飛ぶ（簡易実装: 上方向に直進）
-    Axe,
-    /// 十字: 上下左右 4 方向に同時発射
-    Cross,
-}
-
-impl WeaponKind {
-    /// 武器ごとの発射クールダウン（秒）
-    pub fn cooldown(&self) -> f32 {
-        match self {
-            WeaponKind::MagicWand => WEAPON_COOLDOWN,
-            WeaponKind::Axe       => 1.5,
-            WeaponKind::Cross     => 2.0,
-        }
-    }
-    /// 武器ごとのダメージ
-    pub fn damage(&self) -> i32 {
-        match self {
-            WeaponKind::MagicWand => BULLET_DAMAGE,
-            WeaponKind::Axe       => 25,
-            WeaponKind::Cross     => 15,
-        }
-    }
-}
-
-// ─── 武器スロット ─────────────────────────────────────────────
-pub struct WeaponSlot {
-    pub kind:           WeaponKind,
-    pub cooldown_timer: f32,
-}
-
-impl WeaponSlot {
-    pub fn new(kind: WeaponKind) -> Self {
-        Self { kind, cooldown_timer: 0.0 }
-    }
-}
-
 
 // ─── パーティクル SoA ──────────────────────────────────────────
 pub struct ParticleWorld {
@@ -572,7 +531,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
-    // ── Step 11/14: 武器スロット発射処理 ────────────────────────
+    // ── Step 11/14/17: 武器スロット発射処理 ─────────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
         let slot_count = w.weapon_slots.len();
@@ -581,9 +540,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             if w.weapon_slots[si].cooldown_timer > 0.0 {
                 continue;
             }
-            let kind = w.weapon_slots[si].kind;
-            let cd   = kind.cooldown();
-            let dmg  = kind.damage();
+            let kind  = w.weapon_slots[si].kind;
+            // Step 17: レベルに応じたクールダウン・ダメージ・弾数を使用
+            let cd    = w.weapon_slots[si].effective_cooldown();
+            let dmg   = w.weapon_slots[si].effective_damage();
+            let bcount = w.weapon_slots[si].bullet_count();
             match kind {
                 WeaponKind::MagicWand => {
                     if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
@@ -591,8 +552,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                         let ty   = w.enemies.positions_y[ti] + ENEMY_RADIUS;
                         let bdx  = tx - px;
                         let bdy  = ty - py;
-                        let blen = (bdx * bdx + bdy * bdy).sqrt().max(0.001);
-                        w.bullets.spawn(px, py, (bdx / blen) * BULLET_SPEED, (bdy / blen) * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                        // bcount 発同時発射（Lv3 で 2 発、Lv5 で 3 発）
+                        // 複数発は少しずつ角度をずらして扇状に発射
+                        let base_angle = bdy.atan2(bdx);
+                        let spread = std::f32::consts::PI * 0.08; // 約 14 度の広がり
+                        let half = (bcount as f32 - 1.0) / 2.0;
+                        for bi in 0..bcount {
+                            let angle = base_angle + (bi as f32 - half) * spread;
+                            let vx = angle.cos() * BULLET_SPEED;
+                            let vy = angle.sin() * BULLET_SPEED;
+                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME);
+                        }
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
@@ -602,9 +572,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 WeaponKind::Cross => {
-                    // 上下左右 4 方向に同時発射
-                    let dirs: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
-                    for (dx_dir, dy_dir) in dirs {
+                    // Lv1〜3: 上下左右 4 方向、Lv4 以上: 斜め 4 方向も追加
+                    let dirs_4: [(f32, f32); 4] = [
+                        (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
+                    ];
+                    let diag = std::f32::consts::FRAC_1_SQRT_2;
+                    let dirs_8: [(f32, f32); 8] = [
+                        (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
+                        (diag, -diag), (-diag, -diag), (diag, diag), (-diag, diag),
+                    ];
+                    let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
+                    for &(dx_dir, dy_dir) in dirs {
                         w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME);
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
@@ -821,9 +799,20 @@ fn get_level_up_data(world: ResourceArc<GameWorld>) -> (u32, u32, bool, u32) {
     (w.exp, w.level, w.level_up_pending, exp_to_next)
 }
 
-/// 武器を追加し、レベルアップ待機を解除する（Step 14）
+/// 装備中の武器スロット情報を返す（Step 17）
+/// 戻り値: [(weapon_name, level)] のリスト
+#[rustler::nif]
+fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
+    let w = world.0.lock().unwrap();
+    w.weapon_slots.iter()
+        .map(|s| (s.kind.name().to_string(), s.level))
+        .collect()
+}
+
+/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17）
 /// weapon_name: "magic_wand" | "axe" | "cross"
-/// 最大 6 スロットを超えた場合は既存スロットを上書き（最も古い同種を優先）
+/// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
+/// 新規武器は最大 6 スロットまで追加可能
 #[rustler::nif]
 fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     let mut w = world.0.lock().unwrap();
@@ -835,14 +824,13 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
         _            => WeaponKind::MagicWand,
     };
 
-    const MAX_SLOTS: usize = 6;
-    if w.weapon_slots.len() < MAX_SLOTS {
+    // 同じ武器を選んだ場合はレベルアップ
+    if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+        slot.level = (slot.level + 1).min(weapon::MAX_WEAPON_LEVEL);
+    } else if w.weapon_slots.len() < MAX_WEAPON_SLOTS {
         w.weapon_slots.push(WeaponSlot::new(kind));
-    } else {
-        // 同種スロットがあれば上書き、なければ先頭を上書き
-        let target = w.weapon_slots.iter().position(|s| s.kind == kind).unwrap_or(0);
-        w.weapon_slots[target] = WeaponSlot::new(kind);
     }
+    // Slots full + new weapon: no-op (Elixir-side generate_weapon_choices must not offer this)
 
     // レベルアップ処理: レベルを上げ、フラグを解除
     // exp は累積値で管理するためリセットしない

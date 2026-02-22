@@ -42,4 +42,7 @@ defmodule Game.NifBridge do
 
   # Step 16: パーティクル描画データ取得（[{x, y, r, g, b, alpha, size}]）
   def get_particle_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 17: 装備中の武器スロット情報取得（[{weapon_name, level}]）
+  def get_weapon_levels(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
