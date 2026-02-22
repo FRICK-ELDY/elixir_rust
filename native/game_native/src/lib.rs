@@ -52,6 +52,7 @@ pub struct EnemyWorld {
     pub speeds:       Vec<f32>,
     pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
+    pub count:        usize,
 }
 
 impl EnemyWorld {
@@ -64,6 +65,7 @@ impl EnemyWorld {
             speeds:       Vec::new(),
             hp:           Vec::new(),
             alive:        Vec::new(),
+            count:        0,
         }
     }
 
@@ -71,17 +73,48 @@ impl EnemyWorld {
         self.positions_x.len()
     }
 
-    /// 画面外のランダムな位置に `n` 体スポーン
-    /// positions: spawn_enemies で事前生成した座標リスト
+    pub fn kill(&mut self, i: usize) {
+        if self.alive[i] {
+            self.alive[i] = false;
+            self.count = self.count.saturating_sub(1);
+        }
+    }
+
+    /// 画面外のランダムな位置に `n` 体スポーン（死んだスロットを再利用）
     pub fn spawn(&mut self, positions: &[(f32, f32)]) {
+        let mut slot = 0usize;
         for &(x, y) in positions {
-            self.positions_x.push(x);
-            self.positions_y.push(y);
-            self.velocities_x.push(0.0);
-            self.velocities_y.push(0.0);
-            self.speeds.push(80.0);
-            self.hp.push(30.0);
-            self.alive.push(true);
+            // 死んでいるスロットを探して再利用
+            let reused = loop {
+                if slot >= self.positions_x.len() {
+                    break false;
+                }
+                if !self.alive[slot] {
+                    break true;
+                }
+                slot += 1;
+            };
+
+            if reused {
+                self.positions_x[slot]  = x;
+                self.positions_y[slot]  = y;
+                self.velocities_x[slot] = 0.0;
+                self.velocities_y[slot] = 0.0;
+                self.speeds[slot]       = 80.0;
+                self.hp[slot]           = 30.0;
+                self.alive[slot]        = true;
+                self.count += 1;
+                slot += 1;
+            } else {
+                self.positions_x.push(x);
+                self.positions_y.push(y);
+                self.velocities_x.push(0.0);
+                self.velocities_y.push(0.0);
+                self.speeds.push(80.0);
+                self.hp.push(30.0);
+                self.alive.push(true);
+                self.count += 1;
+            }
         }
     }
 }
@@ -404,7 +437,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             if ddx * ddx + ddy * ddy < hit_r * hit_r {
                 w.enemies.hp[ei] -= dmg as f32;
                 if w.enemies.hp[ei] <= 0.0 {
-                    w.enemies.alive[ei] = false;
+                    w.enemies.kill(ei);
                 }
                 w.bullets.kill(bi);
                 break;
