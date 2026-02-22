@@ -33,17 +33,20 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// アトラス内の UV 座標（576x64 px アトラス）
+// アトラス内の UV 座標（768x64 px アトラス）
 // [0..63]    プレイヤー
 // [64..127]  Slime（緑）
 // [128..191] Bat（紫）
 // [192..255] Golem（灰）
-// [256..319] 弾丸
+// [256..319] 弾丸 MagicWand/Axe/Cross（黄色い円）
 // [320..383] パーティクル
 // [384..447] 経験値宝石（緑）
 // [448..511] 回復ポーション（赤）
 // [512..575] 磁石（黄）
-const ATLAS_W: f32 = 576.0;
+// [576..639] Fireball 弾丸（赤橙の炎球）
+// [640..703] Lightning 弾丸（水色の電撃球）
+// [704..767] Whip エフェクト（黄緑の弧）
+const ATLAS_W: f32 = 768.0;
 const ATLAS_H: f32 = 64.0;
 
 pub fn player_uv() -> ([f32; 2], [f32; 2]) {
@@ -72,6 +75,15 @@ pub fn potion_uv() -> ([f32; 2], [f32; 2]) {
 }
 pub fn magnet_uv() -> ([f32; 2], [f32; 2]) {
     ([512.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn fireball_uv() -> ([f32; 2], [f32; 2]) {
+    ([576.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn lightning_bullet_uv() -> ([f32; 2], [f32; 2]) {
+    ([640.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+}
+pub fn whip_uv() -> ([f32; 2], [f32; 2]) {
+    ([704.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -503,12 +515,15 @@ impl Renderer {
         // Step 20: カメラ Uniform を更新
         let cam_uniform = CameraUniform::new(camera_offset.0, camera_offset.1);
         self.queue.write_buffer(&self.camera_uniform_buf, 0, bytemuck::bytes_of(&cam_uniform));
-        let (player_uv_off, player_uv_sz)     = player_uv();
-        let (bullet_uv_off, bullet_uv_sz)     = bullet_uv();
-        let (particle_uv_off, particle_uv_sz) = particle_uv();
-        let (gem_uv_off, gem_uv_sz)           = gem_uv();
-        let (potion_uv_off, potion_uv_sz)     = potion_uv();
-        let (magnet_uv_off, magnet_uv_sz)     = magnet_uv();
+        let (player_uv_off, player_uv_sz)           = player_uv();
+        let (bullet_uv_off, bullet_uv_sz)           = bullet_uv();
+        let (fireball_uv_off, fireball_uv_sz)       = fireball_uv();
+        let (lightning_uv_off, lightning_uv_sz)     = lightning_bullet_uv();
+        let (whip_uv_off, whip_uv_sz)               = whip_uv();
+        let (particle_uv_off, particle_uv_sz)       = particle_uv();
+        let (gem_uv_off, gem_uv_sz)                 = gem_uv();
+        let (potion_uv_off, potion_uv_sz)           = potion_uv();
+        let (magnet_uv_off, magnet_uv_sz)           = magnet_uv();
 
         let mut instances: Vec<SpriteInstance> =
             Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len());
@@ -534,11 +549,36 @@ impl Renderer {
                         color_tint: [1.0, 1.0, 1.0, 1.0],
                     }
                 }
+                // 通常弾（MagicWand / Axe / Cross）: 黄色い円 16px
                 4 => SpriteInstance {
                     position:   [x - 8.0, y - 8.0],
                     size:       [16.0, 16.0],
                     uv_offset:  bullet_uv_off,
                     uv_size:    bullet_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                // Fireball: 赤橙の炎球 22px（通常弾より大きめ）
+                8 => SpriteInstance {
+                    position:   [x - 11.0, y - 11.0],
+                    size:       [22.0, 22.0],
+                    uv_offset:  fireball_uv_off,
+                    uv_size:    fireball_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                // Lightning 弾丸: 水色の電撃球 18px
+                9 => SpriteInstance {
+                    position:   [x - 9.0, y - 9.0],
+                    size:       [18.0, 18.0],
+                    uv_offset:  lightning_uv_off,
+                    uv_size:    lightning_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                // Whip エフェクト弾: 黄緑の横長楕円 40x20px
+                10 => SpriteInstance {
+                    position:   [x - 20.0, y - 10.0],
+                    size:       [40.0, 20.0],
+                    uv_offset:  whip_uv_off,
+                    uv_size:    whip_uv_sz,
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
                 _ => continue,
@@ -1055,6 +1095,9 @@ fn weapon_short_name(name: &str) -> &str {
         "magic_wand" => "Magic Wand",
         "axe"        => "Axe",
         "cross"      => "Cross",
+        "whip"       => "Whip",
+        "fireball"   => "Fireball",
+        "lightning"  => "Lightning",
         _            => name,
     }
 }
@@ -1096,6 +1139,22 @@ fn weapon_upgrade_desc(name: &str, current_lv: u32) -> Vec<String> {
             }
             lines
         }
+        "whip" => vec![
+            format!("DMG: {} -> {}", whip_dmg(current_lv), whip_dmg(next)),
+            format!("CD:  {:.1}s -> {:.1}s", whip_cd(current_lv), whip_cd(next)),
+            format!("Range: {}px -> {}px", whip_range(current_lv), whip_range(next)),
+            "Fan sweep (108°)".to_string(),
+        ],
+        "fireball" => vec![
+            format!("DMG: {} -> {}", fireball_dmg(current_lv), fireball_dmg(next)),
+            format!("CD:  {:.1}s -> {:.1}s", fireball_cd(current_lv), fireball_cd(next)),
+            "Piercing shot".to_string(),
+        ],
+        "lightning" => vec![
+            format!("DMG: {} -> {}", lightning_dmg(current_lv), lightning_dmg(next)),
+            format!("CD:  {:.1}s -> {:.1}s", lightning_cd(current_lv), lightning_cd(next)),
+            format!("Chain: {} -> {} targets", lightning_chain(current_lv), lightning_chain(next)),
+        ],
         _ => vec!["Upgrade weapon".to_string()],
     }
 }
@@ -1109,3 +1168,14 @@ fn axe_cd(lv: u32) -> f32  { let b = 1.5f32; (b * (1.0 - (lv as f32 - 1.0).max(0
 
 fn cross_dmg(lv: u32) -> i32 { let b = 15i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
 fn cross_cd(lv: u32) -> f32  { let b = 2.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+
+fn whip_dmg(lv: u32) -> i32   { let b = 30i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn whip_cd(lv: u32) -> f32    { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+fn whip_range(lv: u32) -> u32 { 120 + lv.saturating_sub(1) * 20 }
+
+fn fireball_dmg(lv: u32) -> i32 { let b = 20i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn fireball_cd(lv: u32) -> f32  { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+
+fn lightning_dmg(lv: u32) -> i32   { let b = 15i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
+fn lightning_cd(lv: u32) -> f32    { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
+fn lightning_chain(lv: u32) -> u32 { 2 + lv / 2 }

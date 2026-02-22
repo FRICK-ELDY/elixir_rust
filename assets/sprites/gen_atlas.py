@@ -1,21 +1,24 @@
 """
 アトラス画像生成スクリプト
-576x64 px の RGBA PNG を生成する:
+768x64 px の RGBA PNG を生成する:
   [  0.. 63] x [0..63]: プレイヤー（水色の正方形）
   [ 64..127] x [0..63]: Slime（緑のスライム）
   [128..191] x [0..63]: Bat（紫のコウモリ）
   [192..255] x [0..63]: Golem（灰色のゴーレム）
-  [256..319] x [0..63]: 弾丸（黄色い円）
+  [256..319] x [0..63]: 弾丸 MagicWand/Axe/Cross（黄色い円）
   [320..383] x [0..63]: パーティクル（白い円）
   [384..447] x [0..63]: 経験値宝石（緑のダイヤ）
   [448..511] x [0..63]: 回復ポーション（赤い瓶）
   [512..575] x [0..63]: 磁石（黄色い磁石）
+  [576..639] x [0..63]: Fireball 弾丸（赤橙の炎球）
+  [640..703] x [0..63]: Lightning 弾丸（水色の電撃球）
+  [704..767] x [0..63]: Whip エフェクト（黄緑の弧状）
 """
 
 import struct
 import zlib
 
-W, H = 576, 64
+W, H = 768, 64
 
 pixels = bytearray(W * H * 4)
 
@@ -147,6 +150,54 @@ fill_rect(552, 48, 568, 58, 40, 80, 220)
 # 光沢
 fill_rect(524, 20, 532, 26, 255, 240, 120)
 
+# Fireball 弾丸: 赤橙の炎球（外側が暗い赤、内側が明るい橙、中心が白）
+# 外炎（暗い赤）
+fill_circle(608, 32, 14, 200, 40, 0)
+# 中炎（橙）
+fill_circle(608, 32, 10, 255, 120, 0)
+# 内炎（明るい橙黄）
+fill_circle(608, 32, 6, 255, 200, 50)
+# 中心（白い核）
+fill_circle(608, 32, 3, 255, 255, 200)
+# 炎のゆらぎ（上方向に少し伸びた形）
+fill_circle(608, 24, 5, 255, 140, 20)
+fill_circle(608, 20, 3, 255, 180, 60)
+
+# Lightning 弾丸: 水色の電撃球（外側が濃い青、内側が明るい水色、中心が白）
+# 外輪（濃い青紫）
+fill_circle(672, 32, 13, 30, 60, 180)
+# 中間（水色）
+fill_circle(672, 32, 9, 60, 160, 255)
+# 内側（明るい水色）
+fill_circle(672, 32, 5, 150, 220, 255)
+# 中心（白）
+fill_circle(672, 32, 2, 240, 250, 255)
+# 電撃の放射（十字状の光線）
+for i in range(-12, 13):
+    if abs(i) > 2:
+        alpha_val = max(0, 200 - abs(i) * 14)
+        if 0 <= 672 + i < W:
+            set_pixel(672 + i, 32, 100, 200, 255, alpha_val)
+        if 0 <= 32 + i < H:
+            set_pixel(672, 32 + i, 100, 200, 255, alpha_val)
+
+# Whip エフェクト: 黄緑の弧状（横長の楕円、ムチの軌跡）
+# 外枠（濃い緑）
+for dy in range(-8, 9):
+    for dx in range(-20, 21):
+        if (dx / 20.0)**2 + (dy / 8.0)**2 <= 1.0:
+            set_pixel(736 + dx, 32 + dy, 80, 180, 20)
+# 内側（明るい黄緑）
+for dy in range(-5, 6):
+    for dx in range(-16, 17):
+        if (dx / 16.0)**2 + (dy / 5.0)**2 <= 1.0:
+            set_pixel(736 + dx, 32 + dy, 160, 240, 60)
+# 中心ハイライト（白）
+for dy in range(-2, 3):
+    for dx in range(-8, 9):
+        if (dx / 8.0)**2 + (dy / 2.0)**2 <= 1.0:
+            set_pixel(736 + dx, 32 + dy, 220, 255, 180)
+
 # PNG エンコード（標準ライブラリのみ使用）
 def make_png(width, height, rgba_data):
     def chunk(name, data):
@@ -172,13 +223,16 @@ def make_png(width, height, rgba_data):
 with open('atlas.png', 'wb') as f:
     f.write(make_png(W, H, pixels))
 
-print("atlas.png generated (576x64 RGBA)")
+print("atlas.png generated (768x64 RGBA)")
 print("  [  0.. 63] Player")
 print("  [ 64..127] Slime (green)")
 print("  [128..191] Bat   (purple)")
 print("  [192..255] Golem (gray)")
-print("  [256..319] Bullet (yellow)")
+print("  [256..319] Bullet MagicWand/Axe/Cross (yellow)")
 print("  [320..383] Particle (white)")
 print("  [384..447] Gem (green diamond)")
 print("  [448..511] Potion (red bottle)")
 print("  [512..575] Magnet (yellow U-shape)")
+print("  [576..639] Fireball bullet (red-orange flame)")
+print("  [640..703] Lightning bullet (cyan electric)")
+print("  [704..767] Whip effect (yellow-green arc)")

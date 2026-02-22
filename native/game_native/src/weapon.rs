@@ -9,6 +9,12 @@ pub enum WeaponKind {
     MagicWand,
     Axe,
     Cross,
+    /// 近距離扇状薙ぎ払い（弾丸を生成しない直接判定）
+    Whip,
+    /// 敵を貫通する炎弾
+    Fireball,
+    /// 最近接から連鎖する電撃（最大 chain_count 体）
+    Lightning,
 }
 
 impl WeaponKind {
@@ -17,6 +23,9 @@ impl WeaponKind {
             WeaponKind::MagicWand => WEAPON_COOLDOWN,
             WeaponKind::Axe       => 1.5,
             WeaponKind::Cross     => 2.0,
+            WeaponKind::Whip      => 1.0,
+            WeaponKind::Fireball  => 1.0,
+            WeaponKind::Lightning => 1.0,
         }
     }
 
@@ -25,6 +34,9 @@ impl WeaponKind {
             WeaponKind::MagicWand => BULLET_DAMAGE,
             WeaponKind::Axe       => 25,
             WeaponKind::Cross     => 15,
+            WeaponKind::Whip      => 30,
+            WeaponKind::Fireball  => 20,
+            WeaponKind::Lightning => 15,
         }
     }
 
@@ -33,6 +45,9 @@ impl WeaponKind {
             WeaponKind::MagicWand => "magic_wand",
             WeaponKind::Axe       => "axe",
             WeaponKind::Cross     => "cross",
+            WeaponKind::Whip      => "whip",
+            WeaponKind::Fireball  => "fireball",
+            WeaponKind::Lightning => "lightning",
         }
     }
 
@@ -49,6 +64,16 @@ impl WeaponKind {
             // Fixed single bullet
             _                     => None,
         }
+    }
+
+    /// Whip の扇状範囲（半径 px）: Lv1=120, 各レベル +20
+    pub fn whip_range(&self, level: u32) -> f32 {
+        120.0 + (level as f32 - 1.0) * 20.0
+    }
+
+    /// Lightning のチェーン数: Lv1=2, Lv2=2, Lv3=3, Lv4=3, ... Lv8=6
+    pub fn lightning_chain_count(&self, level: u32) -> usize {
+        2 + level as usize / 2
     }
 }
 

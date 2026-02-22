@@ -6,7 +6,7 @@ defmodule Game.LevelSystem do
   no side effects, easy to test, easy to extend.
   """
 
-  @all_weapons [:magic_wand, :axe, :cross]
+  @all_weapons [:magic_wand, :axe, :cross, :whip, :fireball, :lightning]
   # Must match MAX_WEAPON_LEVEL and MAX_WEAPON_SLOTS in native/game_native/src/weapon.rs
   @max_weapon_level 8
   @max_weapon_slots 6
@@ -48,5 +48,8 @@ defmodule Game.LevelSystem do
   def weapon_label(:magic_wand), do: "Magic Wand (auto-aim)"
   def weapon_label(:axe),        do: "Axe (upward throw)"
   def weapon_label(:cross),      do: "Cross (4-way fire)"
+  def weapon_label(:whip),       do: "Whip (fan sweep)"
+  def weapon_label(:fireball),   do: "Fireball (piercing)"
+  def weapon_label(:lightning),  do: "Lightning (chain)"
   def weapon_label(other),       do: to_string(other)
 end
