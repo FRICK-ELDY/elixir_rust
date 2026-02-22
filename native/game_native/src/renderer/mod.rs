@@ -46,7 +46,7 @@ impl ScreenUniform {
     }
 }
 
-const SPRITE_SIZE: f32 = 64.0;
+pub const SPRITE_SIZE: f32 = 64.0;
 const GRID_DIM: usize = 10;
 const INSTANCE_COUNT: usize = GRID_DIM * GRID_DIM;
 
@@ -321,6 +321,22 @@ impl Renderer {
             frame_count: 0,
             fps_timer: std::time::Instant::now(),
         }
+    }
+
+    /// プレイヤーのインスタンス（index 0）の位置を更新する
+    pub fn update_player(&mut self, x: f32, y: f32) {
+        let instance = SpriteInstance {
+            position:   [x, y],
+            size:       [SPRITE_SIZE, SPRITE_SIZE],
+            uv_offset:  [0.0, 0.0],
+            uv_size:    [1.0, 1.0],
+            color_tint: [0.2, 0.8, 1.0, 1.0], // 水色でプレイヤーを識別
+        };
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::bytes_of(&instance),
+        );
     }
 
     pub fn resize(&mut self, new_width: u32, new_height: u32) {

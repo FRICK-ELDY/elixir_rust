@@ -1,8 +1,23 @@
-use rustler::{NifResult, ResourceArc};
+use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::Mutex;
+
+rustler::atoms! {
+    ok
+}
+
+const PLAYER_SPEED: f32 = 200.0; // ピクセル/秒
+const PLAYER_SIZE: f32 = 64.0;
+
+pub struct PlayerState {
+    pub x: f32,
+    pub y: f32,
+    pub input_dx: f32,
+    pub input_dy: f32,
+}
 
 pub struct GameWorldInner {
     pub frame_id: u32,
+    pub player: PlayerState,
 }
 
 pub struct GameWorld(pub Mutex<GameWorldInner>);
@@ -14,14 +29,48 @@ fn add(a: i64, b: i64) -> NifResult<i64> {
 
 #[rustler::nif]
 fn create_world() -> ResourceArc<GameWorld> {
-    ResourceArc::new(GameWorld(Mutex::new(GameWorldInner { frame_id: 0 })))
+    ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
+        frame_id: 0,
+        player: PlayerState {
+            x: 640.0 - PLAYER_SIZE / 2.0,
+            y: 360.0 - PLAYER_SIZE / 2.0,
+            input_dx: 0.0,
+            input_dy: 0.0,
+        },
+    })))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-fn physics_step(world: ResourceArc<GameWorld>, _delta_ms: f64) -> u32 {
+fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     let mut w = world.0.lock().unwrap();
     w.frame_id += 1;
+
+    let dt = delta_ms as f32 / 1000.0;
+    let dx = w.player.input_dx;
+    let dy = w.player.input_dy;
+
+    // 斜め移動を正規化して速度を一定に保つ
+    let len = (dx * dx + dy * dy).sqrt();
+    if len > 0.001 {
+        w.player.x += (dx / len) * PLAYER_SPEED * dt;
+        w.player.y += (dy / len) * PLAYER_SPEED * dt;
+    }
+
     w.frame_id
+}
+
+#[rustler::nif]
+fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
+    let mut w = world.0.lock().unwrap();
+    w.player.input_dx = dx as f32;
+    w.player.input_dy = dy as f32;
+    ok()
+}
+
+#[rustler::nif]
+fn get_player_pos(world: ResourceArc<GameWorld>) -> (f64, f64) {
+    let w = world.0.lock().unwrap();
+    (w.player.x as f64, w.player.y as f64)
 }
 
 #[allow(non_local_definitions)]

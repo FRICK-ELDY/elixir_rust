@@ -19,11 +19,18 @@ defmodule Game.GameLoop do
     _frame_id = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
 
     if rem(state.frame_count, 60) == 0 do
-      Logger.info("Frame: #{state.frame_count}")
+      {px, py} = Game.NifBridge.get_player_pos(state.world_ref)
+      Logger.info("Frame: #{state.frame_count} | Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)})")
     end
 
     Process.send_after(self(), :tick, @tick_ms)
     {:noreply, %{state | last_tick: now_ms(), frame_count: state.frame_count + 1}}
+  end
+
+  @impl true
+  def handle_cast({:input, :move, {dx, dy}}, state) do
+    Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+    {:noreply, state}
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)
