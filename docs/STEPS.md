@@ -1032,7 +1032,7 @@ ls _build\dev\lib\game\priv\native\
 **チェックポイント**:
 - `mix compile` がエラーなく完了すること
 - `Game.NifBridge.add(1, 2)` が `3` を返すこと
-- `platform/windows/_build/debug/lib/game/priv/game_native.dll` が生成されていること
+- `_build/dev/lib/game/priv/native/game_native.dll` が生成されていること
 
 ---
 
