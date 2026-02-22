@@ -1,6 +1,9 @@
 // Background clear color (dark purple)
+#[allow(dead_code)]
 pub const BG_R: f64 = 0.05;
+#[allow(dead_code)]
 pub const BG_G: f64 = 0.02;
+#[allow(dead_code)]
 pub const BG_B: f64 = 0.10;
 
 // Window resolution
@@ -28,6 +31,7 @@ pub const ENEMY_SEPARATION_RADIUS: f32 = ENEMY_RADIUS * 2.0;
 pub const ENEMY_SEPARATION_FORCE:  f32 = 120.0;
 
 // Combat
+#[allow(dead_code)]
 pub const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
 pub const INVINCIBLE_DURATION:  f32 = 0.5;
 pub const WEAPON_COOLDOWN:      f32 = 1.0;

@@ -13,6 +13,11 @@ defmodule Game.SpawnSystem do
     30–60s  : 1 500 enemies (getting serious)
     60–120s : 5 000 enemies (chaos)
     120s+   :10 000 enemies (maximum stress test)
+
+  Step 18 - Enemy types by elapsed time:
+    0–30s   : Slime only
+    30–60s  : Slime + Bat
+    60s+    : Slime + Bat + Golem
   """
 
   @max_enemies 10_000
@@ -42,7 +47,8 @@ defmodule Game.SpawnSystem do
 
       if current < @max_enemies do
         to_spawn = min(count, @max_enemies - current)
-        Game.NifBridge.spawn_enemies(world_ref, :slime, to_spawn)
+        kind = enemy_kind_for_wave(elapsed_sec)
+        Game.NifBridge.spawn_enemies(world_ref, kind, to_spawn)
       end
 
       elapsed_ms
@@ -63,6 +69,23 @@ defmodule Game.SpawnSystem do
   end
 
   @doc """
+  Step 18: ウェーブ進行に応じて敵タイプを選択する。
+
+  - 0〜30秒:  スライムのみ（チュートリアル）
+  - 30〜60秒: スライム + コウモリ
+  - 60秒〜:   スライム + コウモリ + ゴーレム
+
+  純粋関数: 同じ入力に対して常に同じ出力（ランダム選択を除く）
+  """
+  def enemy_kind_for_wave(elapsed_sec) do
+    cond do
+      elapsed_sec < 30  -> :slime
+      elapsed_sec < 60  -> Enum.random([:slime, :bat])
+      true              -> Enum.random([:slime, :bat, :golem])
+    end
+  end
+
+  @doc """
   Returns a human-readable description of the current wave phase.
   Used by StressMonitor for logging.
   """
@@ -70,8 +93,8 @@ defmodule Game.SpawnSystem do
     cond do
       elapsed_sec <  10 -> "Wave 1 - Tutorial"
       elapsed_sec <  30 -> "Wave 2 - Warming Up"
-      elapsed_sec <  60 -> "Wave 3 - Getting Serious"
-      elapsed_sec < 120 -> "Wave 4 - Chaos"
+      elapsed_sec <  60 -> "Wave 3 - Getting Serious (Bat added)"
+      elapsed_sec < 120 -> "Wave 4 - Chaos (Golem added)"
       true              -> "Wave 5 - MAX STRESS"
     end
   end

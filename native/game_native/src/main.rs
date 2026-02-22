@@ -12,13 +12,57 @@ use std::time::Instant;
 
 use constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
+    CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
 use renderer::{HudData, Renderer};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+
+// ─── 敵タイプ（main.rs ローカル定義） ─────────────────────────
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+enum EnemyKind {
+    #[default]
+    Slime,
+    Bat,
+    Golem,
+}
+
+impl EnemyKind {
+    fn max_hp(self) -> f32 {
+        match self { Self::Slime => 30.0, Self::Bat => 15.0, Self::Golem => 150.0 }
+    }
+    fn speed(self) -> f32 {
+        match self { Self::Slime => 80.0, Self::Bat => 160.0, Self::Golem => 40.0 }
+    }
+    fn radius(self) -> f32 {
+        match self { Self::Slime => 20.0, Self::Bat => 12.0, Self::Golem => 32.0 }
+    }
+    fn exp_reward(self) -> u32 {
+        match self { Self::Slime => 5, Self::Bat => 3, Self::Golem => 20 }
+    }
+    fn damage_per_sec(self) -> f32 {
+        match self { Self::Slime => 20.0, Self::Bat => 10.0, Self::Golem => 40.0 }
+    }
+    fn render_kind(self) -> u8 {
+        match self { Self::Slime => 1, Self::Bat => 2, Self::Golem => 3 }
+    }
+    fn for_elapsed(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> Self {
+        if elapsed_secs < 30.0 {
+            Self::Slime
+        } else if elapsed_secs < 60.0 {
+            if rng.next_u32() % 2 == 0 { Self::Slime } else { Self::Bat }
+        } else {
+            match rng.next_u32() % 3 {
+                0 => Self::Bat,
+                1 => Self::Golem,
+                _ => Self::Slime,
+            }
+        }
+    }
+
+}
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -39,12 +83,12 @@ struct PlayerState {
     invincible_timer: f32,
 }
 
-#[derive(Default)]
 struct EnemyWorld {
     positions_x:  Vec<f32>,
     positions_y:  Vec<f32>,
     hp:           Vec<f32>,
     alive:        Vec<bool>,
+    kinds:        Vec<EnemyKind>,
     count:        usize,
     /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
     sep_x:        Vec<f32>,
@@ -55,21 +99,34 @@ struct EnemyWorld {
 
 impl EnemyWorld {
     fn new() -> Self {
-        Self::default()
+        Self {
+            positions_x:  Vec::new(),
+            positions_y:  Vec::new(),
+            hp:           Vec::new(),
+            alive:        Vec::new(),
+            kinds:        Vec::new(),
+            count:        0,
+            sep_x:        Vec::new(),
+            sep_y:        Vec::new(),
+            neighbor_buf: Vec::new(),
+        }
     }
-    fn spawn(&mut self, positions: &[(f32, f32)]) {
+    fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
+        let max_hp = kind.max_hp();
         for &(x, y) in positions {
             let slot = self.alive.iter().position(|&a| !a);
             if let Some(i) = slot {
                 self.positions_x[i] = x;
                 self.positions_y[i] = y;
-                self.hp[i]    = 30.0;
+                self.hp[i]    = max_hp;
                 self.alive[i] = true;
+                self.kinds[i] = kind;
             } else {
                 self.positions_x.push(x);
                 self.positions_y.push(y);
-                self.hp.push(30.0);
+                self.hp.push(max_hp);
                 self.alive.push(true);
+                self.kinds.push(kind);
                 self.sep_x.push(0.0);
                 self.sep_y.push(0.0);
             }
@@ -280,7 +337,7 @@ impl GameWorld {
         let px = self.player.x + PLAYER_RADIUS;
         let py = self.player.y + PLAYER_RADIUS;
 
-        // 敵 AI
+        // 敵 AI（EnemyKind ごとの速度を使用）
         for i in 0..self.enemies.len() {
             if !self.enemies.alive[i] { continue; }
             let ex = self.enemies.positions_x[i];
@@ -288,8 +345,9 @@ impl GameWorld {
             let ddx = px - ex;
             let ddy = py - ey;
             let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
-            self.enemies.positions_x[i] += (ddx / dist) * 80.0 * dt;
-            self.enemies.positions_y[i] += (ddy / dist) * 80.0 * dt;
+            let spd = self.enemies.kinds[i].speed();
+            self.enemies.positions_x[i] += (ddx / dist) * spd * dt;
+            self.enemies.positions_y[i] += (ddy / dist) * spd * dt;
         }
 
         // 敵同士の重なりを解消する分離パス
@@ -323,18 +381,22 @@ impl GameWorld {
             }
         }
 
-        // プレイヤー vs 敵
-        let hit_r = PLAYER_RADIUS + ENEMY_RADIUS;
-        let candidates = self.collision.dynamic.query_nearby(px, py, hit_r);
+        // プレイヤー vs 敵（EnemyKind ごとの半径・ダメージを使用）
+        let max_enemy_r = 32.0_f32;
+        let query_r = PLAYER_RADIUS + max_enemy_r;
+        let candidates = self.collision.dynamic.query_nearby(px, py, query_r);
         for idx in candidates {
             if !self.enemies.alive[idx] { continue; }
-            let ex = self.enemies.positions_x[idx] + ENEMY_RADIUS;
-            let ey = self.enemies.positions_y[idx] + ENEMY_RADIUS;
+            let kind    = self.enemies.kinds[idx];
+            let enemy_r = kind.radius();
+            let hit_r   = PLAYER_RADIUS + enemy_r;
+            let ex = self.enemies.positions_x[idx] + enemy_r;
+            let ey = self.enemies.positions_y[idx] + enemy_r;
             let ddx = px - ex;
             let ddy = py - ey;
             if ddx * ddx + ddy * ddy < hit_r * hit_r {
                 if self.player.invincible_timer <= 0.0 && self.player.hp > 0.0 {
-                    self.player.hp = (self.player.hp - ENEMY_DAMAGE_PER_SEC * dt).max(0.0);
+                    self.player.hp = (self.player.hp - kind.damage_per_sec() * dt).max(0.0);
                     self.player.invincible_timer = INVINCIBLE_DURATION;
                     // 赤いパーティクル
                     self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
@@ -355,8 +417,9 @@ impl GameWorld {
             match self.weapon_slots[si].kind {
                 WeaponKind::MagicWand => {
                     if let Some(ti) = self.find_nearest_enemy(px, py) {
-                        let tx  = self.enemies.positions_x[ti] + ENEMY_RADIUS;
-                        let ty  = self.enemies.positions_y[ti] + ENEMY_RADIUS;
+                        let target_r = self.enemies.kinds[ti].radius();
+                        let tx  = self.enemies.positions_x[ti] + target_r;
+                        let ty  = self.enemies.positions_y[ti] + target_r;
                         let bdx = tx - px;
                         let bdy = ty - py;
                         let base_angle = bdy.atan2(bdx);
@@ -407,29 +470,37 @@ impl GameWorld {
             }
         }
 
-        // Bullet vs enemy collision
-        let hit_r2 = BULLET_RADIUS + ENEMY_RADIUS;
+        // Bullet vs enemy collision（EnemyKind ごとの半径・経験値を使用）
+        let bullet_query_r = BULLET_RADIUS + 32.0_f32;
         for bi in 0..bl {
             if !self.bullets.alive[bi] { continue; }
             let bx  = self.bullets.positions_x[bi];
             let by  = self.bullets.positions_y[bi];
             let dmg = self.bullets.damage[bi];
-            let nearby = self.collision.dynamic.query_nearby(bx, by, hit_r2);
+            let nearby = self.collision.dynamic.query_nearby(bx, by, bullet_query_r);
             for ei in nearby {
                 if !self.enemies.alive[ei] { continue; }
-                let ex  = self.enemies.positions_x[ei] + ENEMY_RADIUS;
-                let ey  = self.enemies.positions_y[ei] + ENEMY_RADIUS;
+                let kind    = self.enemies.kinds[ei];
+                let enemy_r = kind.radius();
+                let hit_r   = BULLET_RADIUS + enemy_r;
+                let ex  = self.enemies.positions_x[ei] + enemy_r;
+                let ey  = self.enemies.positions_y[ei] + enemy_r;
                 let ddx = bx - ex;
                 let ddy = by - ey;
-                if ddx * ddx + ddy * ddy < hit_r2 * hit_r2 {
+                if ddx * ddx + ddy * ddy < hit_r * hit_r {
                     self.enemies.hp[ei] -= dmg as f32;
                     if self.enemies.hp[ei] <= 0.0 {
                         self.enemies.kill(ei);
-                        self.score += 10;
-                        self.exp   += 5;
+                        self.score += kind.exp_reward() * 2;
+                        self.exp   += kind.exp_reward();
                         self.check_level_up();
-                        // 撃破: オレンジパーティクル
-                        self.particles.emit(ex, ey, 8, [1.0, 0.5, 0.1, 1.0]);
+                        // 撃破: タイプ別パーティクル
+                        let pc = match kind {
+                            EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
+                            EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
+                            EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
+                        };
+                        self.particles.emit(ex, ey, 8, pc);
                     } else {
                         // ヒット: 黄色パーティクル
                         self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
@@ -440,16 +511,17 @@ impl GameWorld {
             }
         }
 
-        // Wave-based enemy spawn
+        // Wave-based enemy spawn（Step 18: タイプ別スポーン）
         let (wave_interval, wave_count) = current_wave(self.elapsed_seconds);
         if self.elapsed_seconds - self.last_spawn_secs >= wave_interval
             && self.enemies.count < MAX_ENEMIES
         {
             let to_spawn = wave_count.min(MAX_ENEMIES - self.enemies.count);
+            let kind = EnemyKind::for_elapsed(self.elapsed_seconds, &mut self.rng);
             let positions: Vec<(f32, f32)> = (0..to_spawn)
                 .map(|_| spawn_outside(&mut self.rng))
                 .collect();
-            self.enemies.spawn(&positions);
+            self.enemies.spawn(&positions, kind);
             self.last_spawn_secs = self.elapsed_seconds;
         }
     }
@@ -516,12 +588,16 @@ impl GameWorld {
         v.push((self.player.x, self.player.y, 0u8));
         for i in 0..self.enemies.len() {
             if self.enemies.alive[i] {
-                v.push((self.enemies.positions_x[i], self.enemies.positions_y[i], 1u8));
+                v.push((
+                    self.enemies.positions_x[i],
+                    self.enemies.positions_y[i],
+                    self.enemies.kinds[i].render_kind(),
+                ));
             }
         }
         for i in 0..self.bullets.len() {
             if self.bullets.alive[i] {
-                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], 2u8));
+                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], 4u8));
             }
         }
         v
