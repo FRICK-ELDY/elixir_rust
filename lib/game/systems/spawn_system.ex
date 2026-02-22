@@ -8,11 +8,11 @@ defmodule Game.SpawnSystem do
   - The BEAM scheduler ensures this never blocks the physics tick
 
   Spawn curve (enemies alive target):
-    0–10s   :  100 enemies  (tutorial)
-    10–30s  :  500 enemies  (warming up)
-    30–60s  : 1 500 enemies (getting serious)
-    60–120s : 5 000 enemies (chaos)
-    120s+   :10 000 enemies (maximum stress test)
+    0–30s   :  ~30 enemies  (tutorial)
+    30–60s  :  ~80 enemies  (warming up)
+    60–120s : ~150 enemies  (getting serious)
+    120–180s: ~200 enemies  (intense)
+    180s+   :  300 enemies  (max)
 
   Step 18 - Enemy types by elapsed time:
     0–30s   : Slime only
@@ -20,15 +20,15 @@ defmodule Game.SpawnSystem do
     60s+    : Slime + Bat + Golem
   """
 
-  @max_enemies 10_000
+  @max_enemies 300
 
   # Wave table: {start_sec, spawn_interval_ms, spawn_count_per_tick}
   @waves [
-    {  0,  800,   20},
-    { 10,  600,   50},
-    { 30,  400,  100},
-    { 60,  300,  200},
-    {120,  200,  300},
+    {  0, 3000,   3},   #   0〜30s: 3体 / 3秒（チュートリアル）
+    { 30, 2000,   5},   #  30〜60s: 5体 / 2秒（ウォームアップ）
+    { 60, 1500,   8},   #  60〜120s: 8体 / 1.5秒（本番）
+    {120, 1000,  12},   # 120〜180s: 12体 / 1秒（激化）
+    {180,  800,  15},   # 180s〜:   15体 / 0.8秒（最終盤）
   ]
 
   @doc """
@@ -91,11 +91,11 @@ defmodule Game.SpawnSystem do
   """
   def wave_label(elapsed_sec) do
     cond do
-      elapsed_sec <  10 -> "Wave 1 - Tutorial"
-      elapsed_sec <  30 -> "Wave 2 - Warming Up"
-      elapsed_sec <  60 -> "Wave 3 - Getting Serious (Bat added)"
-      elapsed_sec < 120 -> "Wave 4 - Chaos (Golem added)"
-      true              -> "Wave 5 - MAX STRESS"
+      elapsed_sec <  30 -> "Wave 1 - Tutorial"
+      elapsed_sec <  60 -> "Wave 2 - Warming Up (Bat added)"
+      elapsed_sec < 120 -> "Wave 3 - Getting Serious (Golem added)"
+      elapsed_sec < 180 -> "Wave 4 - Intense"
+      true              -> "Wave 5 - Max"
     end
   end
 end

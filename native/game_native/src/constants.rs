@@ -44,15 +44,15 @@ pub const CELL_SIZE: f32 = 80.0;
 
 // Enemy cap (used by game_window binary; not referenced by the NIF lib)
 #[allow(dead_code)]
-pub const MAX_ENEMIES: usize = 10_000;
+pub const MAX_ENEMIES: usize = 300;
 
 // Wave-based spawn schedule: (start_secs, interval_secs, count_per_tick)
 // Used by game_window binary; Elixir SpawnSystem handles this for the NIF lib.
 #[allow(dead_code)]
 pub const WAVES: &[(f32, f32, usize)] = &[
-    (  0.0, 0.8,   20),
-    ( 10.0, 0.6,   50),
-    ( 30.0, 0.4,  100),
-    ( 60.0, 0.3,  200),
-    (120.0, 0.2,  300),
+    (  0.0, 3.0,   3),   //   0〜30s: 3体 / 3秒（チュートリアル）
+    ( 30.0, 2.0,   5),   //  30〜60s: 5体 / 2秒（ウォームアップ）
+    ( 60.0, 1.5,   8),   //  60〜120s: 8体 / 1.5秒（本番）
+    (120.0, 1.0,  12),   // 120〜180s: 12体 / 1秒（激化）
+    (180.0, 0.8,  15),   // 180s〜:   15体 / 0.8秒（最終盤）
 ];

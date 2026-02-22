@@ -1,4 +1,5 @@
 mod constants;
+mod item;
 mod physics;
 mod weapon;
 
@@ -9,6 +10,7 @@ use constants::{
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
+use item::{ItemKind, ItemWorld};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_SLOTS};
 use physics::rng::SimpleRng;
 use physics::separation::{apply_separation, EnemySeparation};
@@ -414,6 +416,10 @@ pub struct GameWorldInner {
     pub enemies:            EnemyWorld,
     pub bullets:            BulletWorld,
     pub particles:          ParticleWorld,
+    /// ─── Step 19: アイテム ────────────────────────────────────
+    pub items:              ItemWorld,
+    /// 磁石エフェクト残り時間（秒）
+    pub magnet_timer:       f32,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
@@ -484,6 +490,8 @@ fn create_world() -> ResourceArc<GameWorld> {
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
         particles:          ParticleWorld::new(67890),
+        items:              ItemWorld::new(),
+        magnet_timer:       0.0,
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
@@ -670,6 +678,59 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 19: アイテム更新（磁石エフェクト + 自動収集） ─────
+    {
+        // 磁石タイマー更新
+        if w.magnet_timer > 0.0 {
+            w.magnet_timer = (w.magnet_timer - dt).max(0.0);
+        }
+
+        // 磁石エフェクト: アクティブ中は宝石がプレイヤーに向かって飛んでくる
+        if w.magnet_timer > 0.0 {
+            let item_len = w.items.len();
+            for i in 0..item_len {
+                if !w.items.alive[i] { continue; }
+                if w.items.kinds[i] != ItemKind::Gem { continue; }
+                let dx = px - w.items.positions_x[i];
+                let dy = py - w.items.positions_y[i];
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                w.items.positions_x[i] += (dx / dist) * 300.0 * dt;
+                w.items.positions_y[i] += (dy / dist) * 300.0 * dt;
+            }
+        }
+
+        // 自動収集判定（通常: 60px、磁石中: 全画面）
+        let collect_r = if w.magnet_timer > 0.0 { 9999.0_f32 } else { 60.0_f32 };
+        let collect_r_sq = collect_r * collect_r;
+        let item_len = w.items.len();
+        for i in 0..item_len {
+            if !w.items.alive[i] { continue; }
+            let dx = px - w.items.positions_x[i];
+            let dy = py - w.items.positions_y[i];
+            if dx * dx + dy * dy <= collect_r_sq {
+                match w.items.kinds[i] {
+                    ItemKind::Gem => {
+                        // EXP は既に撃破時に加算済みのため、ここでは収集のみ
+                    }
+                    ItemKind::Potion => {
+                        // HP 回復（最大 HP を超えない）
+                        w.player.hp = (w.player.hp + w.items.value[i] as f32)
+                            .min(w.player_max_hp);
+                        // 回復パーティクル（緑）
+                        w.particles.emit(px, py, 6, [0.2, 1.0, 0.4, 1.0]);
+                    }
+                    ItemKind::Magnet => {
+                        // 磁石エフェクトを 10 秒間有効化
+                        w.magnet_timer = 10.0;
+                        // 磁石パーティクル（黄）
+                        w.particles.emit(px, py, 8, [1.0, 0.9, 0.2, 1.0]);
+                    }
+                }
+                w.items.kill(i);
+            }
+        }
+    }
+
     // 2. 弾丸を移動・寿命更新
     let bullet_len = w.bullets.len();
     for i in 0..bullet_len {
@@ -731,11 +792,22 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     }
                     // ── Step 16/18: 敵タイプ別パーティクル ────────
                     let particle_color = match kind {
-                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],   // オレンジ
-                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],   // 紫
-                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],   // 灰
+                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
+                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
+                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                     };
                     w.particles.emit(ex, ey, 8, particle_color);
+                    // ── Step 19: アイテムドロップ（1体につき最大1種類）──
+                    // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
+                    let roll = w.rng.next_u32() % 100;
+                    let (item_kind, item_value) = if roll < 2 {
+                        (ItemKind::Magnet, 0)
+                    } else if roll < 7 {
+                        (ItemKind::Potion, 20)
+                    } else {
+                        (ItemKind::Gem, kind.exp_reward())
+                    };
+                    w.items.spawn(ex, ey, item_kind, item_value);
                 } else {
                     // ── Step 16: ヒット時黄色パーティクル ─────────
                     w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
@@ -923,6 +995,32 @@ fn skip_level_up(world: ResourceArc<GameWorld>) -> Atom {
     let mut w = world.0.lock().unwrap();
     w.complete_level_up();
     ok()
+}
+
+// ─── Step 19: アイテム関連 NIF ─────────────────────────────────
+
+/// アイテム描画データを返す: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
+#[rustler::nif]
+fn get_item_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
+    let w = world.0.lock().unwrap();
+    let mut result = Vec::with_capacity(w.items.count);
+    for i in 0..w.items.len() {
+        if w.items.alive[i] {
+            result.push((
+                w.items.positions_x[i],
+                w.items.positions_y[i],
+                w.items.kinds[i].render_kind(),
+            ));
+        }
+    }
+    result
+}
+
+/// 磁石エフェクトの残り時間（秒）を返す
+#[rustler::nif]
+fn get_magnet_timer(world: ResourceArc<GameWorld>) -> f64 {
+    let w = world.0.lock().unwrap();
+    w.magnet_timer as f64
 }
 
 // ─── ローダー ─────────────────────────────────────────────────

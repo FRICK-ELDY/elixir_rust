@@ -2,6 +2,7 @@
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.
 mod constants;
+mod item;
 mod renderer;
 mod physics;
 mod weapon;
@@ -17,6 +18,7 @@ use constants::{
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
+use item::{ItemKind, ItemWorld};
 use renderer::{HudData, Renderer};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 
@@ -276,6 +278,9 @@ struct GameWorld {
     enemies:          EnemyWorld,
     bullets:          BulletWorld,
     particles:        ParticleWorld,
+    // Step 19: アイテム
+    items:            ItemWorld,
+    magnet_timer:     f32,
     collision:        CollisionWorld,
     rng:              SimpleRng,
     score:            u32,
@@ -302,6 +307,8 @@ impl GameWorld {
             enemies:          EnemyWorld::new(),
             bullets:          BulletWorld::new(),
             particles:        ParticleWorld::new(67890),
+            items:            ItemWorld::new(),
+            magnet_timer:     0.0,
             collision:        CollisionWorld::new(CELL_SIZE),
             rng:              SimpleRng::new(42),
             score:            0,
@@ -501,12 +508,67 @@ impl GameWorld {
                             EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                         };
                         self.particles.emit(ex, ey, 8, pc);
+                        // Step 19: アイテムドロップ（1体につき最大1種類）
+                        // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
+                        let roll = self.rng.next_u32() % 100;
+                        let (item_kind, item_value) = if roll < 2 {
+                            (ItemKind::Magnet, 0)
+                        } else if roll < 7 {
+                            (ItemKind::Potion, 20)
+                        } else {
+                            (ItemKind::Gem, kind.exp_reward())
+                        };
+                        self.items.spawn(ex, ey, item_kind, item_value);
                     } else {
                         // ヒット: 黄色パーティクル
                         self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                     }
                     self.bullets.kill(bi);
                     break;
+                }
+            }
+        }
+
+        // Step 19: アイテム更新（磁石エフェクト + 自動収集）
+        {
+            if self.magnet_timer > 0.0 {
+                self.magnet_timer = (self.magnet_timer - dt).max(0.0);
+            }
+            // 磁石エフェクト: 宝石がプレイヤーに向かって飛んでくる
+            if self.magnet_timer > 0.0 {
+                let item_len = self.items.len();
+                for i in 0..item_len {
+                    if !self.items.alive[i] { continue; }
+                    if self.items.kinds[i] != ItemKind::Gem { continue; }
+                    let dx = px - self.items.positions_x[i];
+                    let dy = py - self.items.positions_y[i];
+                    let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                    self.items.positions_x[i] += (dx / dist) * 300.0 * dt;
+                    self.items.positions_y[i] += (dy / dist) * 300.0 * dt;
+                }
+            }
+            // 自動収集判定
+            let collect_r = if self.magnet_timer > 0.0 { 9999.0_f32 } else { 60.0_f32 };
+            let collect_r_sq = collect_r * collect_r;
+            let item_len = self.items.len();
+            for i in 0..item_len {
+                if !self.items.alive[i] { continue; }
+                let dx = px - self.items.positions_x[i];
+                let dy = py - self.items.positions_y[i];
+                if dx * dx + dy * dy <= collect_r_sq {
+                    match self.items.kinds[i] {
+                        ItemKind::Gem => {}
+                        ItemKind::Potion => {
+                            self.player.hp = (self.player.hp + self.items.value[i] as f32)
+                                .min(self.player.max_hp);
+                            self.particles.emit(px, py, 6, [0.2, 1.0, 0.4, 1.0]);
+                        }
+                        ItemKind::Magnet => {
+                            self.magnet_timer = 10.0;
+                            self.particles.emit(px, py, 8, [1.0, 0.9, 0.2, 1.0]);
+                        }
+                    }
+                    self.items.kill(i);
                 }
             }
         }
@@ -605,6 +667,20 @@ impl GameWorld {
         v
     }
 
+    fn get_item_data(&self) -> Vec<(f32, f32, u8)> {
+        let mut v = Vec::with_capacity(self.items.count);
+        for i in 0..self.items.len() {
+            if self.items.alive[i] {
+                v.push((
+                    self.items.positions_x[i],
+                    self.items.positions_y[i],
+                    self.items.kinds[i].render_kind(),
+                ));
+            }
+        }
+        v
+    }
+
     fn get_particle_data(&self) -> Vec<(f32, f32, f32, f32, f32, f32, f32)> {
         let mut v = Vec::with_capacity(self.particles.count);
         for i in 0..self.particles.len() {
@@ -639,6 +715,9 @@ impl GameWorld {
             weapon_levels:   self.weapon_slots.iter()
                 .map(|s| (s.kind.name().to_string(), s.level))
                 .collect(),
+            // Step 19: アイテム情報
+            magnet_timer:    self.magnet_timer,
+            item_count:      self.items.count,
         }
     }
 }
@@ -790,7 +869,8 @@ impl ApplicationHandler for App {
                 {
                     let render_data   = self.game.get_render_data();
                     let particle_data = self.game.get_particle_data();
-                    renderer.update_instances(&render_data, &particle_data);
+                    let item_data     = self.game.get_item_data();
+                    renderer.update_instances(&render_data, &particle_data, &item_data);
                     let hud = self.game.hud_data(renderer.current_fps);
                     // Step 17: ボタンクリックで武器選択（"__skip__" はスキップ扱い）
                     if let Some(chosen) = renderer.render(window, &hud) {
