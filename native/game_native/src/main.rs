@@ -154,6 +154,9 @@ impl EnemySeparation for EnemyWorld {
     fn neighbor_buf(&mut self) -> &mut Vec<usize> { &mut self.neighbor_buf }
 }
 
+const BULLET_KIND_NORMAL:    u8 = 4;
+const BULLET_KIND_FIREBALL:  u8 = 8;
+
 struct BulletWorld {
     positions_x:  Vec<f32>,
     positions_y:  Vec<f32>,
@@ -162,14 +165,24 @@ struct BulletWorld {
     damage:       Vec<i32>,
     lifetime:     Vec<f32>,
     alive:        Vec<bool>,
+    /// true の弾丸は敵に当たっても消えずに貫通する（Fireball 用）
+    piercing:     Vec<bool>,
+    /// 描画種別（BULLET_KIND_* 定数）
+    render_kind:  Vec<u8>,
     count:        usize,
 }
 
 impl BulletWorld {
     fn new() -> Self {
-        Self { positions_x: Vec::new(), positions_y: Vec::new(), velocities_x: Vec::new(), velocities_y: Vec::new(), damage: Vec::new(), lifetime: Vec::new(), alive: Vec::new(), count: 0 }
+        Self { positions_x: Vec::new(), positions_y: Vec::new(), velocities_x: Vec::new(), velocities_y: Vec::new(), damage: Vec::new(), lifetime: Vec::new(), alive: Vec::new(), piercing: Vec::new(), render_kind: Vec::new(), count: 0 }
     }
     fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32) {
+        self.spawn_ex(x, y, vx, vy, dmg, false, BULLET_KIND_NORMAL);
+    }
+    fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32) {
+        self.spawn_ex(x, y, vx, vy, dmg, true, BULLET_KIND_FIREBALL);
+    }
+    fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32, piercing: bool, render_kind: u8) {
         let slot = self.alive.iter().position(|&a| !a);
         if let Some(i) = slot {
             self.positions_x[i]  = x;
@@ -179,6 +192,8 @@ impl BulletWorld {
             self.damage[i]       = dmg;
             self.lifetime[i]     = BULLET_LIFETIME;
             self.alive[i]        = true;
+            self.piercing[i]     = piercing;
+            self.render_kind[i]  = render_kind;
         } else {
             self.positions_x.push(x);
             self.positions_y.push(y);
@@ -187,6 +202,8 @@ impl BulletWorld {
             self.damage.push(dmg);
             self.lifetime.push(BULLET_LIFETIME);
             self.alive.push(true);
+            self.piercing.push(piercing);
+            self.render_kind.push(render_kind);
         }
         self.count += 1;
     }
@@ -450,7 +467,14 @@ impl GameWorld {
             }
         }
 
-        // Step 17: 武器スロット発射処理（レベルに応じたクールダウン・ダメージ・弾数）
+        // Step 17/21: 武器スロット発射処理（レベルに応じたクールダウン・ダメージ・弾数）
+        // プレイヤーの移動方向（Whip の向き計算用）
+        let facing_angle = {
+            let fdx = self.player.input_dx;
+            let fdy = self.player.input_dy;
+            if fdx * fdx + fdy * fdy > 0.0001 { fdy.atan2(fdx) } else { 0.0_f32 }
+        };
+
         let slot_count = self.weapon_slots.len();
         for si in 0..slot_count {
             self.weapon_slots[si].cooldown_timer = (self.weapon_slots[si].cooldown_timer - dt).max(0.0);
@@ -458,9 +482,11 @@ impl GameWorld {
 
             let cd     = self.weapon_slots[si].effective_cooldown();
             let dmg    = self.weapon_slots[si].effective_damage();
+            let level  = self.weapon_slots[si].level;
             let bcount = self.weapon_slots[si].bullet_count();
+            let kind   = self.weapon_slots[si].kind;
 
-            match self.weapon_slots[si].kind {
+            match kind {
                 WeaponKind::MagicWand => {
                     if let Some(ti) = self.find_nearest_enemy(px, py) {
                         let target_r = self.enemies.kinds[ti].radius();
@@ -495,6 +521,125 @@ impl GameWorld {
                     }
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
+                // ── Step 21: Whip ──────────────────────────────────────────
+                WeaponKind::Whip => {
+                    let whip_range = kind.whip_range(level);
+                    let whip_half_angle = std::f32::consts::PI * 0.3;
+                    let enemy_len = self.enemies.len();
+                    for ei in 0..enemy_len {
+                        if !self.enemies.alive[ei] { continue; }
+                        let ex = self.enemies.positions_x[ei];
+                        let ey = self.enemies.positions_y[ei];
+                        let ddx = ex - px;
+                        let ddy = ey - py;
+                        let dist = (ddx * ddx + ddy * ddy).sqrt();
+                        if dist > whip_range { continue; }
+                        let angle = ddy.atan2(ddx);
+                        let mut diff = angle - facing_angle;
+                        if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+                        if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+                        if diff.abs() < whip_half_angle {
+                            let enemy_r = self.enemies.kinds[ei].radius();
+                            let hit_x = ex + enemy_r;
+                            let hit_y = ey + enemy_r;
+                            self.enemies.hp[ei] -= dmg as f32;
+                            if self.enemies.hp[ei] <= 0.0 {
+                                self.enemies.kill(ei);
+                                let kind_e = self.enemies.kinds[ei];
+                                self.score += kind_e.exp_reward() * 2;
+                                self.exp   += kind_e.exp_reward();
+                                self.check_level_up();
+                                let pc = match kind_e {
+                                    EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
+                                    EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
+                                    EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
+                                };
+                                self.particles.emit(hit_x, hit_y, 8, pc);
+                                let roll = self.rng.next_u32() % 100;
+                                let (item_kind, item_value) = if roll < 2 {
+                                    (ItemKind::Magnet, 0)
+                                } else if roll < 7 {
+                                    (ItemKind::Potion, 20)
+                                } else {
+                                    (ItemKind::Gem, kind_e.exp_reward())
+                                };
+                                self.items.spawn(hit_x, hit_y, item_kind, item_value);
+                            } else {
+                                self.particles.emit(hit_x, hit_y, 3, [1.0, 0.6, 0.1, 1.0]);
+                            }
+                        }
+                    }
+                    self.weapon_slots[si].cooldown_timer = cd;
+                }
+                // ── Step 21: Fireball ──────────────────────────────────────
+                WeaponKind::Fireball => {
+                    if let Some(ti) = self.find_nearest_enemy(px, py) {
+                        let target_r = self.enemies.kinds[ti].radius();
+                        let tx  = self.enemies.positions_x[ti] + target_r;
+                        let ty  = self.enemies.positions_y[ti] + target_r;
+                        let bdx = tx - px;
+                        let bdy = ty - py;
+                        let base_angle = bdy.atan2(bdx);
+                        let vx = base_angle.cos() * BULLET_SPEED;
+                        let vy = base_angle.sin() * BULLET_SPEED;
+                        self.bullets.spawn_piercing(px, py, vx, vy, dmg);
+                        self.weapon_slots[si].cooldown_timer = cd;
+                    }
+                }
+                // ── Step 21: Lightning ─────────────────────────────────────
+                WeaponKind::Lightning => {
+                    let chain_count = kind.lightning_chain_count(level);
+                    let mut hit_set = std::collections::HashSet::new();
+                    let mut current = self.find_nearest_enemy(px, py);
+                    #[allow(unused_assignments)]
+                    let mut next_search_x = px;
+                    #[allow(unused_assignments)]
+                    let mut next_search_y = py;
+                    for _ in 0..chain_count {
+                        if let Some(ei) = current {
+                            let enemy_r = self.enemies.kinds[ei].radius();
+                            let hit_x = self.enemies.positions_x[ei] + enemy_r;
+                            let hit_y = self.enemies.positions_y[ei] + enemy_r;
+                            self.enemies.hp[ei] -= dmg as f32;
+                            self.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
+                            if self.enemies.hp[ei] <= 0.0 {
+                                self.enemies.kill(ei);
+                                let kind_e = self.enemies.kinds[ei];
+                                self.score += kind_e.exp_reward() * 2;
+                                self.exp   += kind_e.exp_reward();
+                                self.check_level_up();
+                                let roll = self.rng.next_u32() % 100;
+                                let (item_kind, item_value) = if roll < 2 {
+                                    (ItemKind::Magnet, 0)
+                                } else if roll < 7 {
+                                    (ItemKind::Potion, 20)
+                                } else {
+                                    (ItemKind::Gem, kind_e.exp_reward())
+                                };
+                                self.items.spawn(hit_x, hit_y, item_kind, item_value);
+                            }
+                            hit_set.insert(ei);
+                            next_search_x = hit_x;
+                            next_search_y = hit_y;
+                            // 次のターゲット: 現在位置から最も近い未ヒット敵
+                            current = {
+                                let mut min_d = f32::MAX;
+                                let mut next = None;
+                                for i in 0..self.enemies.len() {
+                                    if !self.enemies.alive[i] || hit_set.contains(&i) { continue; }
+                                    let dx = self.enemies.positions_x[i] - next_search_x;
+                                    let dy = self.enemies.positions_y[i] - next_search_y;
+                                    let d  = dx * dx + dy * dy;
+                                    if d < min_d { min_d = d; next = Some(i); }
+                                }
+                                next
+                            };
+                        } else {
+                            break;
+                        }
+                    }
+                    self.weapon_slots[si].cooldown_timer = cd;
+                }
             }
         }
 
@@ -521,9 +666,10 @@ impl GameWorld {
         let bullet_query_r = BULLET_RADIUS + 32.0_f32;
         for bi in 0..bl {
             if !self.bullets.alive[bi] { continue; }
-            let bx  = self.bullets.positions_x[bi];
-            let by  = self.bullets.positions_y[bi];
-            let dmg = self.bullets.damage[bi];
+            let bx       = self.bullets.positions_x[bi];
+            let by       = self.bullets.positions_y[bi];
+            let dmg      = self.bullets.damage[bi];
+            let piercing = self.bullets.piercing[bi];
             let nearby = self.collision.dynamic.query_nearby(bx, by, bullet_query_r);
             for ei in nearby {
                 if !self.enemies.alive[ei] { continue; }
@@ -549,7 +695,6 @@ impl GameWorld {
                         };
                         self.particles.emit(ex, ey, 8, pc);
                         // Step 19: アイテムドロップ（1体につき最大1種類）
-                        // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
                         let roll = self.rng.next_u32() % 100;
                         let (item_kind, item_value) = if roll < 2 {
                             (ItemKind::Magnet, 0)
@@ -560,11 +705,15 @@ impl GameWorld {
                         };
                         self.items.spawn(ex, ey, item_kind, item_value);
                     } else {
-                        // ヒット: 黄色パーティクル
-                        self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
+                        // ヒット: 通常は黄色、Fireball は炎色パーティクル
+                        let hit_color = if piercing { [1.0, 0.4, 0.0, 1.0] } else { [1.0, 0.9, 0.3, 1.0] };
+                        self.particles.emit(ex, ey, 3, hit_color);
                     }
-                    self.bullets.kill(bi);
-                    break;
+                    // 貫通弾は消えない
+                    if !piercing {
+                        self.bullets.kill(bi);
+                        break;
+                    }
                 }
             }
         }
@@ -651,6 +800,9 @@ impl GameWorld {
                 ("magic_wand", WeaponKind::MagicWand),
                 ("axe",        WeaponKind::Axe),
                 ("cross",      WeaponKind::Cross),
+                ("whip",       WeaponKind::Whip),
+                ("fireball",   WeaponKind::Fireball),
+                ("lightning",  WeaponKind::Lightning),
             ];
             let mut choices: Vec<(i32, String)> = all.iter()
                 .filter_map(|(name, kind)| {
@@ -672,9 +824,12 @@ impl GameWorld {
     fn select_weapon(&mut self, weapon_name: &str) {
         if weapon_name != "__skip__" {
             let kind = match weapon_name {
-                "axe"   => WeaponKind::Axe,
-                "cross" => WeaponKind::Cross,
-                _       => WeaponKind::MagicWand,
+                "axe"       => WeaponKind::Axe,
+                "cross"     => WeaponKind::Cross,
+                "whip"      => WeaponKind::Whip,
+                "fireball"  => WeaponKind::Fireball,
+                "lightning" => WeaponKind::Lightning,
+                _           => WeaponKind::MagicWand,
             };
             if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
                 slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
@@ -706,7 +861,7 @@ impl GameWorld {
         }
         for i in 0..self.bullets.len() {
             if self.bullets.alive[i] {
-                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], 4u8));
+                v.push((self.bullets.positions_x[i], self.bullets.positions_y[i], self.bullets.render_kind[i]));
             }
         }
         v

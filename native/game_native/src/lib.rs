@@ -28,6 +28,9 @@ rustler::atoms! {
     magic_wand,
     axe,
     cross,
+    whip,
+    fireball,
+    lightning,
     // level_up 通知アトム
     level_up,
     no_change,
@@ -201,6 +204,11 @@ fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
     }
 }
 
+/// 弾丸の描画種別（renderer に渡す kind 値）
+pub const BULLET_KIND_NORMAL:    u8 = 4;  // MagicWand / Axe / Cross（黄色い円）
+pub const BULLET_KIND_FIREBALL:  u8 = 8;  // Fireball（赤橙の炎球）
+pub const BULLET_KIND_LIGHTNING: u8 = 9;  // Lightning（水色の電撃球）
+
 // ─── 弾丸 SoA ─────────────────────────────────────────────────
 pub struct BulletWorld {
     pub positions_x:  Vec<f32>,
@@ -210,6 +218,10 @@ pub struct BulletWorld {
     pub damage:       Vec<i32>,
     pub lifetime:     Vec<f32>,
     pub alive:        Vec<bool>,
+    /// true の弾丸は敵に当たっても消えずに貫通する（Fireball 用）
+    pub piercing:     Vec<bool>,
+    /// 描画種別（BULLET_KIND_* 定数）
+    pub render_kind:  Vec<u8>,
     pub count:        usize,
 }
 
@@ -223,11 +235,21 @@ impl BulletWorld {
             damage:       Vec::new(),
             lifetime:     Vec::new(),
             alive:        Vec::new(),
+            piercing:     Vec::new(),
+            render_kind:  Vec::new(),
             count:        0,
         }
     }
 
     pub fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
+        self.spawn_ex(x, y, vx, vy, damage, lifetime, false, BULLET_KIND_NORMAL);
+    }
+
+    pub fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
+        self.spawn_ex(x, y, vx, vy, damage, lifetime, true, BULLET_KIND_FIREBALL);
+    }
+
+    fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, piercing: bool, render_kind: u8) {
         // 死んでいるスロットを再利用
         for i in 0..self.positions_x.len() {
             if !self.alive[i] {
@@ -238,6 +260,8 @@ impl BulletWorld {
                 self.damage[i]       = damage;
                 self.lifetime[i]     = lifetime;
                 self.alive[i]        = true;
+                self.piercing[i]     = piercing;
+                self.render_kind[i]  = render_kind;
                 self.count += 1;
                 return;
             }
@@ -249,6 +273,8 @@ impl BulletWorld {
         self.damage.push(damage);
         self.lifetime.push(lifetime);
         self.alive.push(true);
+        self.piercing.push(piercing);
+        self.render_kind.push(render_kind);
         self.count += 1;
     }
 
@@ -361,6 +387,30 @@ pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usiz
     let mut nearest  = None;
     for i in 0..enemies.len() {
         if !enemies.alive[i] {
+            continue;
+        }
+        let dx   = enemies.positions_x[i] - px;
+        let dy   = enemies.positions_y[i] - py;
+        let dist = dx * dx + dy * dy;
+        if dist < min_dist {
+            min_dist = dist;
+            nearest  = Some(i);
+        }
+    }
+    nearest
+}
+
+/// 指定インデックスを除外した最近接の生存敵インデックスを返す（Lightning チェーン用）
+pub fn find_nearest_enemy_excluding(
+    enemies: &EnemyWorld,
+    px: f32,
+    py: f32,
+    exclude: &std::collections::HashSet<usize>,
+) -> Option<usize> {
+    let mut min_dist = f32::MAX;
+    let mut nearest  = None;
+    for i in 0..enemies.len() {
+        if !enemies.alive[i] || exclude.contains(&i) {
             continue;
         }
         let dx   = enemies.positions_x[i] - px;
@@ -602,9 +652,21 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
-    // ── Step 11/14/17: 武器スロット発射処理 ─────────────────────
+            // ── Step 11/14/17/21: 武器スロット発射処理 ──────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
+        // プレイヤーの移動方向（Whip の向き計算用）
+        let facing_angle = {
+            let fdx = w.player.input_dx;
+            let fdy = w.player.input_dy;
+            if fdx * fdx + fdy * fdy > 0.0001 {
+                fdy.atan2(fdx)
+            } else {
+                // 停止中は右向きをデフォルトとする
+                0.0_f32
+            }
+        };
+
         let slot_count = w.weapon_slots.len();
         for si in 0..slot_count {
             w.weapon_slots[si].cooldown_timer = (w.weapon_slots[si].cooldown_timer - dt).max(0.0);
@@ -615,6 +677,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             // Step 17: レベルに応じたクールダウン・ダメージ・弾数を使用
             let cd    = w.weapon_slots[si].effective_cooldown();
             let dmg   = w.weapon_slots[si].effective_damage();
+            let level = w.weapon_slots[si].level;
             let bcount = w.weapon_slots[si].bullet_count();
             match kind {
                 WeaponKind::MagicWand => {
@@ -656,6 +719,127 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
                     for &(dx_dir, dy_dir) in dirs {
                         w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                    }
+                    w.weapon_slots[si].cooldown_timer = cd;
+                }
+                // ── Step 21: Whip ──────────────────────────────────────────
+                WeaponKind::Whip => {
+                    // プレイヤーの移動方向に扇状の判定を出す（弾丸を生成しない直接判定）
+                    let whip_range = kind.whip_range(level);
+                    let whip_half_angle = std::f32::consts::PI * 0.3; // 108度 / 2 = 54度
+                    let enemy_len = w.enemies.len();
+                    for ei in 0..enemy_len {
+                        if !w.enemies.alive[ei] { continue; }
+                        let ex = w.enemies.positions_x[ei];
+                        let ey = w.enemies.positions_y[ei];
+                        let ddx = ex - px;
+                        let ddy = ey - py;
+                        let dist = (ddx * ddx + ddy * ddy).sqrt();
+                        if dist > whip_range { continue; }
+                        let angle = ddy.atan2(ddx);
+                        // π/-π をまたぐ場合に正しく動作するよう -π〜π に正規化
+                        let mut diff = angle - facing_angle;
+                        if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+                        if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+                        if diff.abs() < whip_half_angle {
+                            let enemy_r = w.enemies.kinds[ei].radius();
+                            let hit_x = ex + enemy_r;
+                            let hit_y = ey + enemy_r;
+                            w.enemies.hp[ei] -= dmg as f32;
+                            if w.enemies.hp[ei] <= 0.0 {
+                                w.enemies.kill(ei);
+                                let kind_e = w.enemies.kinds[ei];
+                                w.score += kind_e.exp_reward() * 2;
+                                w.exp   += kind_e.exp_reward();
+                                if !w.level_up_pending {
+                                    let required = exp_required_for_next(w.level);
+                                    if w.exp >= required { w.level_up_pending = true; }
+                                }
+                                let pc = match kind_e {
+                                    EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
+                                    EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
+                                    EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
+                                };
+                                w.particles.emit(hit_x, hit_y, 8, pc);
+                                let roll = w.rng.next_u32() % 100;
+                                let (item_kind, item_value) = if roll < 2 {
+                                    (item::ItemKind::Magnet, 0)
+                                } else if roll < 7 {
+                                    (item::ItemKind::Potion, 20)
+                                } else {
+                                    (item::ItemKind::Gem, kind_e.exp_reward())
+                                };
+                                w.items.spawn(hit_x, hit_y, item_kind, item_value);
+                            } else {
+                                w.particles.emit(hit_x, hit_y, 3, [1.0, 0.6, 0.1, 1.0]);
+                            }
+                        }
+                    }
+                    w.weapon_slots[si].cooldown_timer = cd;
+                }
+                // ── Step 21: Fireball ──────────────────────────────────────
+                WeaponKind::Fireball => {
+                    // 最近接敵に向かって貫通弾を発射
+                    if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
+                        let target_r = w.enemies.kinds[ti].radius();
+                        let tx  = w.enemies.positions_x[ti] + target_r;
+                        let ty  = w.enemies.positions_y[ti] + target_r;
+                        let bdx = tx - px;
+                        let bdy = ty - py;
+                        let base_angle = bdy.atan2(bdx);
+                        let vx = base_angle.cos() * BULLET_SPEED;
+                        let vy = base_angle.sin() * BULLET_SPEED;
+                        w.bullets.spawn_piercing(px, py, vx, vy, dmg, BULLET_LIFETIME);
+                        w.weapon_slots[si].cooldown_timer = cd;
+                    }
+                }
+                // ── Step 21: Lightning ─────────────────────────────────────
+                WeaponKind::Lightning => {
+                    // 最近接敵から始まり、最大 chain_count 体に連鎖
+                    let chain_count = kind.lightning_chain_count(level);
+                    let mut hit_set = std::collections::HashSet::new();
+                    // 最初はプレイヤー位置から最近接敵を探す
+                    let mut current = find_nearest_enemy(&w.enemies, px, py);
+                    #[allow(unused_assignments)]
+                    let mut next_search_x = px;
+                    #[allow(unused_assignments)]
+                    let mut next_search_y = py;
+                    for _ in 0..chain_count {
+                        if let Some(ei) = current {
+                            let enemy_r = w.enemies.kinds[ei].radius();
+                            let hit_x = w.enemies.positions_x[ei] + enemy_r;
+                            let hit_y = w.enemies.positions_y[ei] + enemy_r;
+                            w.enemies.hp[ei] -= dmg as f32;
+                            // 電撃パーティクル（水色）
+                            w.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
+                            if w.enemies.hp[ei] <= 0.0 {
+                                w.enemies.kill(ei);
+                                let kind_e = w.enemies.kinds[ei];
+                                w.score += kind_e.exp_reward() * 2;
+                                w.exp   += kind_e.exp_reward();
+                                if !w.level_up_pending {
+                                    let required = exp_required_for_next(w.level);
+                                    if w.exp >= required { w.level_up_pending = true; }
+                                }
+                                let roll = w.rng.next_u32() % 100;
+                                let (item_kind, item_value) = if roll < 2 {
+                                    (item::ItemKind::Magnet, 0)
+                                } else if roll < 7 {
+                                    (item::ItemKind::Potion, 20)
+                                } else {
+                                    (item::ItemKind::Gem, kind_e.exp_reward())
+                                };
+                                w.items.spawn(hit_x, hit_y, item_kind, item_value);
+                            }
+                            hit_set.insert(ei);
+                            next_search_x = hit_x;
+                            next_search_y = hit_y;
+                            current = find_nearest_enemy_excluding(
+                                &w.enemies, next_search_x, next_search_y, &hit_set,
+                            );
+                        } else {
+                            break;
+                        }
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
@@ -759,9 +943,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         if !w.bullets.alive[bi] {
             continue;
         }
-        let bx  = w.bullets.positions_x[bi];
-        let by  = w.bullets.positions_y[bi];
-        let dmg = w.bullets.damage[bi];
+        let bx       = w.bullets.positions_x[bi];
+        let by       = w.bullets.positions_y[bi];
+        let dmg      = w.bullets.damage[bi];
+        let piercing = w.bullets.piercing[bi];
 
         let nearby = w.collision.dynamic.query_nearby(bx, by, bullet_query_r);
         for ei in nearby {
@@ -810,10 +995,19 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     w.items.spawn(ex, ey, item_kind, item_value);
                 } else {
                     // ── Step 16: ヒット時黄色パーティクル ─────────
-                    w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
+                    // ── Step 21: Fireball は炎色パーティクル ──────
+                    let hit_color = if piercing {
+                        [1.0, 0.4, 0.0, 1.0]  // 炎（橙赤）
+                    } else {
+                        [1.0, 0.9, 0.3, 1.0]  // 通常（黄）
+                    };
+                    w.particles.emit(ex, ey, 3, hit_color);
                 }
-                w.bullets.kill(bi);
-                break;
+                // 貫通弾は消えない、通常弾は消す
+                if !piercing {
+                    w.bullets.kill(bi);
+                    break;
+                }
             }
         }
     }
@@ -864,7 +1058,7 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     }
     for i in 0..w.bullets.len() {
         if w.bullets.alive[i] {
-            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], 4u8));
+            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], w.bullets.render_kind[i]));
         }
     }
     result
@@ -959,8 +1153,8 @@ fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
         .collect()
 }
 
-/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17）
-/// weapon_name: "magic_wand" | "axe" | "cross"
+/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17/21）
+/// weapon_name: "magic_wand" | "axe" | "cross" | "whip" | "fireball" | "lightning"
 /// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
 /// 新規武器は最大 6 スロットまで追加可能
 #[rustler::nif]
@@ -971,6 +1165,9 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
         "magic_wand" => WeaponKind::MagicWand,
         "axe"        => WeaponKind::Axe,
         "cross"      => WeaponKind::Cross,
+        "whip"       => WeaponKind::Whip,
+        "fireball"   => WeaponKind::Fireball,
+        "lightning"  => WeaponKind::Lightning,
         _            => WeaponKind::MagicWand,
     };
 
