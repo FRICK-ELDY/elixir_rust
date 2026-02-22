@@ -12,6 +12,16 @@ defmodule Game.NifBridge do
   def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
   def create_world(), do: :erlang.nif_error(:nif_not_loaded)
   def physics_step(_world, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
+<<<<<<< HEAD
   def set_player_input(_world, _dx, _dy), do: :erlang.nif_error(:nif_not_loaded)
   def get_player_pos(_world), do: :erlang.nif_error(:nif_not_loaded)
+=======
+
+  # Step 8: プレイヤー入力
+  def set_player_input(_world, _dx, _dy), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 9: 敵スポーン + 描画データ取得
+  def spawn_enemies(_world, _kind, _count), do: :erlang.nif_error(:nif_not_loaded)
+  def get_render_data(_world), do: :erlang.nif_error(:nif_not_loaded)
+>>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
 end

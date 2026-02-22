@@ -9,22 +9,56 @@ defmodule Game.GameLoop do
   @impl true
   def init(_opts) do
     world_ref = Game.NifBridge.create_world()
+    start_ms = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
-    {:ok, %{world_ref: world_ref, last_tick: now_ms(), frame_count: 0}}
+
+    {:ok,
+     %{
+       world_ref:     world_ref,
+       last_tick:     start_ms,
+       frame_count:   0,
+       start_ms:      start_ms,
+       last_spawn_ms: start_ms
+     }}
+  end
+
+  @impl true
+  def handle_cast({:input, :move, {dx, dy}}, state) do
+    Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+    {:noreply, state}
   end
 
   @impl true
   def handle_info(:tick, state) do
-    delta = now_ms() - state.last_tick
+    now       = now_ms()
+    delta     = now - state.last_tick
+    elapsed   = now - state.start_ms
+
     _frame_id = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
 
+    # 敵スポーン（2 秒ごとに 10 体）
+    new_last_spawn =
+      Game.SpawnSystem.maybe_spawn(state.world_ref, elapsed, state.last_spawn_ms)
+
     if rem(state.frame_count, 60) == 0 do
+<<<<<<< HEAD
       {px, py} = Game.NifBridge.get_player_pos(state.world_ref)
       Logger.info("Frame: #{state.frame_count} | Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)})")
+=======
+      render_data = Game.NifBridge.get_render_data(state.world_ref)
+      enemy_count = Enum.count(render_data, fn {_x, _y, kind} -> kind == 1 end)
+      Logger.info("Frame: #{state.frame_count} | Enemies: #{enemy_count}")
+>>>>>>> 80e93ab (feat: Step9 - 敵スポーン + 追跡 AI（100体）)
     end
 
     Process.send_after(self(), :tick, @tick_ms)
-    {:noreply, %{state | last_tick: now_ms(), frame_count: state.frame_count + 1}}
+
+    {:noreply,
+     %{state |
+       last_tick:     now_ms(),
+       frame_count:   state.frame_count + 1,
+       last_spawn_ms: new_last_spawn
+     }}
   end
 
   @impl true
