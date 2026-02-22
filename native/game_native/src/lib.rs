@@ -25,7 +25,6 @@ pub struct EnemyWorld {
     pub velocities_y: Vec<f32>,
     pub speeds:       Vec<f32>,
     pub alive:        Vec<bool>,
-    pub count:        usize,
 }
 
 impl EnemyWorld {
@@ -37,22 +36,23 @@ impl EnemyWorld {
             velocities_y: Vec::new(),
             speeds:       Vec::new(),
             alive:        Vec::new(),
-            count:        0,
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.positions_x.len()
+    }
+
     /// 画面外のランダムな位置に `n` 体スポーン
-    pub fn spawn(&mut self, n: usize, screen_w: f32, screen_h: f32, rng_seed: u64) {
-        let mut rng = SimpleRng::new(rng_seed);
-        for _ in 0..n {
-            let (x, y) = spawn_position_outside(&mut rng, screen_w, screen_h);
+    /// positions: spawn_enemies で事前生成した座標リスト
+    pub fn spawn(&mut self, positions: &[(f32, f32)]) {
+        for &(x, y) in positions {
             self.positions_x.push(x);
             self.positions_y.push(y);
             self.velocities_x.push(0.0);
             self.velocities_y.push(0.0);
             self.speeds.push(80.0);
             self.alive.push(true);
-            self.count += 1;
         }
     }
 }
@@ -71,7 +71,7 @@ fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
 
 /// Chase AI: 全敵をプレイヤーに向けて移動
 pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, dt: f32) {
-    for i in 0..enemies.count {
+    for i in 0..enemies.len() {
         if !enemies.alive[i] {
             continue;
         }
@@ -87,10 +87,10 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
-    pub frame_id:  u32,
-    pub player:    PlayerState,
-    pub enemies:   EnemyWorld,
-    pub rng_state: u64,
+    pub frame_id: u32,
+    pub player:   PlayerState,
+    pub enemies:  EnemyWorld,
+    pub rng:      SimpleRng,
 }
 
 pub struct GameWorld(pub Mutex<GameWorldInner>);
@@ -112,8 +112,8 @@ fn create_world() -> ResourceArc<GameWorld> {
             input_dx: 0.0,
             input_dy: 0.0,
         },
-        enemies:   EnemyWorld::new(),
-        rng_state: 12345,
+        enemies: EnemyWorld::new(),
+        rng:     SimpleRng::new(12345),
     })))
 }
 
@@ -130,9 +130,11 @@ fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, _kind: Atom, count: usize) -> Atom {
     let mut w = world.0.lock().unwrap();
-    let seed = w.rng_state;
-    w.rng_state = w.rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-    w.enemies.spawn(count, SCREEN_WIDTH, SCREEN_HEIGHT, seed);
+    // rng の借用を先に終わらせてから enemies に渡す
+    let positions: Vec<(f32, f32)> = (0..count)
+        .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
+        .collect();
+    w.enemies.spawn(&positions);
     ok()
 }
 
@@ -176,9 +178,9 @@ fn get_player_pos(world: ResourceArc<GameWorld>) -> (f64, f64) {
 #[rustler::nif]
 fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     let w = world.0.lock().unwrap();
-    let mut result = Vec::with_capacity(1 + w.enemies.count);
+    let mut result = Vec::with_capacity(1 + w.enemies.len());
     result.push((w.player.x, w.player.y, 0u8));
-    for i in 0..w.enemies.count {
+    for i in 0..w.enemies.len() {
         if w.enemies.alive[i] {
             result.push((w.enemies.positions_x[i], w.enemies.positions_y[i], 1u8));
         }
@@ -197,7 +199,7 @@ fn load(env: rustler::Env, _: rustler::Term) -> bool {
 rustler::init!("Elixir.Game.NifBridge", load = load);
 
 // ─── 簡易 LCG 乱数生成器 ──────────────────────────────────────
-struct SimpleRng(u64);
+pub struct SimpleRng(u64);
 
 impl SimpleRng {
     fn new(seed: u64) -> Self {

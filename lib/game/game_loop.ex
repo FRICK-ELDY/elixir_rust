@@ -43,7 +43,7 @@ defmodule Game.GameLoop do
     if rem(state.frame_count, 60) == 0 do
       {px, py}    = Game.NifBridge.get_player_pos(state.world_ref)
       render_data = Game.NifBridge.get_render_data(state.world_ref)
-      enemy_count = Enum.count(render_data, fn {_x, _y, kind} -> kind == 1 end)
+      enemy_count = length(render_data) - 1
       Logger.info(
         "Frame: #{state.frame_count} | " <>
         "Player: (#{Float.round(px, 1)}, #{Float.round(py, 1)}) | " <>
@@ -55,7 +55,7 @@ defmodule Game.GameLoop do
 
     {:noreply,
      %{state |
-       last_tick:     now_ms(),
+       last_tick:     now,
        frame_count:   state.frame_count + 1,
        last_spawn_ms: new_last_spawn
      }}
