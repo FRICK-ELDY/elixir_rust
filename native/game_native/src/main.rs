@@ -11,7 +11,8 @@ use std::time::Instant;
 
 use constants::{
     BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, INVINCIBLE_DURATION,
+    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, ENEMY_SEPARATION_FORCE,
+    ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES, WEAPON_COOLDOWN,
 };
@@ -267,6 +268,53 @@ impl GameWorld {
             let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
             self.enemies.positions_x[i] += (ddx / dist) * 80.0 * dt;
             self.enemies.positions_y[i] += (ddy / dist) * 80.0 * dt;
+        }
+
+        // 敵同士の重なりを解消する分離パス
+        {
+            let len = self.enemies.len();
+            let mut sep_x = vec![0.0f32; len];
+            let mut sep_y = vec![0.0f32; len];
+
+            let mut hash = physics::spatial_hash::SpatialHash::new(ENEMY_SEPARATION_RADIUS);
+            for i in 0..len {
+                if self.enemies.alive[i] {
+                    hash.insert(i, self.enemies.positions_x[i], self.enemies.positions_y[i]);
+                }
+            }
+
+            for i in 0..len {
+                if !self.enemies.alive[i] { continue; }
+                let ix = self.enemies.positions_x[i];
+                let iy = self.enemies.positions_y[i];
+                let neighbors = hash.query_nearby(ix, iy, ENEMY_SEPARATION_RADIUS);
+                for j in neighbors {
+                    if j <= i || !self.enemies.alive[j] { continue; }
+                    let jx = self.enemies.positions_x[j];
+                    let jy = self.enemies.positions_y[j];
+                    let dx = ix - jx;
+                    let dy = iy - jy;
+                    let dist_sq = dx * dx + dy * dy;
+                    if dist_sq < ENEMY_SEPARATION_RADIUS * ENEMY_SEPARATION_RADIUS && dist_sq > 1e-6 {
+                        let dist = dist_sq.sqrt();
+                        let overlap = ENEMY_SEPARATION_RADIUS - dist;
+                        let force = overlap * ENEMY_SEPARATION_FORCE * dt;
+                        let nx = (dx / dist) * force;
+                        let ny = (dy / dist) * force;
+                        sep_x[i] += nx;
+                        sep_y[i] += ny;
+                        sep_x[j] -= nx;
+                        sep_y[j] -= ny;
+                    }
+                }
+            }
+
+            for i in 0..len {
+                if self.enemies.alive[i] {
+                    self.enemies.positions_x[i] += sep_x[i];
+                    self.enemies.positions_y[i] += sep_y[i];
+                }
+            }
         }
 
         // 衝突: Spatial Hash 再構築

@@ -23,6 +23,10 @@ pub const PLAYER_RADIUS: f32 = PLAYER_SIZE / 2.0;
 pub const ENEMY_RADIUS:  f32 = 20.0;
 pub const BULLET_RADIUS: f32 = 6.0;
 
+// Enemy separation: 敵同士が重ならないための押し出し半径・強さ
+pub const ENEMY_SEPARATION_RADIUS: f32 = ENEMY_RADIUS * 2.0;
+pub const ENEMY_SEPARATION_FORCE:  f32 = 120.0;
+
 // Combat
 pub const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
 pub const INVINCIBLE_DURATION:  f32 = 0.5;
