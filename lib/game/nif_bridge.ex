@@ -10,4 +10,6 @@ defmodule Game.NifBridge do
     crate: :game_native
 
   def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
+  def create_world(), do: :erlang.nif_error(:nif_not_loaded)
+  def physics_step(_world, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
 end
