@@ -35,7 +35,7 @@ Step 15 までで「動くゲーム」は完成しました。ここからは**�
 Step 16: ヒットエフェクト（パーティクル）
 Step 17: 武器レベルアップ（同じ武器を重ねると強化）
 Step 18: 複数の敵タイプ（速い・硬い・大きい）
-Step 19: アイテムドロップ（回復・磁石・爆弾）
+Step 19: アイテムドロップ（回復・磁石）
 Step 20: カメラシステム（プレイヤー追従スクロール）
 Step 21: 武器の追加（Whip / Fireball / Lightning）
 Step 22: BGM・SE（rodio クレート）
@@ -471,8 +471,11 @@ WeaponKind::Whip => {
         let dist = (dx*dx + dy*dy).sqrt();
         if dist > whip_range { continue; }
         let angle = dy.atan2(dx);
-        let diff = (angle - facing_angle).abs();
-        if diff < whip_angle / 2.0 {
+        // π/-π をまたぐ場合に正しく動作するよう -π〜π に正規化
+        let mut diff = angle - facing_angle;
+        if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+        if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+        if diff.abs() < whip_angle / 2.0 {
             w.enemies.hp[ei] -= dmg as f32;
             // ヒットエフェクト
         }
@@ -534,7 +537,7 @@ WeaponKind::Lightning => {
 
 ```toml
 [dependencies]
-rodio = "0.20"
+rodio = "0.21"
 ```
 
 ### 実装
