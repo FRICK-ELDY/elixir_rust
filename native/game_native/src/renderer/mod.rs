@@ -782,130 +782,13 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                             );
                             ui.add_space(8.0);
 
-                            if hud.weapon_choices.is_empty() {
-                                // 全武器がMaxLvの場合
-                                ui.label(
-                                    egui::RichText::new("All weapons are at MAX level!")
-                                        .color(egui::Color32::from_rgb(255, 180, 50))
-                                        .size(16.0)
-                                        .strong(),
-                                );
-                                ui.add_space(16.0);
-                                let skip_btn = egui::Button::new(
-                                    egui::RichText::new("Continue  [Esc]")
-                                        .size(16.0)
-                                        .strong(),
-                                )
-                                .fill(egui::Color32::from_rgb(80, 80, 80))
-                                .min_size(egui::vec2(160.0, 36.0));
-                                if ui.add(skip_btn).clicked() {
-                                    chosen = Some("__skip__".to_string());
-                                }
+                            let result = if hud.weapon_choices.is_empty() {
+                                build_max_level_ui(ui)
                             } else {
-                                ui.label(
-                                    egui::RichText::new("Choose a weapon")
-                                        .color(egui::Color32::WHITE)
-                                        .size(16.0),
-                                );
-                                ui.add_space(16.0);
-                                ui.horizontal(|ui| {
-                                    for choice in &hud.weapon_choices {
-                                        // 現在のレベルを取得（0 = 未所持）
-                                        let current_lv = hud.weapon_levels
-                                            .iter()
-                                            .find(|(n, _)| n == choice)
-                                            .map(|(_, lv)| *lv)
-                                            .unwrap_or(0);
-                                        let is_upgrade = current_lv > 0;
-                                        let next_lv    = current_lv + 1;
-
-                                        let border_color = if is_upgrade {
-                                            egui::Color32::from_rgb(255, 180, 50)   // 強化: 金色
-                                        } else {
-                                            egui::Color32::from_rgb(100, 180, 255)  // 新規: 青色
-                                        };
-                                        let bg_color = if is_upgrade {
-                                            egui::Color32::from_rgb(50, 35, 10)
-                                        } else {
-                                            egui::Color32::from_rgb(15, 30, 60)
-                                        };
-
-                                        let frame = egui::Frame::new()
-                                            .fill(bg_color)
-                                            .inner_margin(egui::Margin::symmetric(16, 14))
-                                            .corner_radius(10.0)
-                                            .stroke(egui::Stroke::new(2.0, border_color));
-
-                                        let response = frame.show(ui, |ui| {
-                                            ui.set_min_width(140.0);
-                                            ui.vertical_centered(|ui| {
-                                                // weapon name
-                                                ui.label(
-                                                    egui::RichText::new(weapon_short_name(choice))
-                                                        .color(egui::Color32::from_rgb(220, 230, 255))
-                                                        .size(16.0)
-                                                        .strong(),
-                                                );
-                                                ui.add_space(4.0);
-
-                                                // level display
-                                                let lv_text = if is_upgrade {
-                                                    format!("Lv.{current_lv} -> Lv.{next_lv}")
-                                                } else {
-                                                    "NEW!".to_string()
-                                                };
-                                                let lv_color = if is_upgrade {
-                                                    egui::Color32::from_rgb(255, 200, 80)
-                                                } else {
-                                                    egui::Color32::from_rgb(100, 255, 150)
-                                                };
-                                                ui.label(
-                                                    egui::RichText::new(lv_text)
-                                                        .color(lv_color)
-                                                        .size(13.0)
-                                                        .strong(),
-                                                );
-                                                ui.add_space(6.0);
-
-                                                // upgrade description
-                                                for line in weapon_upgrade_desc(choice, current_lv) {
-                                                    ui.label(
-                                                        egui::RichText::new(line)
-                                                            .color(egui::Color32::from_rgb(180, 200, 180))
-                                                            .size(11.0),
-                                                    );
-                                                }
-                                                ui.add_space(8.0);
-
-                                                // select button
-                                                let btn = egui::Button::new(
-                                                    egui::RichText::new("Select  [1/2/3]")
-                                                        .size(13.0)
-                                                        .strong(),
-                                                )
-                                                .fill(border_color)
-                                                .min_size(egui::vec2(110.0, 28.0));
-                                                ui.add(btn)
-                                            }).inner
-                                        });
-
-                                        if response.inner.clicked() {
-                                            chosen = Some(choice.clone());
-                                        }
-                                        ui.add_space(12.0);
-                                    }
-                                });
-                                ui.add_space(12.0);
-                                // スキップボタン（通常時も表示）
-                                let skip_btn = egui::Button::new(
-                                    egui::RichText::new("Skip  [Esc]")
-                                        .size(12.0),
-                                )
-                                .fill(egui::Color32::from_rgba_unmultiplied(60, 60, 60, 200))
-                                .min_size(egui::vec2(90.0, 24.0));
-                                if ui.add(skip_btn).clicked() {
-                                    chosen = Some("__skip__".to_string());
-                                }
+                                build_weapon_choice_ui(ui, hud)
+                            };
+                            if result.is_some() {
+                                chosen = result;
                             }
                         });
                     });
@@ -913,6 +796,141 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
     }
 
     chosen
+}
+
+/// 全武器がMaxLvの場合のUI（「Continue [Esc]」ボタンのみ）
+fn build_max_level_ui(ui: &mut egui::Ui) -> Option<String> {
+    ui.label(
+        egui::RichText::new("All weapons are at MAX level!")
+            .color(egui::Color32::from_rgb(255, 180, 50))
+            .size(16.0)
+            .strong(),
+    );
+    ui.add_space(16.0);
+    let btn = egui::Button::new(
+        egui::RichText::new("Continue  [Esc]")
+            .size(16.0)
+            .strong(),
+    )
+    .fill(egui::Color32::from_rgb(80, 80, 80))
+    .min_size(egui::vec2(160.0, 36.0));
+    if ui.add(btn).clicked() {
+        Some("__skip__".to_string())
+    } else {
+        None
+    }
+}
+
+/// 武器選択肢がある場合のUI（武器カード × N + 「Skip [Esc]」ボタン）
+fn build_weapon_choice_ui(ui: &mut egui::Ui, hud: &HudData) -> Option<String> {
+    let mut chosen: Option<String> = None;
+
+    ui.label(
+        egui::RichText::new("Choose a weapon")
+            .color(egui::Color32::WHITE)
+            .size(16.0),
+    );
+    ui.add_space(16.0);
+
+    ui.horizontal(|ui| {
+        for choice in &hud.weapon_choices {
+            let current_lv = hud.weapon_levels
+                .iter()
+                .find(|(n, _)| n == choice)
+                .map(|(_, lv)| *lv)
+                .unwrap_or(0);
+            if build_weapon_card(ui, choice, current_lv).is_some() {
+                chosen = Some(choice.clone());
+            }
+            ui.add_space(12.0);
+        }
+    });
+
+    ui.add_space(12.0);
+    let skip_btn = egui::Button::new(
+        egui::RichText::new("Skip  [Esc]").size(12.0),
+    )
+    .fill(egui::Color32::from_rgba_unmultiplied(60, 60, 60, 200))
+    .min_size(egui::vec2(90.0, 24.0));
+    if ui.add(skip_btn).clicked() {
+        chosen = Some("__skip__".to_string());
+    }
+
+    chosen
+}
+
+/// 武器1枚分のカードUIを描画し、選択されたら `Some(())` を返す
+fn build_weapon_card(ui: &mut egui::Ui, choice: &str, current_lv: u32) -> Option<()> {
+    let is_upgrade  = current_lv > 0;
+    let next_lv     = current_lv + 1;
+
+    let border_color = if is_upgrade {
+        egui::Color32::from_rgb(255, 180, 50)   // 強化: 金色
+    } else {
+        egui::Color32::from_rgb(100, 180, 255)  // 新規: 青色
+    };
+    let bg_color = if is_upgrade {
+        egui::Color32::from_rgb(50, 35, 10)
+    } else {
+        egui::Color32::from_rgb(15, 30, 60)
+    };
+
+    let frame = egui::Frame::new()
+        .fill(bg_color)
+        .inner_margin(egui::Margin::symmetric(16, 14))
+        .corner_radius(10.0)
+        .stroke(egui::Stroke::new(2.0, border_color));
+
+    let response = frame.show(ui, |ui| {
+        ui.set_min_width(140.0);
+        ui.vertical_centered(|ui| {
+            ui.label(
+                egui::RichText::new(weapon_short_name(choice))
+                    .color(egui::Color32::from_rgb(220, 230, 255))
+                    .size(16.0)
+                    .strong(),
+            );
+            ui.add_space(4.0);
+
+            let lv_text = if is_upgrade {
+                format!("Lv.{current_lv} -> Lv.{next_lv}")
+            } else {
+                "NEW!".to_string()
+            };
+            let lv_color = if is_upgrade {
+                egui::Color32::from_rgb(255, 200, 80)
+            } else {
+                egui::Color32::from_rgb(100, 255, 150)
+            };
+            ui.label(
+                egui::RichText::new(lv_text)
+                    .color(lv_color)
+                    .size(13.0)
+                    .strong(),
+            );
+            ui.add_space(6.0);
+
+            for line in weapon_upgrade_desc(choice, current_lv) {
+                ui.label(
+                    egui::RichText::new(line)
+                        .color(egui::Color32::from_rgb(180, 200, 180))
+                        .size(11.0),
+                );
+            }
+            ui.add_space(8.0);
+
+            let btn = egui::Button::new(
+                egui::RichText::new("Select  [1/2/3]")
+                    .size(13.0)
+                    .strong(),
+            )
+            .fill(border_color)
+            .min_size(egui::vec2(110.0, 28.0));
+            ui.add(btn)
+        }).inner
+    });
+
+    if response.inner.clicked() { Some(()) } else { None }
 }
 
 fn weapon_short_name(name: &str) -> &str {
