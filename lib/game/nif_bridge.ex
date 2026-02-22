@@ -12,4 +12,6 @@ defmodule Game.NifBridge do
   def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
   def create_world(), do: :erlang.nif_error(:nif_not_loaded)
   def physics_step(_world, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
+  def set_player_input(_world, _dx, _dy), do: :erlang.nif_error(:nif_not_loaded)
+  def get_player_pos(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
