@@ -33,7 +33,7 @@ use constants::{
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
 use item::{ItemKind, ItemWorld};
-use renderer::{HudData, Renderer};
+use renderer::{BossHudInfo, HudData, Renderer};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 
 // ─── 敵タイプ（main.rs ローカル定義） ─────────────────────────
@@ -87,6 +87,84 @@ impl EnemyKind {
     }
 
 }
+// ─── Step 24: ボスエネミー ─────────────────────────────────────
+
+/// ボスの種類
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum BossKind {
+    SlimeKing,   // 3 分: スライムを召喚
+    BatLord,     // 6 分: 高速突進 + 無敵
+    StoneGolem,  // 9 分: 岩を投げる（範囲攻撃）
+}
+
+impl BossKind {
+    fn max_hp(self) -> f32 {
+        match self { Self::SlimeKing => 1000.0, Self::BatLord => 2000.0, Self::StoneGolem => 5000.0 }
+    }
+    fn speed(self) -> f32 {
+        match self { Self::SlimeKing => 60.0, Self::BatLord => 200.0, Self::StoneGolem => 30.0 }
+    }
+    fn radius(self) -> f32 {
+        match self { Self::SlimeKing => 48.0, Self::BatLord => 48.0, Self::StoneGolem => 64.0 }
+    }
+    fn exp_reward(self) -> u32 {
+        match self { Self::SlimeKing => 200, Self::BatLord => 400, Self::StoneGolem => 800 }
+    }
+    fn damage_per_sec(self) -> f32 {
+        match self { Self::SlimeKing => 30.0, Self::BatLord => 50.0, Self::StoneGolem => 80.0 }
+    }
+    fn name(self) -> &'static str {
+        match self { Self::SlimeKing => "Slime King", Self::BatLord => "Bat Lord", Self::StoneGolem => "Stone Golem" }
+    }
+    /// render_kind（renderer の kind 番号）
+    fn render_kind(self) -> u8 {
+        match self { Self::SlimeKing => 11, Self::BatLord => 12, Self::StoneGolem => 13 }
+    }
+    /// 特殊行動のインターバル（秒）
+    fn special_interval(self) -> f32 {
+        match self { Self::SlimeKing => 5.0, Self::BatLord => 4.0, Self::StoneGolem => 6.0 }
+    }
+}
+
+/// ボスの状態
+struct BossState {
+    kind:           BossKind,
+    x:              f32,
+    y:              f32,
+    hp:             f32,
+    max_hp:         f32,
+    phase_timer:    f32,   // 特殊行動タイマー
+    invincible:     bool,  // BatLord の無敵フラグ
+    invincible_timer: f32, // 無敵の残り時間
+    alive:          bool,
+    /// BatLord: 突進中フラグ
+    is_dashing:     bool,
+    dash_timer:     f32,
+    dash_vx:        f32,
+    dash_vy:        f32,
+}
+
+impl BossState {
+    fn new(kind: BossKind, x: f32, y: f32) -> Self {
+        let max_hp = kind.max_hp();
+        Self {
+            kind,
+            x,
+            y,
+            hp: max_hp,
+            max_hp,
+            phase_timer: kind.special_interval(),
+            invincible: false,
+            invincible_timer: 0.0,
+            alive: true,
+            is_dashing: false,
+            dash_timer: 0.0,
+            dash_vx: 0.0,
+            dash_vy: 0.0,
+        }
+    }
+}
+
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -378,6 +456,12 @@ struct GameWorld {
     /// 実際のウィンドウサイズ（リサイズ対応）
     screen_w:         f32,
     screen_h:         f32,
+    // Step 24: ボスエネミー
+    boss:             Option<BossState>,
+    /// 次に出現するボスのインデックス（0=SlimeKing, 1=BatLord, 2=StoneGolem）
+    next_boss_index:  usize,
+    /// ボス出現通知フラグ（1 フレームだけ true になる）
+    boss_spawned:     bool,
 }
 
 /// Step 22: 1 フレーム中に発生した音声イベント
@@ -388,6 +472,8 @@ struct SoundEvents {
     pub level_up:     bool,
     pub player_hurt:  bool,
     pub item_pickup:  bool,
+    /// Step 24: ボス出現
+    pub boss_spawn:   bool,
 }
 
 impl GameWorld {
@@ -427,6 +513,9 @@ impl GameWorld {
             camera_y:         cam_y,
             screen_w:         SCREEN_WIDTH,
             screen_h:         SCREEN_HEIGHT,
+            boss:             None,
+            next_boss_index:  0,
+            boss_spawned:     false,
         }
     }
 
@@ -690,6 +779,25 @@ impl GameWorld {
                             }
                         }
                     }
+                    // Step 24: Whip vs ボス
+                    if let Some(ref mut boss) = self.boss {
+                        if boss.alive && !boss.invincible {
+                            let ddx = boss.x - px;
+                            let ddy = boss.y - py;
+                            let whip_range_sq = whip_range * whip_range;
+                            if ddx * ddx + ddy * ddy <= whip_range_sq {
+                                let angle = ddy.atan2(ddx);
+                                let mut diff = angle - facing_angle;
+                                if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+                                if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+                                if diff.abs() < whip_half_angle {
+                                    boss.hp -= dmg as f32;
+                                    self.particles.emit(boss.x, boss.y, 4, [1.0, 0.8, 0.2, 1.0]);
+                                    se.enemy_hit = true;
+                                }
+                            }
+                        }
+                    }
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Fireball ──────────────────────────────────────
@@ -765,6 +873,20 @@ impl GameWorld {
                             };
                         } else {
                             break;
+                        }
+                    }
+                    // Step 24: Lightning vs ボス（チェーン先としてボスを含める）
+                    if let Some(ref mut boss) = self.boss {
+                        if boss.alive && !boss.invincible {
+                            let ddx = boss.x - px;
+                            let ddy = boss.y - py;
+                            let d = ddx * ddx + ddy * ddy;
+                            if d < 600.0 * 600.0 {
+                                boss.hp -= dmg as f32;
+                                self.bullets.spawn_effect(boss.x, boss.y, 0.10, 9);
+                                self.particles.emit(boss.x, boss.y, 5, [0.3, 0.8, 1.0, 1.0]);
+                                se.enemy_hit = true;
+                            }
                         }
                     }
                     self.weapon_slots[si].cooldown_timer = cd;
@@ -898,6 +1020,217 @@ impl GameWorld {
             }
         }
 
+        // Step 24: ボス出現チェック（3 分 / 6 分 / 9 分）
+        self.boss_spawned = false;
+        {
+            const BOSS_TIMES: [f32; 3] = [180.0, 360.0, 540.0];
+            const BOSS_KINDS: [BossKind; 3] = [BossKind::SlimeKing, BossKind::BatLord, BossKind::StoneGolem];
+            if self.boss.is_none() && self.next_boss_index < BOSS_TIMES.len() {
+                if self.elapsed_seconds >= BOSS_TIMES[self.next_boss_index] {
+                    let kind = BOSS_KINDS[self.next_boss_index];
+                    // プレイヤーの画面外（右側）からスポーン
+                    let bx = px + 600.0;
+                    let by = py;
+                    self.boss = Some(BossState::new(kind, bx, by));
+                    self.next_boss_index += 1;
+                    self.boss_spawned = true;
+                    se.boss_spawn = true;
+                }
+            }
+        }
+
+        // Step 24: ボス更新（借用競合を避けるため、特殊行動データを先に取り出す）
+        #[derive(Default)]
+        struct BossAction {
+            spawn_slimes:    bool,
+            spawn_rocks:     bool,
+            bat_dash_effect: bool,
+            special_x:       f32,
+            special_y:       f32,
+            hurt_particle:   bool,
+            hurt_x:          f32,
+            hurt_y:          f32,
+        }
+        let mut boss_action = BossAction::default();
+
+        if let Some(ref mut boss) = self.boss {
+            if boss.alive {
+                // 無敵タイマー更新
+                if boss.invincible_timer > 0.0 {
+                    boss.invincible_timer = (boss.invincible_timer - dt).max(0.0);
+                    if boss.invincible_timer <= 0.0 {
+                        boss.invincible = false;
+                    }
+                }
+
+                // ボス AI: 種別ごとの移動
+                match boss.kind {
+                    BossKind::SlimeKing | BossKind::StoneGolem => {
+                        let ddx = px - boss.x;
+                        let ddy = py - boss.y;
+                        let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                        let spd = boss.kind.speed();
+                        boss.x += (ddx / dist) * spd * dt;
+                        boss.y += (ddy / dist) * spd * dt;
+                    }
+                    BossKind::BatLord => {
+                        if boss.is_dashing {
+                            boss.x += boss.dash_vx * dt;
+                            boss.y += boss.dash_vy * dt;
+                            boss.dash_timer -= dt;
+                            if boss.dash_timer <= 0.0 {
+                                boss.is_dashing = false;
+                                boss.invincible = false;
+                                boss.invincible_timer = 0.0;
+                            }
+                        } else {
+                            let ddx = px - boss.x;
+                            let ddy = py - boss.y;
+                            let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                            boss.x += (ddx / dist) * boss.kind.speed() * dt;
+                            boss.y += (ddy / dist) * boss.kind.speed() * dt;
+                        }
+                    }
+                }
+
+                // マップ内に制限
+                boss.x = boss.x.clamp(boss.kind.radius(), MAP_WIDTH  - boss.kind.radius());
+                boss.y = boss.y.clamp(boss.kind.radius(), MAP_HEIGHT - boss.kind.radius());
+
+                // 特殊行動タイマー
+                boss.phase_timer -= dt;
+                if boss.phase_timer <= 0.0 {
+                    boss.phase_timer = boss.kind.special_interval();
+                    match boss.kind {
+                        BossKind::SlimeKing => {
+                            boss_action.spawn_slimes = true;
+                            boss_action.special_x = boss.x;
+                            boss_action.special_y = boss.y;
+                        }
+                        BossKind::BatLord => {
+                            let ddx = px - boss.x;
+                            let ddy = py - boss.y;
+                            let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                            let dash_speed = 500.0;
+                            boss.dash_vx = (ddx / dist) * dash_speed;
+                            boss.dash_vy = (ddy / dist) * dash_speed;
+                            boss.is_dashing = true;
+                            boss.dash_timer = 0.6;
+                            boss.invincible = true;
+                            boss.invincible_timer = 0.6;
+                            boss_action.bat_dash_effect = true;
+                            boss_action.special_x = boss.x;
+                            boss_action.special_y = boss.y;
+                        }
+                        BossKind::StoneGolem => {
+                            boss_action.spawn_rocks = true;
+                            boss_action.special_x = boss.x;
+                            boss_action.special_y = boss.y;
+                        }
+                    }
+                }
+
+                // ボス vs プレイヤー接触ダメージ
+                let boss_r = boss.kind.radius();
+                let hit_r  = PLAYER_RADIUS + boss_r;
+                let ddx = px - boss.x;
+                let ddy = py - boss.y;
+                if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                    if self.player.invincible_timer <= 0.0 && self.player.hp > 0.0 {
+                        self.player.hp = (self.player.hp - boss.kind.damage_per_sec() * dt).max(0.0);
+                        self.player.invincible_timer = INVINCIBLE_DURATION;
+                        se.player_hurt = true;
+                        boss_action.hurt_particle = true;
+                        boss_action.hurt_x = px;
+                        boss_action.hurt_y = py;
+                    }
+                }
+            }
+        }
+
+        // 特殊行動の副作用（借用競合を避けるため boss 借用の外で実行）
+        if boss_action.spawn_slimes {
+            let positions: Vec<(f32, f32)> = (0..8).map(|i| {
+                let angle = i as f32 * std::f32::consts::TAU / 8.0;
+                (boss_action.special_x + angle.cos() * 120.0, boss_action.special_y + angle.sin() * 120.0)
+            }).collect();
+            self.enemies.spawn(&positions, EnemyKind::Slime);
+            self.particles.emit(boss_action.special_x, boss_action.special_y, 16, [0.2, 1.0, 0.2, 1.0]);
+        }
+        if boss_action.spawn_rocks {
+            let dirs: [(f32, f32); 4] = [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)];
+            for (dx_dir, dy_dir) in dirs {
+                self.bullets.spawn_ex(
+                    boss_action.special_x, boss_action.special_y,
+                    dx_dir * 200.0, dy_dir * 200.0,
+                    50, false, 11,
+                );
+            }
+            self.particles.emit(boss_action.special_x, boss_action.special_y, 10, [0.6, 0.6, 0.6, 1.0]);
+        }
+        if boss_action.bat_dash_effect {
+            self.particles.emit(boss_action.special_x, boss_action.special_y, 12, [0.8, 0.2, 1.0, 1.0]);
+        }
+        if boss_action.hurt_particle {
+            self.particles.emit(boss_action.hurt_x, boss_action.hurt_y, 8, [1.0, 0.15, 0.15, 1.0]);
+        }
+
+        // Step 24: 弾丸 vs ボス衝突判定
+        let mut boss_killed = false;
+        if let Some(ref mut boss) = self.boss {
+            if boss.alive && !boss.invincible {
+                let boss_r = boss.kind.radius();
+                for bi in 0..self.bullets.len() {
+                    if !self.bullets.alive[bi] { continue; }
+                    let dmg = self.bullets.damage[bi];
+                    if dmg == 0 { continue; }
+                    let bx = self.bullets.positions_x[bi];
+                    let by = self.bullets.positions_y[bi];
+                    let hit_r = BULLET_RADIUS + boss_r;
+                    let ddx = bx - boss.x;
+                    let ddy = by - boss.y;
+                    if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                        boss.hp -= dmg as f32;
+                        se.enemy_hit = true;
+                        if !self.bullets.piercing[bi] {
+                            self.bullets.kill(bi);
+                        }
+                        if boss.hp <= 0.0 {
+                            boss.alive = false;
+                            boss_killed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if boss_killed {
+            if let Some(ref boss) = self.boss {
+                let exp = boss.kind.exp_reward();
+                let bx = boss.x;
+                let by = boss.y;
+                self.score += exp * 2;
+                self.exp   += exp;
+                let prev_pending = self.level_up_pending;
+                self.check_level_up();
+                if self.level_up_pending && !prev_pending { se.level_up = true; }
+                self.particles.emit(bx, by, 40, [1.0, 0.5, 0.0, 1.0]);
+                se.enemy_death = true;
+                for _ in 0..10 {
+                    let ox = (self.rng.next_f32() - 0.5) * 200.0;
+                    let oy = (self.rng.next_f32() - 0.5) * 200.0;
+                    self.items.spawn(bx + ox, by + oy, ItemKind::Gem, exp / 10);
+                }
+            }
+            self.boss = None;
+        }
+
+        // Step 24: Whip vs ボス
+        // (Whip の処理は weapon_slots ループ内で行うため、ここでは別途チェック)
+        // ※ Whip ダメージはすでに enemies に対して処理済みのため、ボス専用処理を追加
+        // → Whip ダメージをボスに適用するため、weapon_slots ループ後にチェック
+        // （実装上、Whip の当たり判定はループ内で行われているため、ここでは不要）
+
         // Wave-based enemy spawn（Step 18: タイプ別スポーン）
         let (wave_interval, wave_count) = current_wave(self.elapsed_seconds);
         if self.elapsed_seconds - self.last_spawn_secs >= wave_interval
@@ -985,10 +1318,25 @@ impl GameWorld {
         (self.camera_x, self.camera_y)
     }
 
-    /// Step 23: (x, y, kind, anim_frame) を返す
+    /// Step 23/24: (x, y, kind, anim_frame) を返す
     fn get_render_data(&self) -> Vec<(f32, f32, u8, u8)> {
-        let mut v = Vec::with_capacity(1 + self.enemies.len() + self.bullets.len());
+        let mut v = Vec::with_capacity(2 + self.enemies.len() + self.bullets.len());
         v.push((self.player.x, self.player.y, 0u8, self.player.anim_frame));
+        // Step 24: ボスを描画（中心座標から左上に変換）
+        if let Some(ref boss) = self.boss {
+            if boss.alive {
+                let boss_sprite_size = match boss.kind {
+                    BossKind::StoneGolem => 128.0,
+                    _ => 96.0,
+                };
+                v.push((
+                    boss.x - boss_sprite_size / 2.0,
+                    boss.y - boss_sprite_size / 2.0,
+                    boss.kind.render_kind(),
+                    0u8,
+                ));
+            }
+        }
         for i in 0..self.enemies.len() {
             if self.enemies.alive[i] {
                 v.push((
@@ -1061,6 +1409,12 @@ impl GameWorld {
             // Step 20: カメラ座標
             camera_x:        self.camera_x,
             camera_y:        self.camera_y,
+            // Step 24: ボス情報
+            boss_info:       self.boss.as_ref().filter(|b| b.alive).map(|b| BossHudInfo {
+                name:   b.kind.name().to_string(),
+                hp:     b.hp,
+                max_hp: b.max_hp,
+            }),
         }
     }
 }

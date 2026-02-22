@@ -33,7 +33,7 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// ─── アトラス UV 定数（Step 23: 1280x64 px アニメーション対応アトラス）──
+// ─── アトラス UV 定数（Step 24: 1600x64 px ボスエネミー対応アトラス）──
 // アニメーションキャラクター（各 64x64、複数フレーム）:
 //   [   0.. 255] プレイヤー歩行 4 フレーム
 //   [ 256.. 511] Slime バウンス 4 フレーム
@@ -48,7 +48,12 @@ pub struct SpriteInstance {
 //   [1088..1151] Fireball
 //   [1152..1215] Lightning
 //   [1216..1279] Whip
-const ATLAS_W: f32 = 1280.0;
+// Step 24: ボスエネミー（各 64x64）:
+//   [1280..1343] Slime King
+//   [1344..1407] Bat Lord
+//   [1408..1471] Stone Golem
+//   [1472..1535] 岩弾
+const ATLAS_W: f32 = 1600.0;
 const FRAME_W: f32 = 64.0;  // 1 フレームの幅（px）
 
 /// プレイヤーのアニメーション UV（フレーム番号 0〜3）
@@ -95,6 +100,19 @@ pub fn lightning_bullet_uv() -> ([f32; 2], [f32; 2]) {
 pub fn whip_uv() -> ([f32; 2], [f32; 2]) {
     ([1216.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
+/// Step 24: ボス UV
+pub fn slime_king_uv() -> ([f32; 2], [f32; 2]) {
+    ([1280.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+}
+pub fn bat_lord_uv() -> ([f32; 2], [f32; 2]) {
+    ([1344.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+}
+pub fn stone_golem_uv() -> ([f32; 2], [f32; 2]) {
+    ([1408.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+}
+pub fn rock_bullet_uv() -> ([f32; 2], [f32; 2]) {
+    ([1472.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+}
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
 
@@ -130,25 +148,32 @@ impl CameraUniform {
 }
 
 // ─── インスタンスバッファの最大容量 ────────────────────────────
-// Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 + Items 500 = 14501
-const MAX_INSTANCES: usize = 14501;
+// Player 1 + Boss 1 + Enemies 10000 + Bullets 2000 + Particles 2000 + Items 500 = 14502
+const MAX_INSTANCES: usize = 14502;
 
 // 敵タイプ別のスプライトサイズ（px）
 // kind: 1=slime(40px), 2=bat(24px), 3=golem(64px)
+// Step 24: boss kind: 11=SlimeKing(96px), 12=BatLord(96px), 13=StoneGolem(128px)
 fn enemy_sprite_size(kind: u8) -> f32 {
     match kind {
-        2 => 24.0,  // Bat: 小さい
-        3 => 64.0,  // Golem: 大きい
-        _ => 40.0,  // Slime: 基本
+        2  => 24.0,   // Bat: 小さい
+        3  => 64.0,   // Golem: 大きい
+        11 => 96.0,   // Slime King: 巨大
+        12 => 96.0,   // Bat Lord: 巨大
+        13 => 128.0,  // Stone Golem: 最大
+        _  => 40.0,   // Slime: 基本
     }
 }
 
-/// Step 23: アニメーションフレームを考慮した敵 UV
+/// Step 23/24: アニメーションフレームを考慮した敵 UV（ボスは静止スプライト）
 fn enemy_anim_uv(kind: u8, frame: u8) -> ([f32; 2], [f32; 2]) {
     match kind {
-        2 => bat_anim_uv(frame),
-        3 => golem_anim_uv(frame),
-        _ => slime_anim_uv(frame),
+        2  => bat_anim_uv(frame),
+        3  => golem_anim_uv(frame),
+        11 => slime_king_uv(),
+        12 => bat_lord_uv(),
+        13 => stone_golem_uv(),
+        _  => slime_anim_uv(frame),
     }
 }
 
@@ -179,6 +204,16 @@ pub struct HudData {
     /// Step 20: カメラ座標（デバッグ表示用）
     pub camera_x:         f32,
     pub camera_y:         f32,
+    /// Step 24: ボス情報（ボスが存在しない場合は None）
+    pub boss_info:        Option<BossHudInfo>,
+}
+
+/// Step 24: HUD に表示するボス情報
+#[derive(Clone)]
+pub struct BossHudInfo {
+    pub name:    String,
+    pub hp:      f32,
+    pub max_hp:  f32,
 }
 
 // ─── Renderer ─────────────────────────────────────────────────
@@ -534,6 +569,7 @@ impl Renderer {
         let (gem_uv_off, gem_uv_sz)                 = gem_uv();
         let (potion_uv_off, potion_uv_sz)           = potion_uv();
         let (magnet_uv_off, magnet_uv_sz)           = magnet_uv();
+        let (rock_uv_off, rock_uv_sz)               = rock_bullet_uv();
 
         let mut instances: Vec<SpriteInstance> =
             Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len());
@@ -593,6 +629,14 @@ impl Renderer {
                     size:       [40.0, 20.0],
                     uv_offset:  whip_uv_off,
                     uv_size:    whip_uv_sz,
+                    color_tint: [1.0, 1.0, 1.0, 1.0],
+                },
+                // Step 24: 岩弾（Stone Golem の範囲攻撃）: 灰色の岩 28px
+                11 => SpriteInstance {
+                    position:   [x - 14.0, y - 14.0],
+                    size:       [28.0, 28.0],
+                    uv_offset:  rock_uv_off,
+                    uv_size:    rock_uv_sz,
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
                 _ => continue,
@@ -931,6 +975,60 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                     }
                 });
         });
+
+    // Step 24: ボス HP バー（画面上部中央）
+    if let Some(ref boss) = hud.boss_info {
+        let boss_ratio = if boss.max_hp > 0.0 {
+            (boss.hp / boss.max_hp).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        egui::Area::new(egui::Id::new("boss_hp_bar"))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 8.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgba_unmultiplied(20, 0, 30, 220))
+                    .inner_margin(egui::Margin::symmetric(16, 10))
+                    .corner_radius(8.0)
+                    .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 0, 255)))
+                    .show(ui, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!("👹 {}", boss.name))
+                                    .color(egui::Color32::from_rgb(255, 80, 80))
+                                    .size(18.0)
+                                    .strong(),
+                            );
+                            ui.add_space(4.0);
+                            let (bar_rect, _) = ui.allocate_exact_size(
+                                egui::vec2(360.0, 22.0),
+                                egui::Sense::hover(),
+                            );
+                            let painter = ui.painter();
+                            painter.rect_filled(bar_rect, 6.0, egui::Color32::from_rgb(40, 10, 10));
+                            let fill_w = bar_rect.width() * boss_ratio;
+                            let fill_rect = egui::Rect::from_min_size(
+                                bar_rect.min,
+                                egui::vec2(fill_w, bar_rect.height()),
+                            );
+                            let bar_color = if boss_ratio > 0.5 {
+                                egui::Color32::from_rgb(180, 0, 220)
+                            } else if boss_ratio > 0.25 {
+                                egui::Color32::from_rgb(220, 60, 60)
+                            } else {
+                                egui::Color32::from_rgb(255, 30, 30)
+                            };
+                            painter.rect_filled(fill_rect, 6.0, bar_color);
+                            ui.label(
+                                egui::RichText::new(format!("{:.0} / {:.0}", boss.hp, boss.max_hp))
+                                    .color(egui::Color32::from_rgb(255, 200, 255))
+                                    .size(12.0),
+                            );
+                        });
+                    });
+            });
+    }
 
     // レベルアップ画面
     if hud.level_up_pending {

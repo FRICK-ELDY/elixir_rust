@@ -34,6 +34,14 @@ rustler::atoms! {
     // level_up 通知アトム
     level_up,
     no_change,
+    // Step 24: ボス種別アトム
+    slime_king,
+    bat_lord,
+    stone_golem,
+    // ゲーム状態アトム
+    alive,
+    dead,
+    none,
 }
 
 // ─── 敵タイプ ─────────────────────────────────────────────────
@@ -465,6 +473,75 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 }
 
 
+// ─── Step 24: ボス種別 ────────────────────────────────────────
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum BossKind {
+    SlimeKing,
+    BatLord,
+    StoneGolem,
+}
+
+impl BossKind {
+    pub fn max_hp(&self) -> f32 {
+        match self { Self::SlimeKing => 1000.0, Self::BatLord => 2000.0, Self::StoneGolem => 5000.0 }
+    }
+    pub fn speed(&self) -> f32 {
+        match self { Self::SlimeKing => 60.0, Self::BatLord => 200.0, Self::StoneGolem => 30.0 }
+    }
+    pub fn radius(&self) -> f32 {
+        match self { Self::SlimeKing => 48.0, Self::BatLord => 48.0, Self::StoneGolem => 64.0 }
+    }
+    pub fn exp_reward(&self) -> u32 {
+        match self { Self::SlimeKing => 200, Self::BatLord => 400, Self::StoneGolem => 800 }
+    }
+    pub fn damage_per_sec(&self) -> f32 {
+        match self { Self::SlimeKing => 30.0, Self::BatLord => 50.0, Self::StoneGolem => 80.0 }
+    }
+    pub fn special_interval(&self) -> f32 {
+        match self { Self::SlimeKing => 5.0, Self::BatLord => 4.0, Self::StoneGolem => 6.0 }
+    }
+    pub fn from_atom(atom: Atom) -> Option<Self> {
+        if atom == slime_king() { Some(Self::SlimeKing) }
+        else if atom == bat_lord() { Some(Self::BatLord) }
+        else if atom == stone_golem() { Some(Self::StoneGolem) }
+        else { None }
+    }
+}
+
+pub struct BossState {
+    pub kind:             BossKind,
+    pub x:                f32,
+    pub y:                f32,
+    pub hp:               f32,
+    pub max_hp:           f32,
+    pub phase_timer:      f32,
+    pub invincible:       bool,
+    pub invincible_timer: f32,
+    pub is_dashing:       bool,
+    pub dash_timer:       f32,
+    pub dash_vx:          f32,
+    pub dash_vy:          f32,
+}
+
+impl BossState {
+    pub fn new(kind: BossKind, x: f32, y: f32) -> Self {
+        let max_hp = kind.max_hp();
+        Self {
+            kind,
+            x, y,
+            hp: max_hp,
+            max_hp,
+            phase_timer: kind.special_interval(),
+            invincible: false,
+            invincible_timer: 0.0,
+            is_dashing: false,
+            dash_timer: 0.0,
+            dash_vx: 0.0,
+            dash_vy: 0.0,
+        }
+    }
+}
+
 // ─── ゲームワールド ───────────────────────────────────────────
 pub struct GameWorldInner {
     pub frame_id:           u32,
@@ -496,6 +573,8 @@ pub struct GameWorldInner {
     pub level_up_pending:   bool,
     /// 装備中の武器スロット（最大 6 つ）
     pub weapon_slots:       Vec<WeaponSlot>,
+    /// ─── Step 24: ボスエネミー ────────────────────────────────
+    pub boss:               Option<BossState>,
 }
 
 impl GameWorldInner {
@@ -558,6 +637,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         level:              1,
         level_up_pending:   false,
         weapon_slots:       vec![WeaponSlot::new(WeaponKind::MagicWand)],
+        boss:               None,
     })))
 }
 
@@ -1030,6 +1110,227 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
     }
 
+    // ── Step 24: ボス更新（Elixir が spawn_boss で生成したボスを毎フレーム動かす）
+    {
+        // 借用競合を避けるため、副作用データを先に収集する
+        struct BossEffect {
+            spawn_slimes:    bool,
+            spawn_rocks:     bool,
+            bat_dash:        bool,
+            special_x:       f32,
+            special_y:       f32,
+            hurt_player:     bool,
+            hurt_x:          f32,
+            hurt_y:          f32,
+            boss_damage:     f32,
+            bullet_hits:     Vec<(usize, f32, bool)>,  // (bullet_idx, dmg, kill_bullet)
+            boss_x:          f32,
+            boss_y:          f32,
+            boss_invincible: bool,
+            boss_r:          f32,
+            boss_exp_reward: u32,
+            boss_hp_ref:     f32,
+            boss_killed:     bool,
+            exp_reward:      u32,
+            kill_x:          f32,
+            kill_y:          f32,
+        }
+        let mut eff = BossEffect {
+            spawn_slimes: false, spawn_rocks: false, bat_dash: false,
+            special_x: 0.0, special_y: 0.0,
+            hurt_player: false, hurt_x: 0.0, hurt_y: 0.0,
+            boss_damage: 0.0,
+            bullet_hits: Vec::new(),
+            boss_x: 0.0, boss_y: 0.0,
+            boss_invincible: false, boss_r: 0.0, boss_exp_reward: 0, boss_hp_ref: 0.0,
+            boss_killed: false, exp_reward: 0, kill_x: 0.0, kill_y: 0.0,
+        };
+
+        // ── フェーズ1: boss の移動・タイマー更新（boss のみを借用）──
+        if w.boss.is_some() {
+            // プレイヤー座標をコピーして boss 借用前に取得
+            let px = w.player.x + PLAYER_RADIUS;
+            let py = w.player.y + PLAYER_RADIUS;
+
+            let boss = w.boss.as_mut().unwrap();
+
+            // 無敵タイマー
+            if boss.invincible_timer > 0.0 {
+                boss.invincible_timer = (boss.invincible_timer - dt).max(0.0);
+                if boss.invincible_timer <= 0.0 { boss.invincible = false; }
+            }
+
+            // 移動 AI
+            match boss.kind {
+                BossKind::SlimeKing | BossKind::StoneGolem => {
+                    let ddx = px - boss.x;
+                    let ddy = py - boss.y;
+                    let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                    let spd = boss.kind.speed();
+                    boss.x += (ddx / dist) * spd * dt;
+                    boss.y += (ddy / dist) * spd * dt;
+                }
+                BossKind::BatLord => {
+                    if boss.is_dashing {
+                        boss.x += boss.dash_vx * dt;
+                        boss.y += boss.dash_vy * dt;
+                        boss.dash_timer -= dt;
+                        if boss.dash_timer <= 0.0 {
+                            boss.is_dashing = false;
+                            boss.invincible = false;
+                            boss.invincible_timer = 0.0;
+                        }
+                    } else {
+                        let ddx = px - boss.x;
+                        let ddy = py - boss.y;
+                        let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                        boss.x += (ddx / dist) * boss.kind.speed() * dt;
+                        boss.y += (ddy / dist) * boss.kind.speed() * dt;
+                    }
+                }
+            }
+            boss.x = boss.x.clamp(boss.kind.radius(), SCREEN_WIDTH  - boss.kind.radius());
+            boss.y = boss.y.clamp(boss.kind.radius(), SCREEN_HEIGHT - boss.kind.radius());
+
+            // 特殊行動タイマー
+            boss.phase_timer -= dt;
+            if boss.phase_timer <= 0.0 {
+                boss.phase_timer = boss.kind.special_interval();
+                match boss.kind {
+                    BossKind::SlimeKing => {
+                        eff.spawn_slimes = true;
+                        eff.special_x = boss.x;
+                        eff.special_y = boss.y;
+                    }
+                    BossKind::BatLord => {
+                        let ddx = px - boss.x;
+                        let ddy = py - boss.y;
+                        let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
+                        boss.dash_vx = (ddx / dist) * 500.0;
+                        boss.dash_vy = (ddy / dist) * 500.0;
+                        boss.is_dashing = true;
+                        boss.dash_timer = 0.6;
+                        boss.invincible = true;
+                        boss.invincible_timer = 0.6;
+                        eff.bat_dash = true;
+                        eff.special_x = boss.x;
+                        eff.special_y = boss.y;
+                    }
+                    BossKind::StoneGolem => {
+                        eff.spawn_rocks = true;
+                        eff.special_x = boss.x;
+                        eff.special_y = boss.y;
+                    }
+                }
+            }
+
+            // ボス vs プレイヤー接触ダメージ: フラグだけ立てる
+            let boss_r = boss.kind.radius();
+            let hit_r  = PLAYER_RADIUS + boss_r;
+            let ddx = px - boss.x;
+            let ddy = py - boss.y;
+            if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                eff.hurt_player = true;
+                eff.hurt_x = px;
+                eff.hurt_y = py;
+                eff.boss_damage = boss.kind.damage_per_sec();
+            }
+
+            // 弾丸 vs ボス: ヒット判定に必要なデータをコピー
+            eff.boss_invincible = boss.invincible;
+            eff.boss_r          = boss.kind.radius();
+            eff.boss_exp_reward = boss.kind.exp_reward();
+            eff.boss_x          = boss.x;
+            eff.boss_y          = boss.y;
+            eff.boss_hp_ref     = boss.hp;
+        }
+        // boss 借用をここで解放してから弾丸データにアクセス
+
+        // 弾丸 vs ボス: boss 借用の外で処理
+        if w.boss.is_some() && !eff.boss_invincible {
+            let bullet_len = w.bullets.positions_x.len();
+            for bi in 0..bullet_len {
+                if !w.bullets.alive[bi] { continue; }
+                let dmg = w.bullets.damage[bi];
+                if dmg == 0 { continue; }
+                let bx = w.bullets.positions_x[bi];
+                let by = w.bullets.positions_y[bi];
+                let hit_r2 = BULLET_RADIUS + eff.boss_r;
+                let ddx2 = bx - eff.boss_x;
+                let ddy2 = by - eff.boss_y;
+                if ddx2 * ddx2 + ddy2 * ddy2 < hit_r2 * hit_r2 {
+                    eff.bullet_hits.push((bi, dmg as f32, !w.bullets.piercing[bi]));
+                }
+            }
+            // ダメージ適用
+            let total_dmg: f32 = eff.bullet_hits.iter().map(|&(_, d, _)| d).sum();
+            if total_dmg > 0.0 {
+                if let Some(ref mut boss) = w.boss {
+                    boss.hp -= total_dmg;
+                    if boss.hp <= 0.0 {
+                        eff.boss_killed = true;
+                        eff.exp_reward  = eff.boss_exp_reward;
+                        eff.kill_x      = boss.x;
+                        eff.kill_y      = boss.y;
+                    }
+                }
+            }
+        }
+
+        // ── フェーズ2: boss 借用を解放してから副作用を適用 ────────
+
+        // プレイヤーダメージ
+        if eff.hurt_player {
+            if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
+                w.player.hp = (w.player.hp - eff.boss_damage * dt).max(0.0);
+                w.player.invincible_timer = INVINCIBLE_DURATION;
+                w.particles.emit(eff.hurt_x, eff.hurt_y, 8, [1.0, 0.15, 0.15, 1.0]);
+            }
+        }
+
+        // 弾丸ヒットパーティクル & 弾丸消去
+        if !eff.bullet_hits.is_empty() {
+            w.particles.emit(eff.boss_x, eff.boss_y, 4, [1.0, 0.8, 0.2, 1.0]);
+            for &(bi, _, kill_bullet) in &eff.bullet_hits {
+                if kill_bullet { w.bullets.kill(bi); }
+            }
+        }
+
+        // 特殊行動の副作用
+        if eff.spawn_slimes {
+            let positions: Vec<(f32, f32)> = (0..8).map(|i| {
+                let angle = i as f32 * std::f32::consts::TAU / 8.0;
+                (eff.special_x + angle.cos() * 120.0, eff.special_y + angle.sin() * 120.0)
+            }).collect();
+            w.enemies.spawn(&positions, EnemyKind::Slime);
+            w.particles.emit(eff.special_x, eff.special_y, 16, [0.2, 1.0, 0.2, 1.0]);
+        }
+        if eff.spawn_rocks {
+            for (dx_dir, dy_dir) in [(1.0_f32, 0.0_f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+                w.bullets.spawn_ex(eff.special_x, eff.special_y, dx_dir * 200.0, dy_dir * 200.0, 50, 3.0, false, 11);
+            }
+            w.particles.emit(eff.special_x, eff.special_y, 10, [0.6, 0.6, 0.6, 1.0]);
+        }
+        if eff.bat_dash {
+            w.particles.emit(eff.special_x, eff.special_y, 12, [0.8, 0.2, 1.0, 1.0]);
+        }
+        if eff.boss_killed {
+            w.score += eff.exp_reward * 2;
+            w.exp   += eff.exp_reward;
+            if !w.level_up_pending {
+                let required = exp_required_for_next(w.level);
+                if w.exp >= required { w.level_up_pending = true; }
+            }
+            w.particles.emit(eff.kill_x, eff.kill_y, 40, [1.0, 0.5, 0.0, 1.0]);
+            for _ in 0..10 {
+                let ox = (w.rng.next_f32() - 0.5) * 200.0;
+                let oy = (w.rng.next_f32() - 0.5) * 200.0;
+                w.items.spawn(eff.kill_x + ox, eff.kill_y + oy, ItemKind::Gem, eff.exp_reward / 10);
+            }
+            w.boss = None;
+        }
+    }
+
     // ── Step 12: フレーム時間計測 ────────────────────────────────
     let elapsed_ms = t_start.elapsed().as_secs_f64() * 1000.0;
     w.last_frame_time_ms = elapsed_ms;
@@ -1236,6 +1537,76 @@ fn get_item_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
 fn get_magnet_timer(world: ResourceArc<GameWorld>) -> f64 {
     let w = world.0.lock().unwrap();
     w.magnet_timer as f64
+}
+
+// ─── Step 24: ボス関連 NIF ─────────────────────────────────────
+
+/// ボスをスポーンする（Elixir 側から呼び出す）
+/// kind: :slime_king | :bat_lord | :stone_golem
+/// スポーン位置はプレイヤーの右 600px
+#[rustler::nif]
+fn spawn_boss(world: ResourceArc<GameWorld>, kind: Atom) -> Atom {
+    let mut w = world.0.lock().unwrap();
+    if w.boss.is_some() { return ok(); }
+    if let Some(boss_kind) = BossKind::from_atom(kind) {
+        let px = w.player.x + PLAYER_RADIUS;
+        let py = w.player.y + PLAYER_RADIUS;
+        let bx = (px + 600.0).min(SCREEN_WIDTH  - boss_kind.radius());
+        let by = py.clamp(boss_kind.radius(), SCREEN_HEIGHT - boss_kind.radius());
+        w.boss = Some(BossState::new(boss_kind, bx, by));
+    }
+    ok()
+}
+
+/// ボスの状態を返す: {status_atom, hp, max_hp}
+/// status_atom: :alive | :none
+#[rustler::nif]
+fn get_boss_info(world: ResourceArc<GameWorld>) -> (Atom, f64, f64) {
+    let w = world.0.lock().unwrap();
+    match &w.boss {
+        Some(boss) => (alive(), boss.hp as f64, boss.max_hp as f64),
+        None       => (none(),  0.0,            0.0),
+    }
+}
+
+/// プレイヤーが死亡しているかを返す（HP == 0 で true）
+#[rustler::nif]
+fn is_player_dead(world: ResourceArc<GameWorld>) -> bool {
+    let w = world.0.lock().unwrap();
+    w.player.hp <= 0.0
+}
+
+/// エリート敵をスポーンする（通常敵の hp_multiplier 倍の HP を持つ）
+/// kind: :slime | :bat | :golem
+/// hp_multiplier: 1.0 = 通常、3.0 = エリート（HP 3 倍）
+#[rustler::nif]
+fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp_multiplier: f64) -> Atom {
+    let mut w = world.0.lock().unwrap();
+    let enemy_kind = EnemyKind::from_atom(kind);
+    let positions: Vec<(f32, f32)> = (0..count)
+        .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
+        .collect();
+    // 通常スポーン後に HP を倍率で上書き
+    let before_len = w.enemies.positions_x.len();
+    w.enemies.spawn(&positions, enemy_kind);
+    let after_len = w.enemies.positions_x.len();
+    let base_hp = enemy_kind.max_hp() * hp_multiplier as f32;
+    // 新規追加分と再利用スロット分の両方に倍率を適用
+    // 再利用スロットは spawn 内で hp をリセット済みのため、全 alive スロットを走査して
+    // 直近 count 体分（最後に alive になったもの）に倍率を掛ける
+    // 簡易実装: 末尾 count 体の alive スロットを倍率適用
+    let mut applied = 0;
+    for i in (0..after_len).rev() {
+        if applied >= count { break; }
+        if w.enemies.alive[i] && w.enemies.kinds[i] == enemy_kind {
+            // 新規追加分（before_len 以降）または最近 alive になったスロット
+            if i >= before_len || w.enemies.hp[i] == enemy_kind.max_hp() {
+                w.enemies.hp[i] = base_hp;
+                applied += 1;
+            }
+        }
+    }
+    ok()
 }
 
 // ─── ローダー ─────────────────────────────────────────────────
