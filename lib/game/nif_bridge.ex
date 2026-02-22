@@ -30,4 +30,7 @@ defmodule Game.NifBridge do
   # Step 12: フレーム時間・敵数取得
   def get_frame_time_ms(_world), do: :erlang.nif_error(:nif_not_loaded)
   def get_enemy_count(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 13: HUD データ一括取得（{hp, max_hp, score, elapsed_seconds}）
+  def get_hud_data(_world), do: :erlang.nif_error(:nif_not_loaded)
 end

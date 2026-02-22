@@ -271,6 +271,13 @@ pub struct GameWorldInner {
     pub collision:          CollisionWorld,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
     pub last_frame_time_ms: f64,
+    /// ─── Step 13: HUD ─────────────────────────────────────────
+    /// 撃破スコア（敵 1 体 = 10 点）
+    pub score:              u32,
+    /// ゲーム開始からの経過時間（秒）
+    pub elapsed_seconds:    f32,
+    /// プレイヤーの最大 HP（HP バー計算用）
+    pub player_max_hp:      f32,
 }
 
 impl GameWorldInner {
@@ -318,6 +325,9 @@ fn create_world() -> ResourceArc<GameWorld> {
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
         last_frame_time_ms: 0.0,
+        score:              0,
+        elapsed_seconds:    0.0,
+        player_max_hp:      100.0,
     })))
 }
 
@@ -351,6 +361,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
     w.frame_id += 1;
 
     let dt = delta_ms as f32 / 1000.0;
+
+    // ── Step 13: 経過時間を更新 ──────────────────────────────────
+    w.elapsed_seconds += dt;
     let dx = w.player.input_dx;
     let dy = w.player.input_dy;
 
@@ -462,6 +475,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 w.enemies.hp[ei] -= dmg as f32;
                 if w.enemies.hp[ei] <= 0.0 {
                     w.enemies.kill(ei);
+                    // ── Step 13: 敵撃破でスコア加算 ──────────────
+                    w.score += 10;
                 }
                 w.bullets.kill(bi);
                 break;
@@ -536,6 +551,19 @@ fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> f64 {
 fn get_enemy_count(world: ResourceArc<GameWorld>) -> usize {
     let w = world.0.lock().unwrap();
     w.enemies.count
+}
+
+/// HUD データを一括取得（Step 13）
+/// 戻り値: (hp, max_hp, score, elapsed_seconds)
+#[rustler::nif]
+fn get_hud_data(world: ResourceArc<GameWorld>) -> (f64, f64, u32, f64) {
+    let w = world.0.lock().unwrap();
+    (
+        w.player.hp        as f64,
+        w.player_max_hp    as f64,
+        w.score,
+        w.elapsed_seconds  as f64,
+    )
 }
 
 // ─── ローダー ─────────────────────────────────────────────────
