@@ -33,57 +33,67 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// アトラス内の UV 座標（768x64 px アトラス）
-// [0..63]    プレイヤー
-// [64..127]  Slime（緑）
-// [128..191] Bat（紫）
-// [192..255] Golem（灰）
-// [256..319] 弾丸 MagicWand/Axe/Cross（黄色い円）
-// [320..383] パーティクル
-// [384..447] 経験値宝石（緑）
-// [448..511] 回復ポーション（赤）
-// [512..575] 磁石（黄）
-// [576..639] Fireball 弾丸（赤橙の炎球）
-// [640..703] Lightning 弾丸（水色の電撃球）
-// [704..767] Whip エフェクト（黄緑の弧）
-const ATLAS_W: f32 = 768.0;
-const ATLAS_H: f32 = 64.0;
+// ─── アトラス UV 定数（Step 23: 1280x64 px アニメーション対応アトラス）──
+// アニメーションキャラクター（各 64x64、複数フレーム）:
+//   [   0.. 255] プレイヤー歩行 4 フレーム
+//   [ 256.. 511] Slime バウンス 4 フレーム
+//   [ 512.. 639] Bat 羽ばたき 2 フレーム
+//   [ 640.. 767] Golem 歩行 2 フレーム
+// 静止スプライト（各 64x64）:
+//   [ 768.. 831] 弾丸
+//   [ 832.. 895] パーティクル
+//   [ 896.. 959] 経験値宝石
+//   [ 960..1023] 回復ポーション
+//   [1024..1087] 磁石
+//   [1088..1151] Fireball
+//   [1152..1215] Lightning
+//   [1216..1279] Whip
+const ATLAS_W: f32 = 1280.0;
+const FRAME_W: f32 = 64.0;  // 1 フレームの幅（px）
 
-pub fn player_uv() -> ([f32; 2], [f32; 2]) {
-    ([0.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+/// プレイヤーのアニメーション UV（フレーム番号 0〜3）
+pub fn player_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    let x = (frame as f32) * FRAME_W;
+    ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
-pub fn slime_uv() -> ([f32; 2], [f32; 2]) {
-    ([64.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+/// Slime のアニメーション UV（フレーム番号 0〜3）
+pub fn slime_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    let x = 256.0 + (frame as f32) * FRAME_W;
+    ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
-pub fn bat_uv() -> ([f32; 2], [f32; 2]) {
-    ([128.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+/// Bat のアニメーション UV（フレーム番号 0〜1）
+pub fn bat_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    let x = 512.0 + (frame as f32) * FRAME_W;
+    ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
-pub fn golem_uv() -> ([f32; 2], [f32; 2]) {
-    ([192.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+/// Golem のアニメーション UV（フレーム番号 0〜1）
+pub fn golem_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    let x = 640.0 + (frame as f32) * FRAME_W;
+    ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
-    ([256.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([768.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
-    ([320.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([832.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn gem_uv() -> ([f32; 2], [f32; 2]) {
-    ([384.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([896.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn potion_uv() -> ([f32; 2], [f32; 2]) {
-    ([448.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([960.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn magnet_uv() -> ([f32; 2], [f32; 2]) {
-    ([512.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([1024.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn fireball_uv() -> ([f32; 2], [f32; 2]) {
-    ([576.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([1088.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn lightning_bullet_uv() -> ([f32; 2], [f32; 2]) {
-    ([640.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([1152.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn whip_uv() -> ([f32; 2], [f32; 2]) {
-    ([704.0 / ATLAS_W, 0.0 / ATLAS_H], [64.0 / ATLAS_W, 64.0 / ATLAS_H])
+    ([1216.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -133,11 +143,12 @@ fn enemy_sprite_size(kind: u8) -> f32 {
     }
 }
 
-fn enemy_uv_for_kind(kind: u8) -> ([f32; 2], [f32; 2]) {
+/// Step 23: アニメーションフレームを考慮した敵 UV
+fn enemy_anim_uv(kind: u8, frame: u8) -> ([f32; 2], [f32; 2]) {
     match kind {
-        2 => bat_uv(),
-        3 => golem_uv(),
-        _ => slime_uv(),
+        2 => bat_anim_uv(frame),
+        3 => golem_anim_uv(frame),
+        _ => slime_anim_uv(frame),
     }
 }
 
@@ -501,13 +512,13 @@ impl Renderer {
     }
 
     /// ゲーム状態からインスタンスリストを構築して GPU バッファを更新する
-    /// render_data: [(x, y, kind)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
+    /// render_data: [(x, y, kind, anim_frame)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
     /// item_data: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
     /// camera_offset: (cam_x, cam_y) カメラのワールド座標オフセット（Step 20）
     pub fn update_instances(
         &mut self,
-        render_data: &[(f32, f32, u8)],
+        render_data: &[(f32, f32, u8, u8)],
         particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
         item_data: &[(f32, f32, u8)],
         camera_offset: (f32, f32),
@@ -515,7 +526,6 @@ impl Renderer {
         // Step 20: カメラ Uniform を更新
         let cam_uniform = CameraUniform::new(camera_offset.0, camera_offset.1);
         self.queue.write_buffer(&self.camera_uniform_buf, 0, bytemuck::bytes_of(&cam_uniform));
-        let (player_uv_off, player_uv_sz)           = player_uv();
         let (bullet_uv_off, bullet_uv_sz)           = bullet_uv();
         let (fireball_uv_off, fireball_uv_sz)       = fireball_uv();
         let (lightning_uv_off, lightning_uv_sz)     = lightning_bullet_uv();
@@ -528,19 +538,23 @@ impl Renderer {
         let mut instances: Vec<SpriteInstance> =
             Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len());
 
-        for &(x, y, kind) in render_data {
+        for &(x, y, kind, anim_frame) in render_data {
             let inst = match kind {
-                0 => SpriteInstance {
-                    position:   [x, y],
-                    size:       [SPRITE_SIZE, SPRITE_SIZE],
-                    uv_offset:  player_uv_off,
-                    uv_size:    player_uv_sz,
-                    color_tint: [1.0, 1.0, 1.0, 1.0],
-                },
-                // 敵タイプ: 1=slime, 2=bat, 3=golem
+                // Step 23: プレイヤーはアニメーションフレームに応じた UV を使用
+                0 => {
+                    let (uv_off, uv_sz) = player_anim_uv(anim_frame);
+                    SpriteInstance {
+                        position:   [x, y],
+                        size:       [SPRITE_SIZE, SPRITE_SIZE],
+                        uv_offset:  uv_off,
+                        uv_size:    uv_sz,
+                        color_tint: [1.0, 1.0, 1.0, 1.0],
+                    }
+                }
+                // Step 23: 敵タイプ: 1=slime, 2=bat, 3=golem（アニメーションフレーム対応）
                 1 | 2 | 3 => {
                     let sz = enemy_sprite_size(kind);
-                    let (uv_off, uv_sz) = enemy_uv_for_kind(kind);
+                    let (uv_off, uv_sz) = enemy_anim_uv(kind, anim_frame);
                     SpriteInstance {
                         position:   [x, y],
                         size:       [sz, sz],
