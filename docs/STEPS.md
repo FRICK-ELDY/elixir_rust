@@ -1024,7 +1024,8 @@ iex> Game.NifBridge.__info__(:functions)
 
 ```powershell
 # Rustler がビルドした .dll の場所を確認
-ls platform\windows\_build\debug\lib\game\priv\
+# mix.exs に build_path を設定していない場合、デフォルトの _build\dev\ 以下に出力される
+ls _build\dev\lib\game\priv\native\
 # → game_native.dll が存在すれば OK
 ```
 
