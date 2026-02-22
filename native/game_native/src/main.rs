@@ -1,10 +1,12 @@
+mod constants;
 mod renderer;
 
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use renderer::{Renderer, SPRITE_SIZE};
+use constants::{PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH, SPRITE_SIZE};
+use renderer::Renderer;
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -12,8 +14,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
-
-const PLAYER_SPEED: f32 = 200.0; // ピクセル/秒
 
 #[derive(Default)]
 struct App {
@@ -31,8 +31,8 @@ impl App {
             window:      None,
             renderer:    None,
             keys_held:   HashSet::new(),
-            player_x:    640.0 - SPRITE_SIZE / 2.0,
-            player_y:    360.0 - SPRITE_SIZE / 2.0,
+            player_x:    SCREEN_WIDTH  / 2.0 - SPRITE_SIZE / 2.0,
+            player_y:    SCREEN_HEIGHT / 2.0 - SPRITE_SIZE / 2.0,
             last_update: None,
         }
     }
@@ -45,7 +45,7 @@ impl ApplicationHandler for App {
                 .create_window(
                     Window::default_attributes()
                         .with_title("Elixir x Rust Survivor")
-                        .with_inner_size(winit::dpi::LogicalSize::new(1280u32, 720u32)),
+                        .with_inner_size(winit::dpi::LogicalSize::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)),
                 )
                 .expect("ウィンドウの作成に失敗しました"),
         );
@@ -100,9 +100,8 @@ impl ApplicationHandler for App {
                         self.player_y += (dy / len) * PLAYER_SPEED * dt;
                     }
 
-                    // 画面端クランプ（1280x720 想定）
-                    self.player_x = self.player_x.clamp(0.0, 1280.0 - SPRITE_SIZE);
-                    self.player_y = self.player_y.clamp(0.0, 720.0  - SPRITE_SIZE);
+                    self.player_x = self.player_x.clamp(0.0, SCREEN_WIDTH  - SPRITE_SIZE);
+                    self.player_y = self.player_y.clamp(0.0, SCREEN_HEIGHT - SPRITE_SIZE);
                 }
                 self.last_update = Some(now);
 

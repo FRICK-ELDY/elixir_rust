@@ -1,12 +1,12 @@
+mod constants;
+
+use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::Mutex;
 
 rustler::atoms! {
     ok
 }
-
-const PLAYER_SPEED: f32 = 200.0; // ピクセル/秒
-const PLAYER_SIZE: f32 = 64.0;
 
 pub struct PlayerState {
     pub x: f32,
@@ -32,8 +32,8 @@ fn create_world() -> ResourceArc<GameWorld> {
     ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
         frame_id: 0,
         player: PlayerState {
-            x: 640.0 - PLAYER_SIZE / 2.0,
-            y: 360.0 - PLAYER_SIZE / 2.0,
+            x: SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
+            y: SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
             input_dx: 0.0,
             input_dy: 0.0,
         },
@@ -55,6 +55,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         w.player.x += (dx / len) * PLAYER_SPEED * dt;
         w.player.y += (dy / len) * PLAYER_SPEED * dt;
     }
+
+    w.player.x = w.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
+    w.player.y = w.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
 
     w.frame_id
 }

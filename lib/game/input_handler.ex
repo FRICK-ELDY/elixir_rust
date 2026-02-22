@@ -14,26 +14,34 @@ defmodule Game.InputHandler do
 
   @impl true
   def handle_cast({:key_down, key}, state) do
-    new_state = %{state | keys_held: MapSet.put(state.keys_held, key)}
-    notify_game_loop(new_state.keys_held)
-    {:noreply, new_state}
+    if MapSet.member?(state.keys_held, key) do
+      {:noreply, state}
+    else
+      new_keys = MapSet.put(state.keys_held, key)
+      notify_game_loop(new_keys)
+      {:noreply, %{state | keys_held: new_keys}}
+    end
   end
 
   @impl true
   def handle_cast({:key_up, key}, state) do
-    new_state = %{state | keys_held: MapSet.delete(state.keys_held, key)}
-    notify_game_loop(new_state.keys_held)
-    {:noreply, new_state}
+    if MapSet.member?(state.keys_held, key) do
+      new_keys = MapSet.delete(state.keys_held, key)
+      notify_game_loop(new_keys)
+      {:noreply, %{state | keys_held: new_keys}}
+    else
+      {:noreply, state}
+    end
   end
 
   defp notify_game_loop(keys_held) do
     dx =
-      (if MapSet.member?(keys_held, :d), do: 1, else: 0) +
-      (if MapSet.member?(keys_held, :a), do: -1, else: 0)
+      (if MapSet.member?(keys_held, :d) or MapSet.member?(keys_held, :arrow_right), do: 1, else: 0) +
+      (if MapSet.member?(keys_held, :a) or MapSet.member?(keys_held, :arrow_left),  do: -1, else: 0)
 
     dy =
-      (if MapSet.member?(keys_held, :s), do: 1, else: 0) +
-      (if MapSet.member?(keys_held, :w), do: -1, else: 0)
+      (if MapSet.member?(keys_held, :s) or MapSet.member?(keys_held, :arrow_down), do: 1, else: 0) +
+      (if MapSet.member?(keys_held, :w) or MapSet.member?(keys_held, :arrow_up),   do: -1, else: 0)
 
     GenServer.cast(Game.GameLoop, {:input, :move, {dx, dy}})
   end

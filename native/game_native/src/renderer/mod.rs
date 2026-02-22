@@ -1,3 +1,4 @@
+use crate::constants::SPRITE_SIZE;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -46,7 +47,6 @@ impl ScreenUniform {
     }
 }
 
-pub const SPRITE_SIZE: f32 = 64.0;
 const GRID_DIM: usize = 10;
 const INSTANCE_COUNT: usize = GRID_DIM * GRID_DIM;
 
