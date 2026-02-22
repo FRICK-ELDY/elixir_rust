@@ -18,6 +18,7 @@ pollster = "0.3"
 bytemuck = { version = "1", features = ["derive"] }
 image = "0.25"
 rustler = "0.34"
+rayon = "1"
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化

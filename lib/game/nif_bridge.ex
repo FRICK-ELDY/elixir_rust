@@ -26,4 +26,8 @@ defmodule Game.NifBridge do
 
   # Step 11: 弾丸数取得
   def get_bullet_count(_world), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 12: フレーム時間・敵数取得
+  def get_frame_time_ms(_world), do: :erlang.nif_error(:nif_not_loaded)
+  def get_enemy_count(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
