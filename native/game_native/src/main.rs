@@ -154,8 +154,8 @@ impl EnemySeparation for EnemyWorld {
     fn neighbor_buf(&mut self) -> &mut Vec<usize> { &mut self.neighbor_buf }
 }
 
-const BULLET_KIND_NORMAL:    u8 = 4;
-const BULLET_KIND_FIREBALL:  u8 = 8;
+const BULLET_KIND_NORMAL:   u8 = 4;
+const BULLET_KIND_FIREBALL: u8 = 8;
 
 struct BulletWorld {
     positions_x:  Vec<f32>,
@@ -181,6 +181,33 @@ impl BulletWorld {
     }
     fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32) {
         self.spawn_ex(x, y, vx, vy, dmg, true, BULLET_KIND_FIREBALL);
+    }
+    /// ダメージ 0・短命の表示専用エフェクト弾を生成する（Whip / Lightning 用）
+    fn spawn_effect(&mut self, x: f32, y: f32, lifetime: f32, render_kind: u8) {
+        // lifetime を直接設定するため spawn_ex の後に上書きする
+        let slot = self.alive.iter().position(|&a| !a);
+        if let Some(i) = slot {
+            self.positions_x[i]  = x;
+            self.positions_y[i]  = y;
+            self.velocities_x[i] = 0.0;
+            self.velocities_y[i] = 0.0;
+            self.damage[i]       = 0;
+            self.lifetime[i]     = lifetime;
+            self.alive[i]        = true;
+            self.piercing[i]     = false;
+            self.render_kind[i]  = render_kind;
+        } else {
+            self.positions_x.push(x);
+            self.positions_y.push(y);
+            self.velocities_x.push(0.0);
+            self.velocities_y.push(0.0);
+            self.damage.push(0);
+            self.lifetime.push(lifetime);
+            self.alive.push(true);
+            self.piercing.push(false);
+            self.render_kind.push(render_kind);
+        }
+        self.count += 1;
     }
     fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, dmg: i32, piercing: bool, render_kind: u8) {
         let slot = self.alive.iter().position(|&a| !a);
@@ -525,15 +552,21 @@ impl GameWorld {
                 WeaponKind::Whip => {
                     let whip_range = kind.whip_range(level);
                     let whip_half_angle = std::f32::consts::PI * 0.3;
-                    let enemy_len = self.enemies.len();
-                    for ei in 0..enemy_len {
+                    // facing_angle 方向の中間点にエフェクト弾を生成（kind=10: 黄緑の横長楕円）
+                    let eff_x = px + facing_angle.cos() * whip_range * 0.5;
+                    let eff_y = py + facing_angle.sin() * whip_range * 0.5;
+                    self.bullets.spawn_effect(eff_x, eff_y, 0.12, 10);
+                    // 空間ハッシュで範囲内の候補のみ取得し、全敵ループを回避
+                    let whip_range_sq = whip_range * whip_range;
+                    let candidates = self.collision.dynamic.query_nearby(px, py, whip_range);
+                    for ei in candidates {
                         if !self.enemies.alive[ei] { continue; }
                         let ex = self.enemies.positions_x[ei];
                         let ey = self.enemies.positions_y[ei];
                         let ddx = ex - px;
                         let ddy = ey - py;
-                        let dist = (ddx * ddx + ddy * ddy).sqrt();
-                        if dist > whip_range { continue; }
+                        // sqrt を避けて二乗比較で正確な円形クリップ
+                        if ddx * ddx + ddy * ddy > whip_range_sq { continue; }
                         let angle = ddy.atan2(ddx);
                         let mut diff = angle - facing_angle;
                         if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
@@ -589,7 +622,8 @@ impl GameWorld {
                 // ── Step 21: Lightning ─────────────────────────────────────
                 WeaponKind::Lightning => {
                     let chain_count = kind.lightning_chain_count(level);
-                    let mut hit_set = std::collections::HashSet::new();
+                    // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
+                    let mut hit_vec: Vec<usize> = Vec::with_capacity(chain_count);
                     let mut current = self.find_nearest_enemy(px, py);
                     #[allow(unused_assignments)]
                     let mut next_search_x = px;
@@ -601,6 +635,8 @@ impl GameWorld {
                             let hit_x = self.enemies.positions_x[ei] + enemy_r;
                             let hit_y = self.enemies.positions_y[ei] + enemy_r;
                             self.enemies.hp[ei] -= dmg as f32;
+                            // 電撃エフェクト弾（kind=9: 水色の電撃球）+ パーティクル
+                            self.bullets.spawn_effect(hit_x, hit_y, 0.10, 9);
                             self.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
                             if self.enemies.hp[ei] <= 0.0 {
                                 self.enemies.kill(ei);
@@ -618,7 +654,7 @@ impl GameWorld {
                                 };
                                 self.items.spawn(hit_x, hit_y, item_kind, item_value);
                             }
-                            hit_set.insert(ei);
+                            hit_vec.push(ei);
                             next_search_x = hit_x;
                             next_search_y = hit_y;
                             // 次のターゲット: 現在位置から最も近い未ヒット敵
@@ -626,7 +662,7 @@ impl GameWorld {
                                 let mut min_d = f32::MAX;
                                 let mut next = None;
                                 for i in 0..self.enemies.len() {
-                                    if !self.enemies.alive[i] || hit_set.contains(&i) { continue; }
+                                    if !self.enemies.alive[i] || hit_vec.contains(&i) { continue; }
                                     let dx = self.enemies.positions_x[i] - next_search_x;
                                     let dy = self.enemies.positions_y[i] - next_search_y;
                                     let d  = dx * dx + dy * dy;
@@ -666,9 +702,11 @@ impl GameWorld {
         let bullet_query_r = BULLET_RADIUS + 32.0_f32;
         for bi in 0..bl {
             if !self.bullets.alive[bi] { continue; }
+            let dmg = self.bullets.damage[bi];
+            // ダメージ 0 はエフェクト専用弾（Whip / Lightning）— 衝突判定をスキップ
+            if dmg == 0 { continue; }
             let bx       = self.bullets.positions_x[bi];
             let by       = self.bullets.positions_y[bi];
-            let dmg      = self.bullets.damage[bi];
             let piercing = self.bullets.piercing[bi];
             let nearby = self.collision.dynamic.query_nearby(bx, by, bullet_query_r);
             for ei in nearby {

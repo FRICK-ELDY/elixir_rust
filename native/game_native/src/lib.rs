@@ -208,6 +208,7 @@ fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
 pub const BULLET_KIND_NORMAL:    u8 = 4;  // MagicWand / Axe / Cross（黄色い円）
 pub const BULLET_KIND_FIREBALL:  u8 = 8;  // Fireball（赤橙の炎球）
 pub const BULLET_KIND_LIGHTNING: u8 = 9;  // Lightning（水色の電撃球）
+pub const BULLET_KIND_WHIP:      u8 = 10; // Whip（黄緑の弧状）
 
 // ─── 弾丸 SoA ─────────────────────────────────────────────────
 pub struct BulletWorld {
@@ -247,6 +248,11 @@ impl BulletWorld {
 
     pub fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
         self.spawn_ex(x, y, vx, vy, damage, lifetime, true, BULLET_KIND_FIREBALL);
+    }
+
+    /// ダメージ 0・短命の表示専用エフェクト弾を生成する（Whip / Lightning 用）
+    pub fn spawn_effect(&mut self, x: f32, y: f32, lifetime: f32, render_kind: u8) {
+        self.spawn_ex(x, y, 0.0, 0.0, 0, lifetime, false, render_kind);
     }
 
     fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, piercing: bool, render_kind: u8) {
@@ -405,7 +411,7 @@ pub fn find_nearest_enemy_excluding(
     enemies: &EnemyWorld,
     px: f32,
     py: f32,
-    exclude: &std::collections::HashSet<usize>,
+    exclude: &[usize],
 ) -> Option<usize> {
     let mut min_dist = f32::MAX;
     let mut nearest  = None;
@@ -727,15 +733,21 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                     // プレイヤーの移動方向に扇状の判定を出す（弾丸を生成しない直接判定）
                     let whip_range = kind.whip_range(level);
                     let whip_half_angle = std::f32::consts::PI * 0.3; // 108度 / 2 = 54度
-                    let enemy_len = w.enemies.len();
-                    for ei in 0..enemy_len {
+                    // facing_angle 方向の中間点にエフェクト弾を生成（kind=10: 黄緑の横長楕円）
+                    let eff_x = px + facing_angle.cos() * whip_range * 0.5;
+                    let eff_y = py + facing_angle.sin() * whip_range * 0.5;
+                    w.bullets.spawn_effect(eff_x, eff_y, 0.12, BULLET_KIND_WHIP);
+                    // 空間ハッシュで範囲内の候補のみ取得し、全敵ループを回避
+                    let whip_range_sq = whip_range * whip_range;
+                    let candidates = w.collision.dynamic.query_nearby(px, py, whip_range);
+                    for ei in candidates {
                         if !w.enemies.alive[ei] { continue; }
                         let ex = w.enemies.positions_x[ei];
                         let ey = w.enemies.positions_y[ei];
                         let ddx = ex - px;
                         let ddy = ey - py;
-                        let dist = (ddx * ddx + ddy * ddy).sqrt();
-                        if dist > whip_range { continue; }
+                        // sqrt を避けて二乗比較で正確な円形クリップ
+                        if ddx * ddx + ddy * ddy > whip_range_sq { continue; }
                         let angle = ddy.atan2(ddx);
                         // π/-π をまたぐ場合に正しく動作するよう -π〜π に正規化
                         let mut diff = angle - facing_angle;
@@ -797,7 +809,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 WeaponKind::Lightning => {
                     // 最近接敵から始まり、最大 chain_count 体に連鎖
                     let chain_count = kind.lightning_chain_count(level);
-                    let mut hit_set = std::collections::HashSet::new();
+                    // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
+                    let mut hit_vec: Vec<usize> = Vec::with_capacity(chain_count);
                     // 最初はプレイヤー位置から最近接敵を探す
                     let mut current = find_nearest_enemy(&w.enemies, px, py);
                     #[allow(unused_assignments)]
@@ -810,7 +823,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                             let hit_x = w.enemies.positions_x[ei] + enemy_r;
                             let hit_y = w.enemies.positions_y[ei] + enemy_r;
                             w.enemies.hp[ei] -= dmg as f32;
-                            // 電撃パーティクル（水色）
+                            // 電撃エフェクト弾（kind=9: 水色の電撃球）+ パーティクル
+                            w.bullets.spawn_effect(hit_x, hit_y, 0.10, BULLET_KIND_LIGHTNING);
                             w.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
                             if w.enemies.hp[ei] <= 0.0 {
                                 w.enemies.kill(ei);
@@ -831,11 +845,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                                 };
                                 w.items.spawn(hit_x, hit_y, item_kind, item_value);
                             }
-                            hit_set.insert(ei);
+                            hit_vec.push(ei);
                             next_search_x = hit_x;
                             next_search_y = hit_y;
                             current = find_nearest_enemy_excluding(
-                                &w.enemies, next_search_x, next_search_y, &hit_set,
+                                &w.enemies, next_search_x, next_search_y, &hit_vec,
                             );
                         } else {
                             break;
@@ -943,9 +957,13 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         if !w.bullets.alive[bi] {
             continue;
         }
+        let dmg = w.bullets.damage[bi];
+        // ダメージ 0 はエフェクト専用弾（Whip / Lightning）— 衝突判定をスキップ
+        if dmg == 0 {
+            continue;
+        }
         let bx       = w.bullets.positions_x[bi];
         let by       = w.bullets.positions_y[bi];
-        let dmg      = w.bullets.damage[bi];
         let piercing = w.bullets.piercing[bi];
 
         let nearby = w.collision.dynamic.query_nearby(bx, by, bullet_query_r);
