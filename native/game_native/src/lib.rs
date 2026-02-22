@@ -440,6 +440,89 @@ pub fn find_nearest_enemy_excluding(
     nearest
 }
 
+/// 二乗距離（sqrt を避けて高速化）
+#[inline]
+fn dist_sq(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let dx = x1 - x2;
+    let dy = y1 - y2;
+    dx * dx + dy * dy
+}
+
+/// Spatial Hash を使った高速最近接探索
+/// search_radius 内に候補がいなければ全探索にフォールバック
+pub fn find_nearest_enemy_spatial(
+    collision: &CollisionWorld,
+    enemies: &EnemyWorld,
+    px: f32,
+    py: f32,
+    search_radius: f32,
+) -> Option<usize> {
+    let candidates = collision.dynamic.query_nearby(px, py, search_radius);
+
+    let result = candidates
+        .iter()
+        .filter(|&&i| i < enemies.len() && enemies.alive[i])
+        .min_by(|&&a, &&b| {
+            let da = dist_sq(
+                enemies.positions_x[a],
+                enemies.positions_y[a],
+                px,
+                py,
+            );
+            let db = dist_sq(
+                enemies.positions_x[b],
+                enemies.positions_y[b],
+                px,
+                py,
+            );
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .copied();
+
+    // 半径内に誰もいなければ全探索（フォールバック）
+    result.or_else(|| find_nearest_enemy(enemies, px, py))
+}
+
+/// Spatial Hash を使った高速最近接探索（除外リスト付き・Lightning チェーン用）
+/// search_radius 内の候補から exclude を除外して最近接を返す
+pub fn find_nearest_enemy_spatial_excluding(
+    collision: &CollisionWorld,
+    enemies: &EnemyWorld,
+    px: f32,
+    py: f32,
+    search_radius: f32,
+    exclude: &[usize],
+) -> Option<usize> {
+    let candidates = collision.dynamic.query_nearby(px, py, search_radius);
+
+    let result = candidates
+        .iter()
+        .filter(|&&i| {
+            i < enemies.len()
+                && enemies.alive[i]
+                && !exclude.contains(&i)
+        })
+        .min_by(|&&a, &&b| {
+            let da = dist_sq(
+                enemies.positions_x[a],
+                enemies.positions_y[a],
+                px,
+                py,
+            );
+            let db = dist_sq(
+                enemies.positions_x[b],
+                enemies.positions_y[b],
+                px,
+                py,
+            );
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .copied();
+
+    // 半径内に誰もいなければ全探索（フォールバック）
+    result.or_else(|| find_nearest_enemy_excluding(enemies, px, py, exclude))
+}
+
 /// Chase AI: 全敵をプレイヤーに向けて移動（rayon で並列化）
 pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, dt: f32) {
     let len = enemies.len();
@@ -772,7 +855,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             let bcount = w.weapon_slots[si].bullet_count();
             match kind {
                 WeaponKind::MagicWand => {
-                    if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
+                    let search_radius = SCREEN_WIDTH / 2.0; // 640px
+                    if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, search_radius) {
                         let target_r = w.enemies.kinds[ti].radius();
                         let tx   = w.enemies.positions_x[ti] + target_r;
                         let ty   = w.enemies.positions_y[ti] + target_r;
@@ -898,7 +982,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 // ── Step 21: Fireball ──────────────────────────────────────
                 WeaponKind::Fireball => {
                     // 最近接敵に向かって貫通弾を発射
-                    if let Some(ti) = find_nearest_enemy(&w.enemies, px, py) {
+                    let search_radius = SCREEN_WIDTH / 2.0; // 640px
+                    if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, search_radius) {
                         let target_r = w.enemies.kinds[ti].radius();
                         let tx  = w.enemies.positions_x[ti] + target_r;
                         let ty  = w.enemies.positions_y[ti] + target_r;
@@ -915,10 +1000,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                 WeaponKind::Lightning => {
                     // 最近接敵から始まり、最大 chain_count 体に連鎖
                     let chain_count = kind.lightning_chain_count(level);
+                    let search_radius = SCREEN_WIDTH / 2.0; // 640px
                     // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
                     let mut hit_vec: Vec<usize> = Vec::with_capacity(chain_count);
-                    // 最初はプレイヤー位置から最近接敵を探す
-                    let mut current = find_nearest_enemy(&w.enemies, px, py);
+                    // 最初はプレイヤー位置から最近接敵を探す（空間ハッシュで候補を絞る）
+                    let mut current = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, search_radius);
                     #[allow(unused_assignments)]
                     let mut next_search_x = px;
                     #[allow(unused_assignments)]
@@ -954,8 +1040,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                             hit_vec.push(ei);
                             next_search_x = hit_x;
                             next_search_y = hit_y;
-                            current = find_nearest_enemy_excluding(
-                                &w.enemies, next_search_x, next_search_y, &hit_vec,
+                            current = find_nearest_enemy_spatial_excluding(
+                                &w.collision, &w.enemies,
+                                next_search_x, next_search_y,
+                                search_radius, &hit_vec,
                             );
                         } else {
                             break;
