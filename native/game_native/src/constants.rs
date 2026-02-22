@@ -10,6 +10,17 @@ pub const BG_B: f64 = 0.10;
 pub const SCREEN_WIDTH:  f32 = 1280.0;
 pub const SCREEN_HEIGHT: f32 = 720.0;
 
+// Map size (Step 20: camera scroll)
+// Used by game_window binary; NIF lib uses fixed screen coordinates.
+#[allow(dead_code)]
+pub const MAP_WIDTH:  f32 = 4096.0;
+#[allow(dead_code)]
+pub const MAP_HEIGHT: f32 = 4096.0;
+
+// Camera lerp speed (Step 20)
+#[allow(dead_code)]
+pub const CAMERA_LERP_SPEED: f32 = 5.0;
+
 // Sprite / player size
 pub const SPRITE_SIZE:  f32 = 64.0;
 pub const PLAYER_SIZE:  f32 = SPRITE_SIZE;

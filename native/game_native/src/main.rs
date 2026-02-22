@@ -13,8 +13,9 @@ use std::time::Instant;
 
 use constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
-    CELL_SIZE, ENEMY_SEPARATION_FORCE,
+    CAMERA_LERP_SPEED, CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
+    MAP_HEIGHT, MAP_WIDTH,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
@@ -292,14 +293,26 @@ struct GameWorld {
     level:            u32,
     level_up_pending: bool,
     weapon_choices:   Vec<String>,
+    // Step 20: カメラ（プレイヤー追従スクロール）
+    camera_x:         f32,
+    camera_y:         f32,
+    /// 実際のウィンドウサイズ（リサイズ対応）
+    screen_w:         f32,
+    screen_h:         f32,
 }
 
 impl GameWorld {
     fn new() -> Self {
+        // プレイヤーはマップ中央からスタート
+        let start_x = MAP_WIDTH  / 2.0 - PLAYER_SIZE / 2.0;
+        let start_y = MAP_HEIGHT / 2.0 - PLAYER_SIZE / 2.0;
+        // カメラ初期位置: プレイヤーが画面中央に来るように（初期ウィンドウサイズ基準）
+        let cam_x = start_x + PLAYER_SIZE / 2.0 - SCREEN_WIDTH  / 2.0;
+        let cam_y = start_y + PLAYER_SIZE / 2.0 - SCREEN_HEIGHT / 2.0;
         Self {
             player: PlayerState {
-                x: SCREEN_WIDTH / 2.0 - PLAYER_SIZE / 2.0,
-                y: SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
+                x: start_x,
+                y: start_y,
                 input_dx: 0.0, input_dy: 0.0,
                 hp: 100.0, max_hp: 100.0,
                 invincible_timer: 0.0,
@@ -319,7 +332,17 @@ impl GameWorld {
             level:            1,
             level_up_pending: false,
             weapon_choices:   Vec::new(),
+            camera_x:         cam_x,
+            camera_y:         cam_y,
+            screen_w:         SCREEN_WIDTH,
+            screen_h:         SCREEN_HEIGHT,
         }
+    }
+
+    /// ウィンドウリサイズ時に画面サイズを更新する（Step 20）
+    fn on_resize(&mut self, width: u32, height: u32) {
+        self.screen_w = width  as f32;
+        self.screen_h = height as f32;
     }
 
     fn step(&mut self, dt: f32) {
@@ -338,11 +361,27 @@ impl GameWorld {
             self.player.x += (dx / len) * PLAYER_SPEED * dt;
             self.player.y += (dy / len) * PLAYER_SPEED * dt;
         }
-        self.player.x = self.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
-        self.player.y = self.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
+        // Step 20: マップ境界内に制限
+        self.player.x = self.player.x.clamp(0.0, MAP_WIDTH  - PLAYER_SIZE);
+        self.player.y = self.player.y.clamp(0.0, MAP_HEIGHT - PLAYER_SIZE);
 
         let px = self.player.x + PLAYER_RADIUS;
         let py = self.player.y + PLAYER_RADIUS;
+
+        // Step 20: カメラの滑らかな追従（lerp）
+        // 実際のウィンドウサイズを使うことでリサイズ後も中央追従が正しく動作する
+        let sw = self.screen_w;
+        let sh = self.screen_h;
+        let target_cam_x = px - sw / 2.0;
+        let target_cam_y = py - sh / 2.0;
+        // マップ端でカメラを止める
+        let max_cam_x = (MAP_WIDTH  - sw).max(0.0);
+        let max_cam_y = (MAP_HEIGHT - sh).max(0.0);
+        let target_cam_x = target_cam_x.clamp(0.0, max_cam_x);
+        let target_cam_y = target_cam_y.clamp(0.0, max_cam_y);
+        let lerp_t = 1.0 - (-CAMERA_LERP_SPEED * dt).exp();
+        self.camera_x += (target_cam_x - self.camera_x) * lerp_t;
+        self.camera_y += (target_cam_y - self.camera_y) * lerp_t;
 
         // 敵 AI（EnemyKind ごとの速度を使用）
         for i in 0..self.enemies.len() {
@@ -472,7 +511,8 @@ impl GameWorld {
             }
             let bx = self.bullets.positions_x[i];
             let by = self.bullets.positions_y[i];
-            if bx < -100.0 || bx > SCREEN_WIDTH + 100.0 || by < -100.0 || by > SCREEN_HEIGHT + 100.0 {
+            // Step 20: 画面外判定をマップサイズ基準に変更（ワールド座標で判定）
+            if bx < -100.0 || bx > MAP_WIDTH + 100.0 || by < -100.0 || by > MAP_HEIGHT + 100.0 {
                 self.bullets.kill(i);
             }
         }
@@ -647,6 +687,11 @@ impl GameWorld {
         self.weapon_choices.clear();
     }
 
+    /// Step 20: カメラオフセットを返す
+    fn camera_offset(&self) -> (f32, f32) {
+        (self.camera_x, self.camera_y)
+    }
+
     fn get_render_data(&self) -> Vec<(f32, f32, u8)> {
         let mut v = Vec::with_capacity(1 + self.enemies.len() + self.bullets.len());
         v.push((self.player.x, self.player.y, 0u8));
@@ -718,6 +763,9 @@ impl GameWorld {
             // Step 19: アイテム情報
             magnet_timer:    self.magnet_timer,
             item_count:      self.items.count,
+            // Step 20: カメラ座標
+            camera_x:        self.camera_x,
+            camera_y:        self.camera_y,
         }
     }
 }
@@ -736,13 +784,14 @@ fn exp_for_next(level: u32) -> u32 {
     if idx < TABLE.len() { TABLE[idx] } else { 270 + (idx as u32 - 9) * 50 }
 }
 
+/// Step 20: マップ全体の外周からスポーン（カメラ位置に関係なくマップ端から出現）
 fn spawn_outside(rng: &mut SimpleRng) -> (f32, f32) {
     let margin = 80.0;
     match rng.next_u32() % 4 {
-        0 => (rng.next_f32() * SCREEN_WIDTH, -margin),
-        1 => (rng.next_f32() * SCREEN_WIDTH, SCREEN_HEIGHT + margin),
-        2 => (-margin,                        rng.next_f32() * SCREEN_HEIGHT),
-        _ => (SCREEN_WIDTH + margin,          rng.next_f32() * SCREEN_HEIGHT),
+        0 => (rng.next_f32() * MAP_WIDTH, -margin),
+        1 => (rng.next_f32() * MAP_WIDTH, MAP_HEIGHT + margin),
+        2 => (-margin,                     rng.next_f32() * MAP_HEIGHT),
+        _ => (MAP_WIDTH + margin,          rng.next_f32() * MAP_HEIGHT),
     }
 }
 
@@ -805,6 +854,8 @@ impl ApplicationHandler for App {
                 if let Some(renderer) = self.renderer.as_mut() {
                     renderer.resize(size.width, size.height);
                 }
+                // Step 20: ゲーム側にも画面サイズを通知してカメラ計算を正確に保つ
+                self.game.on_resize(size.width, size.height);
             }
 
             WindowEvent::KeyboardInput {
@@ -867,10 +918,11 @@ impl ApplicationHandler for App {
                 if let (Some(renderer), Some(window)) =
                     (self.renderer.as_mut(), self.window.as_ref())
                 {
-                    let render_data   = self.game.get_render_data();
-                    let particle_data = self.game.get_particle_data();
-                    let item_data     = self.game.get_item_data();
-                    renderer.update_instances(&render_data, &particle_data, &item_data);
+                    let render_data    = self.game.get_render_data();
+                    let particle_data  = self.game.get_particle_data();
+                    let item_data      = self.game.get_item_data();
+                    let camera_offset  = self.game.camera_offset();
+                    renderer.update_instances(&render_data, &particle_data, &item_data, camera_offset);
                     let hud = self.game.hud_data(renderer.current_fps);
                     // Step 17: ボタンクリックで武器選択（"__skip__" はスキップ扱い）
                     if let Some(chosen) = renderer.render(window, &hud) {

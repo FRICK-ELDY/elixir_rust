@@ -92,6 +92,21 @@ impl ScreenUniform {
     }
 }
 
+// ─── カメラ Uniform（Step 20: プレイヤー追従スクロール）──────
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    offset: [f32; 2],
+    _pad:   [f32; 2],
+}
+
+impl CameraUniform {
+    fn new(offset_x: f32, offset_y: f32) -> Self {
+        Self { offset: [offset_x, offset_y], _pad: [0.0; 2] }
+    }
+}
+
 // ─── インスタンスバッファの最大容量 ────────────────────────────
 // Player 1 + Enemies 10000 + Bullets 2000 + Particles 2000 + Items 500 = 14501
 const MAX_INSTANCES: usize = 14501;
@@ -138,6 +153,9 @@ pub struct HudData {
     pub magnet_timer:     f32,
     /// Step 19: アイテム数
     pub item_count:       usize,
+    /// Step 20: カメラ座標（デバッグ表示用）
+    pub camera_x:         f32,
+    pub camera_y:         f32,
 }
 
 // ─── Renderer ─────────────────────────────────────────────────
@@ -155,6 +173,9 @@ pub struct Renderer {
     bind_group:           wgpu::BindGroup,
     screen_uniform_buf:   wgpu::Buffer,
     screen_bind_group:    wgpu::BindGroup,
+    // Step 20: カメラ Uniform
+    camera_uniform_buf:   wgpu::Buffer,
+    camera_bind_group:    wgpu::BindGroup,
     // egui
     egui_ctx:             egui::Context,
     egui_renderer:        egui_wgpu::Renderer,
@@ -308,6 +329,38 @@ impl Renderer {
             }],
         });
 
+        // ─── バインドグループ group(2): カメラ Uniform（Step 20）─
+        let camera_uniform = CameraUniform::new(0.0, 0.0);
+        let camera_uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label:    Some("Camera Uniform Buffer"),
+            contents: bytemuck::bytes_of(&camera_uniform),
+            usage:    wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label:   Some("Camera Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding:    0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty:         wgpu::BindingType::Buffer {
+                        ty:                 wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size:   None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label:   Some("Camera Bind Group"),
+            layout:  &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding:  0,
+                resource: camera_uniform_buf.as_entire_binding(),
+            }],
+        });
+
         // ─── シェーダー・パイプライン ────────────────────────────
         let shader_source = include_str!("shaders/sprite.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -317,7 +370,7 @@ impl Renderer {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label:                Some("Sprite Pipeline Layout"),
-            bind_group_layouts:   &[&texture_bind_group_layout, &screen_bind_group_layout],
+            bind_group_layouts:   &[&texture_bind_group_layout, &screen_bind_group_layout, &camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -415,6 +468,8 @@ impl Renderer {
             bind_group,
             screen_uniform_buf,
             screen_bind_group,
+            camera_uniform_buf,
+            camera_bind_group,
             egui_ctx,
             egui_renderer,
             egui_winit,
@@ -437,12 +492,17 @@ impl Renderer {
     /// render_data: [(x, y, kind)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
     /// item_data: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
+    /// camera_offset: (cam_x, cam_y) カメラのワールド座標オフセット（Step 20）
     pub fn update_instances(
         &mut self,
         render_data: &[(f32, f32, u8)],
         particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
         item_data: &[(f32, f32, u8)],
+        camera_offset: (f32, f32),
     ) {
+        // Step 20: カメラ Uniform を更新
+        let cam_uniform = CameraUniform::new(camera_offset.0, camera_offset.1);
+        self.queue.write_buffer(&self.camera_uniform_buf, 0, bytemuck::bytes_of(&cam_uniform));
         let (player_uv_off, player_uv_sz)     = player_uv();
         let (bullet_uv_off, bullet_uv_sz)     = bullet_uv();
         let (particle_uv_off, particle_uv_sz) = particle_uv();
@@ -601,6 +661,7 @@ impl Renderer {
                 pass.set_pipeline(&self.render_pipeline);
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 pass.set_bind_group(1, &self.screen_bind_group, &[]);
+                pass.set_bind_group(2, &self.camera_bind_group, &[]);
                 pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                 pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -801,6 +862,11 @@ fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> 
                     ui.label(
                         egui::RichText::new(format!("Items: {}", hud.item_count))
                             .color(egui::Color32::from_rgb(150, 230, 150)),
+                    );
+                    // Step 20: カメラ座標デバッグ
+                    ui.label(
+                        egui::RichText::new(format!("Cam: ({:.0}, {:.0})", hud.camera_x, hud.camera_y))
+                            .color(egui::Color32::from_rgb(180, 180, 255)),
                     );
                     if hud.magnet_timer > 0.0 {
                         ui.label(

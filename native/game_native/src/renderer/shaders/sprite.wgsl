@@ -8,6 +8,13 @@ struct ScreenUniform {
 };
 @group(1) @binding(0) var<uniform> screen: ScreenUniform;
 
+// group(2): カメラ Uniform（Step 20: プレイヤー追従スクロール）
+struct CameraUniform {
+    offset: vec2<f32>, // カメラのワールド座標オフセット（左上）
+    _pad:   vec2<f32>,
+};
+@group(2) @binding(0) var<uniform> camera: CameraUniform;
+
 struct VertexInput {
     @location(0) position: vec2<f32>,
 };
@@ -34,10 +41,13 @@ fn vs_main(in: VertexInput, inst: InstanceInput) -> VertexOutput {
     // ワールド座標：インスタンスの左上 + 頂点オフセット（サイズ分）
     let world_pos = inst.i_position + in.position * inst.i_size;
 
+    // カメラオフセットを引いてスクリーン座標に変換（Step 20）
+    let screen_pos = world_pos - camera.offset;
+
     // クリップ座標（Y 軸は下が正なので反転）
     out.clip_position = vec4<f32>(
-        (world_pos.x - screen.half_size.x) / screen.half_size.x,
-        -(world_pos.y - screen.half_size.y) / screen.half_size.y,
+        (screen_pos.x - screen.half_size.x) / screen.half_size.x,
+        -(screen_pos.y - screen.half_size.y) / screen.half_size.y,
         0.0,
         1.0,
     );
