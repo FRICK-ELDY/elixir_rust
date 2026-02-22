@@ -1,7 +1,13 @@
 mod constants;
 mod physics;
 
-use constants::{FRAME_BUDGET_MS, PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use constants::{
+    BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
+    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, FRAME_BUDGET_MS,
+    INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
+    SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_COOLDOWN,
+};
+use physics::rng::SimpleRng;
 use physics::spatial_hash::CollisionWorld;
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
@@ -19,29 +25,7 @@ rustler::atoms! {
     no_change,
 }
 
-// ─── 定数 ─────────────────────────────────────────────────────
-/// プレイヤーの当たり判定半径（px）
-const PLAYER_RADIUS: f32 = PLAYER_SIZE / 2.0;
-/// 敵の当たり判定半径（px）
-const ENEMY_RADIUS: f32 = 20.0;
-/// 敵がプレイヤーに触れたときのダメージ（HP/秒）
-const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
-/// 被弾後の無敵時間（秒）
-const INVINCIBLE_DURATION: f32 = 0.5;
-/// Spatial Hash のセルサイズ（px）
-const CELL_SIZE: f32 = 80.0;
-/// Magic Wand の発射間隔（秒）
-const WEAPON_COOLDOWN: f32 = 1.0;
-/// 弾丸の移動速度（px/秒）
-const BULLET_SPEED: f32 = 400.0;
-/// 弾丸のダメージ
-const BULLET_DAMAGE: i32 = 10;
-/// 弾丸の生存時間（秒）
-const BULLET_LIFETIME: f32 = 3.0;
-/// 弾丸の当たり判定半径（px）
-const BULLET_RADIUS: f32 = 6.0;
-
-// ─── プレイヤー ───────────────────────────────────────────────
+// ─── Player ───────────────────────────────────────────────────
 pub struct PlayerState {
     pub x:                f32,
     pub y:                f32,
@@ -713,18 +697,3 @@ fn load(env: rustler::Env, _: rustler::Term) -> bool {
 
 rustler::init!("Elixir.Game.NifBridge", load = load);
 
-// ─── 簡易 LCG 乱数生成器 ──────────────────────────────────────
-pub struct SimpleRng(u64);
-
-impl SimpleRng {
-    fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-    fn next_u32(&mut self) -> u32 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        (self.0 >> 33) as u32
-    }
-    fn next_f32(&mut self) -> f32 {
-        (self.next_u32() as f32) / (u32::MAX as f32)
-    }
-}

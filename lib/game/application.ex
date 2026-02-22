@@ -4,11 +4,11 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Input handler — translates key events to GameLoop casts
+      # Input handler: translates key events to GameLoop casts
       Game.InputHandler,
-      # Core game loop — 60 Hz physics tick via Rust NIF
+      # Core game loop: 60 Hz physics tick via Rust NIF
       Game.GameLoop,
-      # Independent performance monitor — samples every second
+      # Independent performance monitor: samples every second.
       # Demonstrates OTP: this process is completely isolated from the game loop.
       # A crash here never affects gameplay; the supervisor restarts it automatically.
       Game.StressMonitor,

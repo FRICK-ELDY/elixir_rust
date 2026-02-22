@@ -1,4 +1,4 @@
-use crate::constants::SPRITE_SIZE;
+use crate::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -75,18 +75,20 @@ const MAX_INSTANCES: usize = 12001;
 
 #[derive(Default, Clone)]
 pub struct HudData {
-    pub hp:              f32,
-    pub max_hp:          f32,
-    pub score:           u32,
-    pub elapsed_seconds: f32,
-    pub level:           u32,
-    pub exp:             u32,
-    pub exp_to_next:     u32,
-    pub enemy_count:     usize,
-    pub bullet_count:    usize,
-    pub fps:             f32,
+    pub hp:               f32,
+    pub max_hp:           f32,
+    pub score:            u32,
+    pub elapsed_seconds:  f32,
+    pub level:            u32,
+    pub exp:              u32,
+    pub exp_to_next:      u32,
+    pub enemy_count:      usize,
+    pub bullet_count:     usize,
+    // Populated from Renderer::current_fps each frame; passed to build_hud_ui
+    #[allow(dead_code)]
+    pub fps:              f32,
     pub level_up_pending: bool,
-    pub weapon_choices:  Vec<String>,
+    pub weapon_choices:   Vec<String>,
 }
 
 // ─── Renderer ─────────────────────────────────────────────────
@@ -111,7 +113,7 @@ pub struct Renderer {
     // FPS 計測
     frame_count:          u32,
     fps_timer:            std::time::Instant,
-    current_fps:          f32,
+    pub current_fps:      f32,
 }
 
 impl Renderer {
@@ -486,9 +488,9 @@ impl Renderer {
                     resolve_target: None,
                     ops:            wgpu::Operations {
                         load:  wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.05,
-                            g: 0.02,
-                            b: 0.10,
+                            r: BG_R,
+                            g: BG_G,
+                            b: BG_B,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

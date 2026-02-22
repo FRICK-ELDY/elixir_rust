@@ -9,7 +9,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use constants::{PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH};
+use constants::{
+    BULLET_DAMAGE, BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
+    CELL_SIZE, ENEMY_DAMAGE_PER_SEC, ENEMY_RADIUS, INVINCIBLE_DURATION,
+    MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
+    SCREEN_HEIGHT, SCREEN_WIDTH, WAVES, WEAPON_COOLDOWN,
+};
 use renderer::{HudData, Renderer};
 use winit::{
     application::ApplicationHandler,
@@ -19,28 +24,8 @@ use winit::{
     window::{Window, WindowId},
 };
 
+use physics::rng::SimpleRng;
 use physics::spatial_hash::CollisionWorld;
-
-const PLAYER_RADIUS: f32 = PLAYER_SIZE / 2.0;
-const ENEMY_RADIUS:  f32 = 20.0;
-const ENEMY_DAMAGE_PER_SEC: f32 = 20.0;
-const INVINCIBLE_DURATION:  f32 = 0.5;
-const CELL_SIZE:     f32 = 80.0;
-const WEAPON_COOLDOWN: f32 = 1.0;
-const BULLET_SPEED:  f32 = 400.0;
-const BULLET_DAMAGE: i32 = 10;
-const BULLET_LIFETIME: f32 = 3.0;
-const BULLET_RADIUS: f32 = 6.0;
-const MAX_ENEMIES: usize = 10_000;
-
-// Wave-based spawn schedule: (start_secs, interval_secs, count)
-const WAVES: &[(f32, f32, usize)] = &[
-    (  0.0, 0.8,   20),
-    ( 10.0, 0.6,   50),
-    ( 30.0, 0.4,  100),
-    ( 60.0, 0.3,  200),
-    (120.0, 0.2,  300),
-];
 
 struct PlayerState {
     x: f32, y: f32,
@@ -399,19 +384,7 @@ fn spawn_outside(rng: &mut SimpleRng) -> (f32, f32) {
     }
 }
 
-// ─── 簡易 LCG 乱数 ────────────────────────────────────────────
-
-struct SimpleRng(u64);
-impl SimpleRng {
-    fn new(seed: u64) -> Self { Self(seed) }
-    fn next_u32(&mut self) -> u32 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        (self.0 >> 33) as u32
-    }
-    fn next_f32(&mut self) -> f32 { self.next_u32() as f32 / u32::MAX as f32 }
-}
-
-// ─── winit アプリケーション ────────────────────────────────────
+// ─── winit application ────────────────────────────────────────
 
 struct App {
     window:      Option<Arc<Window>>,
@@ -512,9 +485,7 @@ impl ApplicationHandler for App {
                 {
                     let render_data = self.game.get_render_data();
                     renderer.update_instances(&render_data);
-
-                    // HudData を構築（FPS は renderer 内部で計測）
-                    let hud = self.game.hud_data(0.0);
+                    let hud = self.game.hud_data(renderer.current_fps);
                     renderer.render(window, &hud);
                 }
 

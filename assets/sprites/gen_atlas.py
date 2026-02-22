@@ -63,9 +63,8 @@ def make_png(width, height, rgba_data):
         c = name + data
         return struct.pack('>I', len(data)) + c + struct.pack('>I', zlib.crc32(c) & 0xffffffff)
 
-    ihdr = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
-    # RGBA なので color_type=6
-    ihdr = struct.pack('>II', width, height) + bytes([8, 6, 0, 0, 0])
+    # color_type=6: RGBA (bit_depth=8, compression=0, filter=0, interlace=0)
+    ihdr = struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0)
 
     raw_rows = bytearray()
     for y in range(height):

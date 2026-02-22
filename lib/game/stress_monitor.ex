@@ -19,7 +19,7 @@ defmodule Game.StressMonitor do
   require Logger
 
   @sample_interval_ms 1_000
-  @frame_budget_ms    16.67
+  @frame_budget_ms    1000.0 / 60.0
   @max_enemies        10_000
 
   # ── Public API ──────────────────────────────────────────────────
