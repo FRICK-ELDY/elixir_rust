@@ -631,8 +631,20 @@ impl Renderer {
                     uv_size:    whip_uv_sz,
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
+                // Step 24: ボス本体（11=SlimeKing, 12=BatLord, 13=StoneGolem）
+                11 | 12 | 13 => {
+                    let sz = enemy_sprite_size(kind);
+                    let (uv_off, uv_sz) = enemy_anim_uv(kind, 0);
+                    SpriteInstance {
+                        position:   [x, y],
+                        size:       [sz, sz],
+                        uv_offset:  uv_off,
+                        uv_size:    uv_sz,
+                        color_tint: [1.0, 1.0, 1.0, 1.0],
+                    }
+                }
                 // Step 24: 岩弾（Stone Golem の範囲攻撃）: 灰色の岩 28px
-                11 => SpriteInstance {
+                14 => SpriteInstance {
                     position:   [x - 14.0, y - 14.0],
                     size:       [28.0, 28.0],
                     uv_offset:  rock_uv_off,

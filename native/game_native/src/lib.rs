@@ -217,6 +217,8 @@ pub const BULLET_KIND_NORMAL:    u8 = 4;  // MagicWand / Axe / Cross（黄色い
 pub const BULLET_KIND_FIREBALL:  u8 = 8;  // Fireball（赤橙の炎球）
 pub const BULLET_KIND_LIGHTNING: u8 = 9;  // Lightning（水色の電撃球）
 pub const BULLET_KIND_WHIP:      u8 = 10; // Whip（黄緑の弧状）
+// 11=SlimeKing, 12=BatLord, 13=StoneGolem（ボス render_kind と共有）
+pub const BULLET_KIND_ROCK:      u8 = 14; // StoneGolem の岩弾
 
 // ─── 弾丸 SoA ─────────────────────────────────────────────────
 pub struct BulletWorld {
@@ -499,6 +501,9 @@ impl BossKind {
     }
     pub fn special_interval(&self) -> f32 {
         match self { Self::SlimeKing => 5.0, Self::BatLord => 4.0, Self::StoneGolem => 6.0 }
+    }
+    pub fn render_kind(&self) -> u8 {
+        match self { Self::SlimeKing => 11, Self::BatLord => 12, Self::StoneGolem => 13 }
     }
     pub fn from_atom(atom: Atom) -> Option<Self> {
         if atom == slime_king() { Some(Self::SlimeKing) }
@@ -867,6 +872,27 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                             }
                         }
                     }
+                    // Step 24: Whip vs ボス
+                    {
+                        let whip_range_sq = whip_range * whip_range;
+                        let boss_hit_pos: Option<(f32, f32)> = if let Some(ref boss) = w.boss {
+                            if !boss.invincible {
+                                let ddx = boss.x - px;
+                                let ddy = boss.y - py;
+                                if ddx * ddx + ddy * ddy <= whip_range_sq {
+                                    let angle = ddy.atan2(ddx);
+                                    let mut diff = angle - facing_angle;
+                                    if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+                                    if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+                                    if diff.abs() < whip_half_angle { Some((boss.x, boss.y)) } else { None }
+                                } else { None }
+                            } else { None }
+                        } else { None };
+                        if let Some((bx, by)) = boss_hit_pos {
+                            if let Some(ref mut boss) = w.boss { boss.hp -= dmg as f32; }
+                            w.particles.emit(bx, by, 4, [1.0, 0.8, 0.2, 1.0]);
+                        }
+                    }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Fireball ──────────────────────────────────────
@@ -933,6 +959,23 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
                             );
                         } else {
                             break;
+                        }
+                    }
+                    // Step 24: Lightning vs ボス（600px 以内なら連鎖先としてダメージ）
+                    {
+                        let boss_hit_pos: Option<(f32, f32)> = if let Some(ref boss) = w.boss {
+                            if !boss.invincible {
+                                let ddx = boss.x - px;
+                                let ddy = boss.y - py;
+                                if ddx * ddx + ddy * ddy < 600.0 * 600.0 {
+                                    Some((boss.x, boss.y))
+                                } else { None }
+                            } else { None }
+                        } else { None };
+                        if let Some((bx, by)) = boss_hit_pos {
+                            if let Some(ref mut boss) = w.boss { boss.hp -= dmg as f32; }
+                            w.bullets.spawn_effect(bx, by, 0.10, BULLET_KIND_LIGHTNING);
+                            w.particles.emit(bx, by, 5, [0.3, 0.8, 1.0, 1.0]);
                         }
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
@@ -1307,7 +1350,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         }
         if eff.spawn_rocks {
             for (dx_dir, dy_dir) in [(1.0_f32, 0.0_f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
-                w.bullets.spawn_ex(eff.special_x, eff.special_y, dx_dir * 200.0, dy_dir * 200.0, 50, 3.0, false, 11);
+                w.bullets.spawn_ex(eff.special_x, eff.special_y, dx_dir * 200.0, dy_dir * 200.0, 50, 3.0, false, BULLET_KIND_ROCK);
             }
             w.particles.emit(eff.special_x, eff.special_y, 10, [0.6, 0.6, 0.6, 1.0]);
         }
@@ -1360,12 +1403,25 @@ fn get_player_hp(world: ResourceArc<GameWorld>) -> f64 {
 }
 
 /// 描画データを返す: [{x, y, kind}] のリスト
-/// kind: 0 = player, 1 = slime, 2 = bat, 3 = golem, 4 = bullet
+/// kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet,
+///       11=SlimeKing, 12=BatLord, 13=StoneGolem, 14=rock_bullet
 #[rustler::nif]
 fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
     let w = world.0.lock().unwrap();
-    let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len());
+    let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len() + 1);
     result.push((w.player.x, w.player.y, 0u8));
+    // Step 24: ボスを描画（中心座標からスプライト左上に変換）
+    if let Some(ref boss) = w.boss {
+        let boss_sprite_size = match boss.kind {
+            BossKind::StoneGolem => 128.0,
+            _ => 96.0,
+        };
+        result.push((
+            boss.x - boss_sprite_size / 2.0,
+            boss.y - boss_sprite_size / 2.0,
+            boss.kind.render_kind(),
+        ));
+    }
     for i in 0..w.enemies.len() {
         if w.enemies.alive[i] {
             result.push((
@@ -1600,7 +1656,7 @@ fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp
         if applied >= count { break; }
         if w.enemies.alive[i] && w.enemies.kinds[i] == enemy_kind {
             // 新規追加分（before_len 以降）または最近 alive になったスロット
-            if i >= before_len || w.enemies.hp[i] == enemy_kind.max_hp() {
+            if i >= before_len || (w.enemies.hp[i] - enemy_kind.max_hp()).abs() < 0.01 {
                 w.enemies.hp[i] = base_hp;
                 applied += 1;
             }

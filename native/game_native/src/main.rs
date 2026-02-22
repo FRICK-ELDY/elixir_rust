@@ -269,6 +269,8 @@ impl EnemySeparation for EnemyWorld {
 
 const BULLET_KIND_NORMAL:   u8 = 4;
 const BULLET_KIND_FIREBALL: u8 = 8;
+// 11=SlimeKing, 12=BatLord, 13=StoneGolem（ボス render_kind と共有）
+const BULLET_KIND_ROCK:     u8 = 14; // StoneGolem の岩弾
 
 struct BulletWorld {
     positions_x:  Vec<f32>,
@@ -1163,7 +1165,7 @@ impl GameWorld {
                 self.bullets.spawn_ex(
                     boss_action.special_x, boss_action.special_y,
                     dx_dir * 200.0, dy_dir * 200.0,
-                    50, false, 11,
+                    50, false, BULLET_KIND_ROCK,
                 );
             }
             self.particles.emit(boss_action.special_x, boss_action.special_y, 10, [0.6, 0.6, 0.6, 1.0]);
