@@ -1,4 +1,5 @@
 mod constants;
+mod item;
 mod physics;
 mod weapon;
 
@@ -9,6 +10,7 @@ use constants::{
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
+use item::{ItemKind, ItemWorld};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_SLOTS};
 use physics::rng::SimpleRng;
 use physics::separation::{apply_separation, EnemySeparation};
@@ -29,75 +31,6 @@ rustler::atoms! {
     // level_up 通知アトム
     level_up,
     no_change,
-}
-
-// ─── アイテムタイプ ────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum ItemKind {
-    Gem    = 0,  // 経験値宝石（緑）
-    Potion = 1,  // 回復ポーション（赤）
-    Magnet = 2,  // 磁石（黄）
-}
-
-impl ItemKind {
-    /// レンダラーに渡す kind 値（5=gem, 6=potion, 7=magnet）
-    pub fn render_kind(&self) -> u8 {
-        match self { Self::Gem => 5, Self::Potion => 6, Self::Magnet => 7 }
-    }
-}
-
-// ─── アイテム SoA ──────────────────────────────────────────────
-pub struct ItemWorld {
-    pub positions_x: Vec<f32>,
-    pub positions_y: Vec<f32>,
-    pub kinds:       Vec<ItemKind>,
-    pub value:       Vec<u32>,   // Gem: EXP 量, Potion: 回復量, Magnet: 未使用
-    pub alive:       Vec<bool>,
-    pub count:       usize,
-}
-
-impl ItemWorld {
-    pub fn new() -> Self {
-        Self {
-            positions_x: Vec::new(),
-            positions_y: Vec::new(),
-            kinds:       Vec::new(),
-            value:       Vec::new(),
-            alive:       Vec::new(),
-            count:       0,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.positions_x.len()
-    }
-
-    pub fn spawn(&mut self, x: f32, y: f32, kind: ItemKind, value: u32) {
-        for i in 0..self.positions_x.len() {
-            if !self.alive[i] {
-                self.positions_x[i] = x;
-                self.positions_y[i] = y;
-                self.kinds[i]       = kind;
-                self.value[i]       = value;
-                self.alive[i]       = true;
-                self.count += 1;
-                return;
-            }
-        }
-        self.positions_x.push(x);
-        self.positions_y.push(y);
-        self.kinds.push(kind);
-        self.value.push(value);
-        self.alive.push(true);
-        self.count += 1;
-    }
-
-    pub fn kill(&mut self, i: usize) {
-        if self.alive[i] {
-            self.alive[i] = false;
-            self.count = self.count.saturating_sub(1);
-        }
-    }
 }
 
 // ─── 敵タイプ ─────────────────────────────────────────────────
@@ -842,49 +775,46 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
             let ey  = w.enemies.positions_y[ei] + enemy_r;
             let ddx = bx - ex;
             let ddy = by - ey;
-                if ddx * ddx + ddy * ddy < hit_r * hit_r {
-                    w.enemies.hp[ei] -= dmg as f32;
-                    if w.enemies.hp[ei] <= 0.0 {
-                        w.enemies.kill(ei);
-                        // ── Step 13: 敵撃破でスコア加算 ──────────────
-                        // Step 18: 敵タイプに応じたスコア（経験値 × 2）
-                        w.score += kind.exp_reward() * 2;
-                        // ── Step 14/18: 経験値加算（タイプ別）────────
-                        w.exp += kind.exp_reward();
-                        if !w.level_up_pending {
-                            let required = exp_required_for_next(w.level);
-                            if w.exp >= required {
-                                w.level_up_pending = true;
-                            }
+            if ddx * ddx + ddy * ddy < hit_r * hit_r {
+                w.enemies.hp[ei] -= dmg as f32;
+                if w.enemies.hp[ei] <= 0.0 {
+                    w.enemies.kill(ei);
+                    // ── Step 13: 敵撃破でスコア加算 ──────────────
+                    // Step 18: 敵タイプに応じたスコア（経験値 × 2）
+                    w.score += kind.exp_reward() * 2;
+                    // ── Step 14/18: 経験値加算（タイプ別）────────
+                    w.exp += kind.exp_reward();
+                    if !w.level_up_pending {
+                        let required = exp_required_for_next(w.level);
+                        if w.exp >= required {
+                            w.level_up_pending = true;
                         }
-                        // ── Step 16/18: 敵タイプ別パーティクル ────────
-                        let particle_color = match kind {
-                            EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],   // オレンジ
-                            EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],   // 紫
-                            EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],   // 灰
-                        };
-                        w.particles.emit(ex, ey, 8, particle_color);
-                        // ── Step 19: アイテムドロップ ──────────────────
-                        // 経験値宝石は 100% ドロップ
-                        let gem_value = kind.exp_reward();
-                        w.items.spawn(ex, ey, ItemKind::Gem, gem_value);
-                        // 回復ポーション: 5% ドロップ
-                        let roll_potion = w.rng.next_u32() % 100;
-                        if roll_potion < 5 {
-                            w.items.spawn(ex, ey, ItemKind::Potion, 20);
-                        }
-                        // 磁石: 2% ドロップ
-                        let roll_magnet = w.rng.next_u32() % 100;
-                        if roll_magnet < 2 {
-                            w.items.spawn(ex, ey, ItemKind::Magnet, 0);
-                        }
-                    } else {
-                        // ── Step 16: ヒット時黄色パーティクル ─────────
-                        w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                     }
-                    w.bullets.kill(bi);
-                    break;
+                    // ── Step 16/18: 敵タイプ別パーティクル ────────
+                    let particle_color = match kind {
+                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
+                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
+                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
+                    };
+                    w.particles.emit(ex, ey, 8, particle_color);
+                    // ── Step 19: アイテムドロップ（1体につき最大1種類）──
+                    // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
+                    let roll = w.rng.next_u32() % 100;
+                    let (item_kind, item_value) = if roll < 2 {
+                        (ItemKind::Magnet, 0)
+                    } else if roll < 7 {
+                        (ItemKind::Potion, 20)
+                    } else {
+                        (ItemKind::Gem, kind.exp_reward())
+                    };
+                    w.items.spawn(ex, ey, item_kind, item_value);
+                } else {
+                    // ── Step 16: ヒット時黄色パーティクル ─────────
+                    w.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
                 }
+                w.bullets.kill(bi);
+                break;
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 use crate::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
+use crate::item::{RENDER_KIND_GEM, RENDER_KIND_MAGNET, RENDER_KIND_POTION};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -504,9 +505,9 @@ impl Renderer {
         for &(x, y, kind) in item_data {
             if instances.len() >= MAX_INSTANCES { break; }
             let (uv_off, uv_sz, sz) = match kind {
-                5 => (gem_uv_off,    gem_uv_sz,    20.0_f32), // Gem: 20px
-                6 => (potion_uv_off, potion_uv_sz, 24.0_f32), // Potion: 24px
-                7 => (magnet_uv_off, magnet_uv_sz, 28.0_f32), // Magnet: 28px
+                RENDER_KIND_GEM    => (gem_uv_off,    gem_uv_sz,    20.0_f32),
+                RENDER_KIND_POTION => (potion_uv_off, potion_uv_sz, 24.0_f32),
+                RENDER_KIND_MAGNET => (magnet_uv_off, magnet_uv_sz, 28.0_f32),
                 _ => continue,
             };
             instances.push(SpriteInstance {

@@ -2,6 +2,7 @@
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.
 mod constants;
+mod item;
 mod renderer;
 mod physics;
 mod weapon;
@@ -17,6 +18,7 @@ use constants::{
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
 };
+use item::{ItemKind, ItemWorld};
 use renderer::{HudData, Renderer};
 use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 
@@ -191,66 +193,6 @@ impl BulletWorld {
         if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
     }
     fn len(&self) -> usize { self.positions_x.len() }
-}
-
-// ─── アイテムタイプ ────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-enum ItemKind {
-    #[default]
-    Gem,
-    Potion,
-    Magnet,
-}
-
-impl ItemKind {
-    fn render_kind(self) -> u8 {
-        match self { Self::Gem => 5, Self::Potion => 6, Self::Magnet => 7 }
-    }
-}
-
-struct ItemWorld {
-    positions_x: Vec<f32>,
-    positions_y: Vec<f32>,
-    kinds:       Vec<ItemKind>,
-    value:       Vec<u32>,
-    alive:       Vec<bool>,
-    count:       usize,
-}
-
-impl ItemWorld {
-    fn new() -> Self {
-        Self {
-            positions_x: Vec::new(),
-            positions_y: Vec::new(),
-            kinds:       Vec::new(),
-            value:       Vec::new(),
-            alive:       Vec::new(),
-            count:       0,
-        }
-    }
-    fn len(&self) -> usize { self.positions_x.len() }
-    fn spawn(&mut self, x: f32, y: f32, kind: ItemKind, value: u32) {
-        for i in 0..self.positions_x.len() {
-            if !self.alive[i] {
-                self.positions_x[i] = x;
-                self.positions_y[i] = y;
-                self.kinds[i]       = kind;
-                self.value[i]       = value;
-                self.alive[i]       = true;
-                self.count += 1;
-                return;
-            }
-        }
-        self.positions_x.push(x);
-        self.positions_y.push(y);
-        self.kinds.push(kind);
-        self.value.push(value);
-        self.alive.push(true);
-        self.count += 1;
-    }
-    fn kill(&mut self, i: usize) {
-        if self.alive[i] { self.alive[i] = false; self.count = self.count.saturating_sub(1); }
-    }
 }
 
 struct ParticleWorld {
@@ -566,15 +508,17 @@ impl GameWorld {
                             EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                         };
                         self.particles.emit(ex, ey, 8, pc);
-                        // Step 19: アイテムドロップ
-                        let gem_value = kind.exp_reward();
-                        self.items.spawn(ex, ey, ItemKind::Gem, gem_value);
-                        if self.rng.next_u32() % 100 < 5 {
-                            self.items.spawn(ex, ey, ItemKind::Potion, 20);
-                        }
-                        if self.rng.next_u32() % 100 < 2 {
-                            self.items.spawn(ex, ey, ItemKind::Magnet, 0);
-                        }
+                        // Step 19: アイテムドロップ（1体につき最大1種類）
+                        // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
+                        let roll = self.rng.next_u32() % 100;
+                        let (item_kind, item_value) = if roll < 2 {
+                            (ItemKind::Magnet, 0)
+                        } else if roll < 7 {
+                            (ItemKind::Potion, 20)
+                        } else {
+                            (ItemKind::Gem, kind.exp_reward())
+                        };
+                        self.items.spawn(ex, ey, item_kind, item_value);
                     } else {
                         // ヒット: 黄色パーティクル
                         self.particles.emit(ex, ey, 3, [1.0, 0.9, 0.3, 1.0]);
