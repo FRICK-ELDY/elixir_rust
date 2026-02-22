@@ -523,72 +523,136 @@ WeaponKind::Lightning => {
 ### 目標
 **音響効果**を追加して没入感を高める。
 
+### なぜ重要か
+BGM と SE はゲームの「体験密度」を大きく左右する。視覚フィードバック（パーティクル）と組み合わせることで、ヒット感・達成感が格段に増す。
+
 ### 必要な音源
+
 | 音源 | 形式 | 用途 |
 |---|---|---|
-| bgm.ogg | OGG Vorbis | ループ BGM |
+| bgm.wav | WAV (16bit 44.1kHz) | ループ BGM |
 | hit.wav | WAV | 敵ヒット音 |
 | death.wav | WAV | 敵撃破音 |
 | level_up.wav | WAV | レベルアップ音 |
 | player_hurt.wav | WAV | プレイヤーダメージ音 |
 | item_pickup.wav | WAV | アイテム収集音 |
 
-### Cargo.toml への追加
+> **注意:** 本実装では WAV 形式を使用する。OGG Vorbis を使う場合は `Cargo.toml` の `features` に `"vorbis"` を追加し、`include_bytes!` のパスを `.ogg` に変更すること。
+
+### Cargo.toml への追加（実装済み）
 
 ```toml
 [dependencies]
-rodio = "0.21"
+rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "vorbis"] }
 ```
 
-### 実装
+### ダミー音声ファイルの生成
+
+実際の音源を用意する前に、Python スクリプトでダミー WAV を生成できる。
+
+```bash
+python assets/audio/gen_audio.py
+```
+
+生成されるファイル:
+- `bgm.wav`         — 低音ドローン（8 秒ループ）
+- `hit.wav`         — ノイズバースト（0.08 秒）
+- `death.wav`       — 下降音（0.32 秒）
+- `level_up.wav`    — 上昇アルペジオ（0.48 秒）
+- `player_hurt.wav` — 低音インパクト（0.15 秒）
+- `item_pickup.wav` — 高音チャイム（0.20 秒）
+
+### 実装: `native/game_native/src/audio.rs`
 
 ```rust
-// audio.rs
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+// rodio 0.21 API: OutputStream::try_default() / Sink::try_new() は廃止
+// → OutputStreamBuilder::open_default_stream() / Sink::connect_new() を使う
+use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 
 pub struct AudioManager {
-    _stream:       OutputStream,
-    stream_handle: OutputStreamHandle,
-    bgm_sink:      Sink,
+    _stream:  OutputStream,   // Drop 防止のためオーナーシップを保持
+    bgm_sink: Sink,
 }
 
 impl AudioManager {
-    pub fn new() -> Self {
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        let bgm_sink = Sink::try_new(&stream_handle).unwrap();
-        Self { _stream, stream_handle, bgm_sink }
+    /// デバイスなし環境（CI 等）では None を返す
+    pub fn new() -> Option<Self> {
+        let stream = OutputStreamBuilder::open_default_stream().ok()?;
+        let bgm_sink = Sink::connect_new(&stream.mixer());
+        Some(Self { _stream: stream, bgm_sink })
     }
 
     pub fn play_bgm(&self, bytes: &'static [u8]) {
+        if !self.bgm_sink.empty() { return; }
         let cursor = std::io::Cursor::new(bytes);
-        let source = Decoder::new(cursor).unwrap().repeat_infinite();
-        self.bgm_sink.append(source);
+        if let Ok(source) = Decoder::new(cursor) {
+            self.bgm_sink.append(source.repeat_infinite());
+        }
     }
 
     pub fn play_se(&self, bytes: &'static [u8]) {
         let cursor = std::io::Cursor::new(bytes);
-        let source = Decoder::new(cursor).unwrap();
-        let sink = Sink::try_new(&self.stream_handle).unwrap();
-        sink.append(source);
-        sink.detach(); // 再生後に自動解放
+        if let Ok(source) = Decoder::new(cursor) {
+            let sink = Sink::connect_new(&self._stream.mixer());
+            sink.append(source);
+            sink.detach(); // 再生後に自動解放
+        }
     }
+
+    pub fn play_se_with_volume(&self, bytes: &'static [u8], volume: f32) { /* ... */ }
+    pub fn pause_bgm(&self)  { self.bgm_sink.pause(); }
+    pub fn resume_bgm(&self) { self.bgm_sink.play(); }
+    pub fn set_bgm_volume(&self, volume: f32) { self.bgm_sink.set_volume(volume); }
 }
 ```
 
-### 音源の埋め込み
+### 音源の埋め込み（`main.rs`）
 
 ```rust
-// main.rs
-static BGM_BYTES:         &[u8] = include_bytes!("../../../assets/audio/bgm.ogg");
+static BGM_BYTES:         &[u8] = include_bytes!("../../../assets/audio/bgm.wav");
 static HIT_BYTES:         &[u8] = include_bytes!("../../../assets/audio/hit.wav");
+static DEATH_BYTES:       &[u8] = include_bytes!("../../../assets/audio/death.wav");
 static LEVEL_UP_BYTES:    &[u8] = include_bytes!("../../../assets/audio/level_up.wav");
+static PLAYER_HURT_BYTES: &[u8] = include_bytes!("../../../assets/audio/player_hurt.wav");
+static ITEM_PICKUP_BYTES: &[u8] = include_bytes!("../../../assets/audio/item_pickup.wav");
 ```
 
+### SE トリガー設計: `SoundEvents` パターン
+
+`GameWorld::step()` が `SoundEvents` を返し、`App` が SE を発火する。ゲームロジックと音声再生を分離することで、NIF 側（`lib.rs`）でも同じロジックを再利用できる。
+
+```rust
+#[derive(Default)]
+struct SoundEvents {
+    pub enemy_hit:   bool,
+    pub enemy_death: bool,
+    pub level_up:    bool,
+    pub player_hurt: bool,
+    pub item_pickup: bool,
+}
+
+// App::window_event 内（RedrawRequested）
+let se = self.game.step(dt);
+if let Some(ref am) = self.audio {
+    if se.level_up         { am.play_se(LEVEL_UP_BYTES); }
+    else if se.enemy_death { am.play_se(DEATH_BYTES); }
+    else if se.enemy_hit   { am.play_se(HIT_BYTES); }
+    if se.player_hurt      { am.play_se(PLAYER_HURT_BYTES); }
+    if se.item_pickup      { am.play_se_with_volume(ITEM_PICKUP_BYTES, 0.6); }
+}
+```
+
+> **SE の優先順位:** 同一フレームで複数イベントが発生した場合、`level_up > enemy_death > enemy_hit` の順で 1 種類のみ再生する（音の重なりによる騒音を防ぐ）。`player_hurt` と `item_pickup` は独立して再生する。
+
 ### 確認ポイント
+- [ ] `python assets/audio/gen_audio.py` を実行して音声ファイルが生成される
 - [ ] ゲーム開始と同時に BGM が流れる
-- [ ] 敵を倒すと SE が鳴る
-- [ ] レベルアップ時に SE が鳴る
-- [ ] プレイヤーがダメージを受けると SE が鳴る
+- [ ] 敵に弾が当たると `hit.wav` が鳴る
+- [ ] 敵を倒すと `death.wav` が鳴る
+- [ ] レベルアップ時に `level_up.wav` が鳴る
+- [ ] プレイヤーがダメージを受けると `player_hurt.wav` が鳴る
+- [ ] アイテムを収集すると `item_pickup.wav` が鳴る
+- [ ] 音声デバイスなし環境（CI 等）でもクラッシュしない
 
 ---
 
