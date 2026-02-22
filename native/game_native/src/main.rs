@@ -1,15 +1,28 @@
 /// Standalone rendering binary.
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.
+mod audio;
 mod constants;
 mod item;
 mod renderer;
 mod physics;
 mod weapon;
 
+// ─── Step 22: 音声ファイルをバイナリに埋め込む ──────────────────────
+// assets/audio/ 以下の WAV ファイルが存在しない場合はコンパイルエラーになる。
+// `cargo run` 前に `python assets/audio/gen_audio.py` を実行すること。
+static BGM_BYTES:          &[u8] = include_bytes!("../../../assets/audio/bgm.wav");
+static HIT_BYTES:          &[u8] = include_bytes!("../../../assets/audio/hit.wav");
+static DEATH_BYTES:        &[u8] = include_bytes!("../../../assets/audio/death.wav");
+static LEVEL_UP_BYTES:     &[u8] = include_bytes!("../../../assets/audio/level_up.wav");
+static PLAYER_HURT_BYTES:  &[u8] = include_bytes!("../../../assets/audio/player_hurt.wav");
+static ITEM_PICKUP_BYTES:  &[u8] = include_bytes!("../../../assets/audio/item_pickup.wav");
+
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
+
+use audio::AudioManager;
 
 use constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
@@ -345,6 +358,16 @@ struct GameWorld {
     screen_h:         f32,
 }
 
+/// Step 22: 1 フレーム中に発生した音声イベント
+#[derive(Default)]
+struct SoundEvents {
+    pub enemy_hit:    bool,
+    pub enemy_death:  bool,
+    pub level_up:     bool,
+    pub player_hurt:  bool,
+    pub item_pickup:  bool,
+}
+
 impl GameWorld {
     fn new() -> Self {
         // プレイヤーはマップ中央からスタート
@@ -389,10 +412,13 @@ impl GameWorld {
         self.screen_h = height as f32;
     }
 
-    fn step(&mut self, dt: f32) {
+    /// ゲームを 1 ステップ進め、このフレームで発生した音声イベントを返す。
+    fn step(&mut self, dt: f32) -> SoundEvents {
+        let mut se = SoundEvents::default();
+
         // レベルアップ中はゲームを一時停止（プレイヤーがボタンを選ぶまで待つ）
         if self.level_up_pending {
-            return;
+            return se;
         }
 
         self.elapsed_seconds += dt;
@@ -490,6 +516,7 @@ impl GameWorld {
                     self.player.invincible_timer = INVINCIBLE_DURATION;
                     // 赤いパーティクル
                     self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
+                    se.player_hurt = true;
                 }
             }
         }
@@ -581,13 +608,16 @@ impl GameWorld {
                                 let kind_e = self.enemies.kinds[ei];
                                 self.score += kind_e.exp_reward() * 2;
                                 self.exp   += kind_e.exp_reward();
+                                let prev_pending = self.level_up_pending;
                                 self.check_level_up();
+                                if self.level_up_pending && !prev_pending { se.level_up = true; }
                                 let pc = match kind_e {
                                     EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
                                     EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
                                     EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                                 };
                                 self.particles.emit(hit_x, hit_y, 8, pc);
+                                se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
                                     (ItemKind::Magnet, 0)
@@ -599,6 +629,7 @@ impl GameWorld {
                                 self.items.spawn(hit_x, hit_y, item_kind, item_value);
                             } else {
                                 self.particles.emit(hit_x, hit_y, 3, [1.0, 0.6, 0.1, 1.0]);
+                                se.enemy_hit = true;
                             }
                         }
                     }
@@ -643,7 +674,10 @@ impl GameWorld {
                                 let kind_e = self.enemies.kinds[ei];
                                 self.score += kind_e.exp_reward() * 2;
                                 self.exp   += kind_e.exp_reward();
+                                let prev_pending = self.level_up_pending;
                                 self.check_level_up();
+                                if self.level_up_pending && !prev_pending { se.level_up = true; }
+                                se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
                                     (ItemKind::Magnet, 0)
@@ -653,6 +687,8 @@ impl GameWorld {
                                     (ItemKind::Gem, kind_e.exp_reward())
                                 };
                                 self.items.spawn(hit_x, hit_y, item_kind, item_value);
+                            } else {
+                                se.enemy_hit = true;
                             }
                             hit_vec.push(ei);
                             next_search_x = hit_x;
@@ -724,7 +760,9 @@ impl GameWorld {
                         self.enemies.kill(ei);
                         self.score += kind.exp_reward() * 2;
                         self.exp   += kind.exp_reward();
+                        let prev_pending = self.level_up_pending;
                         self.check_level_up();
+                        if self.level_up_pending && !prev_pending { se.level_up = true; }
                         // 撃破: タイプ別パーティクル
                         let pc = match kind {
                             EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
@@ -732,6 +770,7 @@ impl GameWorld {
                             EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                         };
                         self.particles.emit(ex, ey, 8, pc);
+                        se.enemy_death = true;
                         // Step 19: アイテムドロップ（1体につき最大1種類）
                         let roll = self.rng.next_u32() % 100;
                         let (item_kind, item_value) = if roll < 2 {
@@ -746,6 +785,7 @@ impl GameWorld {
                         // ヒット: 通常は黄色、Fireball は炎色パーティクル
                         let hit_color = if piercing { [1.0, 0.4, 0.0, 1.0] } else { [1.0, 0.9, 0.3, 1.0] };
                         self.particles.emit(ex, ey, 3, hit_color);
+                        se.enemy_hit = true;
                     }
                     // 貫通弾は消えない
                     if !piercing {
@@ -795,6 +835,7 @@ impl GameWorld {
                             self.particles.emit(px, py, 8, [1.0, 0.9, 0.2, 1.0]);
                         }
                     }
+                    se.item_pickup = true;
                     self.items.kill(i);
                 }
             }
@@ -813,6 +854,8 @@ impl GameWorld {
             self.enemies.spawn(&positions, kind);
             self.last_spawn_secs = self.elapsed_seconds;
         }
+
+        se
     }
 
     fn find_nearest_enemy(&self, px: f32, py: f32) -> Option<usize> {
@@ -996,6 +1039,8 @@ struct App {
     game:        GameWorld,
     keys_held:   HashSet<KeyCode>,
     last_update: Option<Instant>,
+    // Step 22: 音声マネージャ（デバイスなし環境では None）
+    audio:       Option<AudioManager>,
 }
 
 impl App {
@@ -1006,6 +1051,7 @@ impl App {
             game:        GameWorld::new(),
             keys_held:   HashSet::new(),
             last_update: None,
+            audio:       None,
         }
     }
 }
@@ -1027,9 +1073,16 @@ impl ApplicationHandler for App {
 
         let renderer = pollster::block_on(Renderer::new(window.clone()));
 
+        // Step 22: 音声デバイスを初期化し BGM を開始する
+        let audio = AudioManager::new();
+        if let Some(ref am) = audio {
+            am.play_bgm(BGM_BYTES);
+        }
+
         self.window      = Some(window);
         self.renderer    = Some(renderer);
         self.last_update = Some(Instant::now());
+        self.audio       = audio;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -1103,7 +1156,25 @@ impl ApplicationHandler for App {
                 // ─── ゲームステップ ────────────────────────────
                 if let Some(last) = self.last_update {
                     let dt = now.duration_since(last).as_secs_f32().min(0.05);
-                    self.game.step(dt);
+                    let se = self.game.step(dt);
+
+                    // Step 22: SE 再生（音声デバイスが存在する場合のみ）
+                    if let Some(ref am) = self.audio {
+                        // レベルアップは最優先（他の SE より目立たせる）
+                        if se.level_up {
+                            am.play_se(LEVEL_UP_BYTES);
+                        } else if se.enemy_death {
+                            am.play_se(DEATH_BYTES);
+                        } else if se.enemy_hit {
+                            am.play_se(HIT_BYTES);
+                        }
+                        if se.player_hurt {
+                            am.play_se(PLAYER_HURT_BYTES);
+                        }
+                        if se.item_pickup {
+                            am.play_se_with_volume(ITEM_PICKUP_BYTES, 0.6);
+                        }
+                    }
                 }
                 self.last_update = Some(now);
 
