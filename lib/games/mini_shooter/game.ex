@@ -42,7 +42,7 @@ defmodule Game.MiniShooter do
   def context_defaults, do: %{}
 
   @impl Engine.Game
-  def assets_path, do: "vampire_survivor"
+  def assets_path, do: "mini_shooter"
 
   # ── GameLoop / StressMonitor が参照するオプションAPI ──────────────
   # ヴァンサバと同様のインターフェース。レベルアップなしのためスタブを返す。
