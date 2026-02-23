@@ -50,7 +50,7 @@ defmodule Engine.GameLoop do
 
     case Engine.SceneManager.current() do
       {:ok, %{module: ^level_up_scene}} ->
-        Game.NifBridge.skip_level_up(state.world_ref)
+        Engine.skip_level_up(state.world_ref)
         Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
         Engine.SceneManager.pop_scene()
         {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
@@ -67,7 +67,7 @@ defmodule Engine.GameLoop do
 
     case Engine.SceneManager.current() do
       {:ok, %{module: ^level_up_scene}} ->
-        Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
+        Engine.add_weapon(state.world_ref, weapon)
         new_weapon_levels = fetch_weapon_levels(state.world_ref)
         lv = Map.get(new_weapon_levels, weapon, 1)
         Logger.info("[LEVEL UP] Weapon selected: #{game.weapon_label(weapon, lv)} -> resuming")
@@ -165,12 +165,12 @@ defmodule Engine.GameLoop do
       state =
         case scene_state do
           %{choices: [first | _]} ->
-            Game.NifBridge.add_weapon(state.world_ref, to_string(first))
+            Engine.add_weapon(state.world_ref, first)
             new_levels = fetch_weapon_levels(state.world_ref)
             Logger.info("[LEVEL UP] Auto-selected: #{game.weapon_label(first, Map.get(new_levels, first, 1))} -> resuming")
             %{state | weapon_levels: new_levels}
           _ ->
-            Game.NifBridge.skip_level_up(state.world_ref)
+            Engine.skip_level_up(state.world_ref)
             Logger.info("[LEVEL UP] Auto-skipped (no choices) -> resuming")
             state
         end

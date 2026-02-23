@@ -31,7 +31,8 @@ use core::constants::{
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
 use core::item::{ItemKind, ItemWorld};
-use core::weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::entity_params::{WeaponParams, lightning_chain_count, whip_range};
+use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
@@ -472,7 +473,7 @@ impl GameWorld {
             score:            0,
             elapsed_seconds:  0.0,
             last_spawn_secs:  0.0,
-            weapon_slots:     vec![WeaponSlot::new(WeaponKind::MagicWand)],
+            weapon_slots:     vec![WeaponSlot::new(0)], // MagicWand
             exp:              0,
             level:            1,
             level_up_pending: false,
@@ -686,10 +687,10 @@ impl GameWorld {
             let dmg    = self.weapon_slots[si].effective_damage();
             let level  = self.weapon_slots[si].level;
             let bcount = self.weapon_slots[si].bullet_count();
-            let kind   = self.weapon_slots[si].kind;
+            let kind_id = self.weapon_slots[si].kind_id;
 
-            match kind {
-                WeaponKind::MagicWand => {
+            match kind_id {
+                0 => { // MagicWand
                     if let Some(ti) = self.find_nearest_enemy(px, py) {
                         let target_r = self.enemies.kinds[ti].radius();
                         let tx  = self.enemies.positions_x[ti] + target_r;
@@ -706,11 +707,11 @@ impl GameWorld {
                         self.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
-                WeaponKind::Axe => {
+                1 => { // Axe
                     self.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg);
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
-                WeaponKind::Cross => {
+                2 => { // Cross
                     let dirs_4: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
                     let diag = std::f32::consts::FRAC_1_SQRT_2;
                     let dirs_8: [(f32, f32); 8] = [
@@ -724,16 +725,16 @@ impl GameWorld {
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Whip ──────────────────────────────────────────
-                WeaponKind::Whip => {
-                    let whip_range = kind.whip_range(level);
+                3 => { // Whip
+                    let wr = whip_range(kind_id, level);
                     let whip_half_angle = std::f32::consts::PI * 0.3;
                     // facing_angle 方向の中間点にエフェクト弾を生成（kind=10: 黄緑の横長楕円）
-                    let eff_x = px + facing_angle.cos() * whip_range * 0.5;
-                    let eff_y = py + facing_angle.sin() * whip_range * 0.5;
+                    let eff_x = px + facing_angle.cos() * wr * 0.5;
+                    let eff_y = py + facing_angle.sin() * wr * 0.5;
                     self.bullets.spawn_effect(eff_x, eff_y, 0.12, 10);
                     // 空間ハッシュで範囲内の候補のみ取得し、全敵ループを回避
-                    let whip_range_sq = whip_range * whip_range;
-                    let candidates = self.collision.dynamic.query_nearby(px, py, whip_range);
+                    let whip_range_sq = wr * wr;
+                    let candidates = self.collision.dynamic.query_nearby(px, py, wr);
                     for ei in candidates {
                         if !self.enemies.alive[ei] { continue; }
                         let ex = self.enemies.positions_x[ei];
@@ -791,7 +792,7 @@ impl GameWorld {
                         if boss.alive && !boss.invincible {
                             let ddx = boss.x - px;
                             let ddy = boss.y - py;
-                            let whip_range_sq = whip_range * whip_range;
+                            let whip_range_sq = wr * wr;
                             if ddx * ddx + ddy * ddy <= whip_range_sq {
                                 let angle = ddy.atan2(ddx);
                                 let mut diff = angle - facing_angle;
@@ -808,7 +809,7 @@ impl GameWorld {
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Fireball ──────────────────────────────────────
-                WeaponKind::Fireball => {
+                4 => { // Fireball
                     if let Some(ti) = self.find_nearest_enemy(px, py) {
                         let target_r = self.enemies.kinds[ti].radius();
                         let tx  = self.enemies.positions_x[ti] + target_r;
@@ -823,8 +824,8 @@ impl GameWorld {
                     }
                 }
                 // ── Step 21: Lightning ─────────────────────────────────────
-                WeaponKind::Lightning => {
-                    let chain_count = kind.lightning_chain_count(level);
+                5 => { // Lightning
+                    let chain_count = lightning_chain_count(kind_id, level);
                     // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
                     let mut hit_vec: Vec<usize> = Vec::with_capacity(chain_count);
                     let mut current = self.find_nearest_enemy(px, py);
@@ -903,6 +904,7 @@ impl GameWorld {
                     }
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
+                _ => {}
             }
         }
 
@@ -1289,18 +1291,14 @@ impl GameWorld {
         if self.exp >= required {
             self.level_up_pending = true;
             // 選択肢: 未所持優先 → 低レベル順（Lv.8 は除外）
-            let all: &[(&str, WeaponKind)] = &[
-                ("magic_wand", WeaponKind::MagicWand),
-                ("axe",        WeaponKind::Axe),
-                ("cross",      WeaponKind::Cross),
-                ("whip",       WeaponKind::Whip),
-                ("fireball",   WeaponKind::Fireball),
-                ("lightning",  WeaponKind::Lightning),
+            let all: &[(&str, u8)] = &[
+                ("magic_wand", 0), ("axe", 1), ("cross", 2),
+                ("whip", 3), ("fireball", 4), ("lightning", 5),
             ];
             let mut choices: Vec<(i32, String)> = all.iter()
-                .filter_map(|(name, kind)| {
+                .filter_map(|(name, wid)| {
                     let lv = self.weapon_slots.iter()
-                        .find(|s| &s.kind == kind)
+                        .find(|s| s.kind_id == *wid)
                         .map(|s| s.level)
                         .unwrap_or(0);
                     if lv >= 8 { return None; }
@@ -1316,18 +1314,15 @@ impl GameWorld {
     /// 武器を選択してレベルアップを確定する
     fn select_weapon(&mut self, weapon_name: &str) {
         if weapon_name != "__skip__" {
-            let kind = match weapon_name {
-                "axe"       => WeaponKind::Axe,
-                "cross"     => WeaponKind::Cross,
-                "whip"      => WeaponKind::Whip,
-                "fireball"  => WeaponKind::Fireball,
-                "lightning" => WeaponKind::Lightning,
-                _           => WeaponKind::MagicWand,
+            let kind_id = match weapon_name {
+                "axe"       => 1, "cross"     => 2, "whip" => 3,
+                "fireball"  => 4, "lightning" => 5,
+                _           => 0, // MagicWand
             };
-            if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+            if let Some(slot) = self.weapon_slots.iter_mut().find(|s| s.kind_id == kind_id) {
                 slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
             } else if self.weapon_slots.len() < MAX_WEAPON_SLOTS {
-                self.weapon_slots.push(WeaponSlot::new(kind));
+                self.weapon_slots.push(WeaponSlot::new(kind_id));
             }
         }
         self.level            += 1;
@@ -1426,7 +1421,7 @@ impl GameWorld {
             level_up_pending: self.level_up_pending,
             weapon_choices:  self.weapon_choices.clone(),
             weapon_levels:   self.weapon_slots.iter()
-                .map(|s| (s.kind.name().to_string(), s.level))
+                .map(|s| (WeaponParams::get(s.kind_id).name.to_string(), s.level))
                 .collect(),
             magnet_timer:    self.magnet_timer,
             item_count:      self.items.count,

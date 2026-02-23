@@ -34,7 +34,7 @@ defmodule Engine do
   # ── World 操作（ゲームから利用）───────────────────────────────────────
 
   @doc """
-  通常敵をスポーンする。
+  通常敵をスポーンする（Step 38: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_enemies(world_ref, :slime, 5)
@@ -43,25 +43,27 @@ defmodule Engine do
 
   ## 引数
   - `world_ref` - エンジンが管理するワールド参照（context から取得）
-  - `kind` - 敵種別（`:slime` | `:bat` | `:golem`）
+  - `kind` - 敵種別アトム（`:slime` | `:bat` | `:golem`）
   - `count` - スポーン数
   """
   def spawn_enemies(world_ref, kind, count) do
-    Game.NifBridge.spawn_enemies(world_ref, kind, count)
+    kind_id = resolve_enemy_id(kind)
+    Game.NifBridge.spawn_enemies(world_ref, kind_id, count)
   end
 
   @doc """
-  エリート敵をスポーンする。HP 倍率を指定可能。
+  エリート敵をスポーンする。HP 倍率を指定可能（Step 38: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_elite_enemy(world_ref, :golem, 2, 3.0)
   """
   def spawn_elite_enemy(world_ref, kind, count, hp_multiplier) do
-    Game.NifBridge.spawn_elite_enemy(world_ref, kind, count, hp_multiplier)
+    kind_id = resolve_enemy_id(kind)
+    Game.NifBridge.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)
   end
 
   @doc """
-  ボスをスポーンする。
+  ボスをスポーンする（Step 38: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_boss(world_ref, :slime_king)
@@ -69,7 +71,8 @@ defmodule Engine do
       Engine.spawn_boss(world_ref, :stone_golem)
   """
   def spawn_boss(world_ref, kind) do
-    Game.NifBridge.spawn_boss(world_ref, kind)
+    kind_id = resolve_boss_id(kind)
+    Game.NifBridge.spawn_boss(world_ref, kind_id)
   end
 
   @doc """
@@ -171,18 +174,20 @@ defmodule Engine do
   end
 
   @doc """
-  武器を追加する。GameLoop の weapon 選択処理で呼ばれる。
-  ゲームは LevelUp シーンの戻り値 `{:transition, :pop, state}` 等で間接的にトリガーする。
+  武器を追加する（Step 38: entity_registry で weapon → ID に解決）。
+  GameLoop の weapon 選択処理で呼ばれる。
 
   ## 引数
   - `weapon_name` - 追加する武器の名前（atom または string）
   """
   def add_weapon(world_ref, weapon_name) when is_binary(weapon_name) do
-    Game.NifBridge.add_weapon(world_ref, weapon_name)
+    weapon_id = resolve_weapon_id(String.to_atom(weapon_name))
+    Game.NifBridge.add_weapon(world_ref, weapon_id)
   end
 
   def add_weapon(world_ref, weapon) when is_atom(weapon) do
-    Game.NifBridge.add_weapon(world_ref, to_string(weapon))
+    weapon_id = resolve_weapon_id(weapon)
+    Game.NifBridge.add_weapon(world_ref, weapon_id)
   end
 
   @doc """
@@ -223,4 +228,21 @@ defmodule Engine do
 
   @doc "現在シーンの state を更新する。GameLoop が使用。"
   defdelegate update_current_scene(fun), to: Engine.SceneManager, as: :update_current
+
+  # ── Step 38: entity_registry による ID 解決（内部用）─────────────────────
+
+  defp resolve_enemy_id(kind) do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    Map.get(game.entity_registry().enemies, kind, 0)
+  end
+
+  defp resolve_boss_id(kind) do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    Map.get(game.entity_registry().bosses, kind, 0)
+  end
+
+  defp resolve_weapon_id(weapon) do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    Map.get(game.entity_registry().weapons, weapon, 0)
+  end
 end

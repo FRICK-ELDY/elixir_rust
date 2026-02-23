@@ -170,7 +170,7 @@ end
 - [x] `initial_scenes/0` でゲームが起動シーンを指定（Step 34, 36）
 - [x] `physics_scenes/0` で物理演算対象シーンを抽象化（Step 35, 36）
 - [ ] 遷移時の特別処理の責務分離（シーン内完結 or on_transition コールバック）
-- [ ] `entity_registry/0` で ID ベースの敵・武器参照（Step 38）
+- [x] `entity_registry/0` で ID ベースの敵・武器参照（Step 38）
 - [ ] ゲーム登録メカニズム `config :game, current: Game.VampireSurvivor`（Step 34）
 
 ### 5.2 将来フェーズで検討

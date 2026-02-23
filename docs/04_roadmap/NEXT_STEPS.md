@@ -138,16 +138,14 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ### フェーズ3: 拡張性の強化（Step 38〜40、オプション）
 
-#### Step 38: エンティティ・武器の ID ベース参照
+#### Step 38: エンティティ・武器の ID ベース参照 ✅ 実装済み
 
 **目標**: Rust の enum を増やさずに、ゲームが敵・武器を追加できるようにする（データ駆動の第一歩）。
 
 **対応**:
-- `EnemyKind` / `WeaponKind` を `u8` ID にし、パラメータ（HP, speed 等）をテーブルで管理
-- Elixir 側でゲームごとの「ID → パラメータ」マップを保持し、NIF に渡す
-- ヴァンサバは既存の Slime/Bat/Golem を ID 0,1,2 でマッピング
-
-**難易度**: 高。`physics_step` 内の武器ロジックが enum に強く依存しているため、段階的な移行が必要。
+- `EnemyKind` / `WeaponKind` / `BossKind` を `u8` ID にし、パラメータを `core/entity_params.rs` のテーブルで管理
+- Elixir 側で `entity_registry/0` を実装し、atom → ID のマッピングを提供。Engine が ID に解決して NIF に渡す
+- ヴァンサバは既存の Slime/Bat/Golem を ID 0,1,2、武器を 0〜5、ボスを 0,1,2 でマッピング
 
 ---
 

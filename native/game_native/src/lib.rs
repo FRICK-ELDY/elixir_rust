@@ -1,9 +1,10 @@
 mod core;
 
-// ベンチマーク等から利用するため re-export
+// ベンチマーク等から利用するため re-export（後方互換）
 pub use core::enemy::EnemyKind;
 pub use core::boss::BossKind;
 
+use core::entity_params::{BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count};
 use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_SEPARATION_FORCE,
@@ -13,7 +14,7 @@ use core::constants::{
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
 use core::item::{ItemKind, ItemWorld};
-use core::weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
@@ -63,19 +64,7 @@ pub enum FrameEvent {
     BossDefeated { boss_kind: u8 },
 }
 
-// ─── 敵タイプ（core を継承、NIF 用 from_atom を追加）──────────
-impl EnemyKind {
-    /// Elixir アトムから敵タイプを変換
-    pub fn from_atom(atom: Atom) -> Self {
-        if atom == bat() {
-            Self::Bat
-        } else if atom == golem() {
-            Self::Golem
-        } else {
-            Self::Slime
-        }
-    }
-}
+// Step 38: 敵は u8 ID で参照。atom から ID への変換は Elixir の entity_registry で行う。
 
 // ─── Player ───────────────────────────────────────────────────
 pub struct PlayerState {
@@ -97,7 +86,7 @@ pub struct EnemyWorld {
     pub speeds:       Vec<f32>,
     pub hp:           Vec<f32>,
     pub alive:        Vec<bool>,
-    pub kinds:        Vec<EnemyKind>,
+    pub kind_ids:     Vec<u8>,
     pub count:        usize,
     /// 分離パス用の作業バッファ（毎フレーム再利用してアロケーションを回避）
     pub sep_x:        Vec<f32>,
@@ -118,7 +107,7 @@ impl EnemyWorld {
             speeds:       Vec::new(),
             hp:           Vec::new(),
             alive:        Vec::new(),
-            kinds:        Vec::new(),
+            kind_ids:     Vec::new(),
             count:        0,
             sep_x:        Vec::new(),
             sep_y:        Vec::new(),
@@ -139,10 +128,11 @@ impl EnemyWorld {
         }
     }
 
-    /// 指定タイプの敵を `positions` の座標にスポーン（O(1) でスロット取得）
-    pub fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
-        let speed  = kind.speed();
-        let max_hp = kind.max_hp();
+    /// 指定 ID の敵を `positions` の座標にスポーン（O(1) でスロット取得）
+    pub fn spawn(&mut self, positions: &[(f32, f32)], kind_id: u8) {
+        let params = EnemyParams::get(kind_id);
+        let speed  = params.speed;
+        let max_hp = params.max_hp;
 
         for &(x, y) in positions {
             if let Some(i) = self.free_list.pop() {
@@ -154,7 +144,7 @@ impl EnemyWorld {
                 self.speeds[i]       = speed;
                 self.hp[i]           = max_hp;
                 self.alive[i]        = true;
-                self.kinds[i]        = kind;
+                self.kind_ids[i]     = kind_id;
                 self.sep_x[i]        = 0.0;
                 self.sep_y[i]        = 0.0;
             } else {
@@ -165,7 +155,7 @@ impl EnemyWorld {
                 self.speeds.push(speed);
                 self.hp.push(max_hp);
                 self.alive.push(true);
-                self.kinds.push(kind);
+                self.kind_ids.push(kind_id);
                 self.sep_x.push(0.0);
                 self.sep_y.push(0.0);
             }
@@ -626,19 +616,10 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 }
 
 
-// ─── Step 24: ボス種別（core を継承、NIF 用 from_atom を追加）──
-impl BossKind {
-    /// Elixir アトムからボス種別を変換
-    pub fn from_atom(atom: Atom) -> Option<Self> {
-        if atom == slime_king() { Some(Self::SlimeKing) }
-        else if atom == bat_lord() { Some(Self::BatLord) }
-        else if atom == stone_golem() { Some(Self::StoneGolem) }
-        else { None }
-    }
-}
+// Step 38: ボスは u8 kind_id で参照。0=SlimeKing, 1=BatLord, 2=StoneGolem
 
 pub struct BossState {
-    pub kind:             BossKind,
+    pub kind_id:          u8,
     pub x:                f32,
     pub y:                f32,
     pub hp:               f32,
@@ -653,14 +634,14 @@ pub struct BossState {
 }
 
 impl BossState {
-    pub fn new(kind: BossKind, x: f32, y: f32) -> Self {
-        let max_hp = kind.max_hp();
+    pub fn new(kind_id: u8, x: f32, y: f32) -> Self {
+        let params = BossParams::get(kind_id);
         Self {
-            kind,
+            kind_id,
             x, y,
-            hp: max_hp,
-            max_hp,
-            phase_timer: kind.special_interval(),
+            hp: params.max_hp,
+            max_hp: params.max_hp,
+            phase_timer: params.special_interval,
             invincible: false,
             invincible_timer: 0.0,
             is_dashing: false,
@@ -767,7 +748,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         exp:                0,
         level:              1,
         level_up_pending:   false,
-        weapon_slots:       vec![WeaponSlot::new(WeaponKind::MagicWand)],
+        weapon_slots:       vec![WeaponSlot::new(0)], // MagicWand
         boss:               None,
         frame_events:       Vec::new(),
     })))
@@ -788,17 +769,14 @@ fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> NifResul
     Ok(ok())
 }
 
-/// 敵をスポーン（Step 9 / Step 18）
-/// kind: :slime | :bat | :golem
+/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem）
 #[rustler::nif]
-fn spawn_enemies(world: ResourceArc<GameWorld>, kind: Atom, count: usize) -> NifResult<Atom> {
+fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
-    let enemy_kind = EnemyKind::from_atom(kind);
-    // rng の借用を先に終わらせてから enemies に渡す
     let positions: Vec<(f32, f32)> = (0..count)
         .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
         .collect();
-    w.enemies.spawn(&positions, enemy_kind);
+    w.enemies.spawn(&positions, kind_id);
     Ok(ok())
 }
 
@@ -857,8 +835,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
         if !w.enemies.alive[idx] {
             continue;
         }
-        let kind = w.enemies.kinds[idx];
-        let enemy_r = kind.radius();
+        let kind_id = w.enemies.kind_ids[idx];
+        let params = EnemyParams::get(kind_id);
+        let enemy_r = params.radius;
         let hit_radius = PLAYER_RADIUS + enemy_r;
         let ex = w.enemies.positions_x[idx] + enemy_r;
         let ey = w.enemies.positions_y[idx] + enemy_r;
@@ -869,7 +848,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
         if dist_sq < hit_radius * hit_radius {
             // 敵→プレイヤーへのダメージ（無敵時間中は無効）
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
-                let dmg = kind.damage_per_sec() * dt;
+                let dmg = params.damage_per_sec * dt;
                 w.player.hp = (w.player.hp - dmg).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
                 w.frame_events.push(FrameEvent::PlayerDamaged { damage: dmg });
@@ -902,16 +881,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             if w.weapon_slots[si].cooldown_timer > 0.0 {
                 continue;
             }
-            let kind  = w.weapon_slots[si].kind;
+            let kind_id = w.weapon_slots[si].kind_id;
+            let wp = WeaponParams::get(kind_id);
             // Step 17: レベルに応じたクールダウン・ダメージ・弾数を使用
             let cd    = w.weapon_slots[si].effective_cooldown();
             let dmg   = w.weapon_slots[si].effective_damage();
             let level = w.weapon_slots[si].level;
             let bcount = w.weapon_slots[si].bullet_count();
-            match kind {
-                WeaponKind::MagicWand => {
+            match kind_id {
+                0 => { // MagicWand
                     if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, WEAPON_SEARCH_RADIUS) {
-                        let target_r = w.enemies.kinds[ti].radius();
+                        let target_r = EnemyParams::get(w.enemies.kind_ids[ti]).radius;
                         let tx   = w.enemies.positions_x[ti] + target_r;
                         let ty   = w.enemies.positions_y[ti] + target_r;
                         let bdx  = tx - px;
@@ -925,17 +905,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                             let angle = base_angle + (bi as f32 - half) * spread;
                             let vx = angle.cos() * BULLET_SPEED;
                             let vy = angle.sin() * BULLET_SPEED;
-                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME, kind.as_u8());
+                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME, wp.as_u8);
                         }
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
-                WeaponKind::Axe => {
+                1 => { // Axe
                     // 上方向に直進（簡易実装）
-                    w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME, kind.as_u8());
+                    w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME, wp.as_u8);
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                WeaponKind::Cross => {
+                2 => { // Cross
                     // Lv1〜3: 上下左右 4 方向、Lv4 以上: 斜め 4 方向も追加
                     let dirs_4: [(f32, f32); 4] = [
                         (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
@@ -947,14 +927,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     ];
                     let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
                     for &(dx_dir, dy_dir) in dirs {
-                        w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME, kind.as_u8());
+                        w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME, wp.as_u8);
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Whip ──────────────────────────────────────────
-                WeaponKind::Whip => {
+                3 => {
                     // プレイヤーの移動方向に扇状の判定を出す（弾丸を生成しない直接判定）
-                    let whip_range = kind.whip_range(level);
+                    let whip_range = whip_range(kind_id, level);
                     let whip_half_angle = std::f32::consts::PI * 0.3; // 108度 / 2 = 54度
                     // facing_angle 方向の中間点にエフェクト弾を生成（kind=10: 黄緑の横長楕円）
                     let eff_x = px + facing_angle.cos() * whip_range * 0.5;
@@ -977,19 +957,20 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         if diff >  std::f32::consts::PI { diff -= std::f32::consts::TAU; }
                         if diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
                         if diff.abs() < whip_half_angle {
-                            let enemy_r = w.enemies.kinds[ei].radius();
+                            let enemy_r = EnemyParams::get(w.enemies.kind_ids[ei]).radius;
                             let hit_x = ex + enemy_r;
                             let hit_y = ey + enemy_r;
                             w.enemies.hp[ei] -= dmg as f32;
                             if w.enemies.hp[ei] <= 0.0 {
-                                let kind_e = w.enemies.kinds[ei];
+                                let kind_e = w.enemies.kind_ids[ei];
+                                let ep_hit = EnemyParams::get(kind_e);
                                 w.enemies.kill(ei);
                                 w.frame_events.push(FrameEvent::EnemyKilled {
-                                    enemy_kind:  kind_e as u8,
-                                    weapon_kind: kind.as_u8(),
+                                    enemy_kind:  kind_e,
+                                    weapon_kind: wp.as_u8,
                                 });
-                                w.score += kind_e.exp_reward() * 2;
-                                w.exp   += kind_e.exp_reward();
+                                w.score += ep_hit.exp_reward * 2;
+                                w.exp   += ep_hit.exp_reward;
                                 if !w.level_up_pending {
                                     let required = exp_required_for_next(w.level);
                                     if w.exp >= required {
@@ -998,19 +979,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                                         w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                                     }
                                 }
-                                let pc = match kind_e {
-                                    EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
-                                    EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
-                                    EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
-                                };
-                                w.particles.emit(hit_x, hit_y, 8, pc);
+                                w.particles.emit(hit_x, hit_y, 8, ep_hit.particle_color);
                                 let roll = w.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
                                     (ItemKind::Magnet, 0)
                                 } else if roll < 7 {
                                     (ItemKind::Potion, 20)
                                 } else {
-                                    (ItemKind::Gem, kind_e.exp_reward())
+                                    (ItemKind::Gem, ep_hit.exp_reward)
                                 };
                                 w.items.spawn(hit_x, hit_y, item_kind, item_value);
                             } else {
@@ -1041,11 +1017,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                // ── Step 21: Fireball ──────────────────────────────────────
-                WeaponKind::Fireball => {
+                4 => {
                     // 最近接敵に向かって貫通弾を発射
                     if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, WEAPON_SEARCH_RADIUS) {
-                        let target_r = w.enemies.kinds[ti].radius();
+                        let target_r = EnemyParams::get(w.enemies.kind_ids[ti]).radius;
                         let tx  = w.enemies.positions_x[ti] + target_r;
                         let ty  = w.enemies.positions_y[ti] + target_r;
                         let bdx = tx - px;
@@ -1053,14 +1028,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         let base_angle = bdy.atan2(bdx);
                         let vx = base_angle.cos() * BULLET_SPEED;
                         let vy = base_angle.sin() * BULLET_SPEED;
-                        w.bullets.spawn_piercing(px, py, vx, vy, dmg, BULLET_LIFETIME, kind.as_u8());
+                        w.bullets.spawn_piercing(px, py, vx, vy, dmg, BULLET_LIFETIME, wp.as_u8);
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
                 // ── Step 21: Lightning ─────────────────────────────────────
-                WeaponKind::Lightning => {
+                5 => {
                     // 最近接敵から始まり、最大 chain_count 体に連鎖
-                    let chain_count = kind.lightning_chain_count(level);
+                    let chain_count = lightning_chain_count(kind_id, level);
                     // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
                     let mut hit_vec: Vec<usize> = Vec::with_capacity(chain_count);
                     // 最初はプレイヤー位置から最近接敵を探す（空間ハッシュで候補を絞る）
@@ -1071,7 +1046,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     let mut next_search_y = py;
                     for _ in 0..chain_count {
                         if let Some(ei) = current {
-                            let enemy_r = w.enemies.kinds[ei].radius();
+                            let enemy_r = EnemyParams::get(w.enemies.kind_ids[ei]).radius;
                             let hit_x = w.enemies.positions_x[ei] + enemy_r;
                             let hit_y = w.enemies.positions_y[ei] + enemy_r;
                             w.enemies.hp[ei] -= dmg as f32;
@@ -1079,14 +1054,15 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                             w.bullets.spawn_effect(hit_x, hit_y, 0.10, BULLET_KIND_LIGHTNING);
                             w.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
                             if w.enemies.hp[ei] <= 0.0 {
-                                let kind_e = w.enemies.kinds[ei];
+                                let kind_e = w.enemies.kind_ids[ei];
+                                let ep_chain = EnemyParams::get(kind_e);
                                 w.enemies.kill(ei);
                                 w.frame_events.push(FrameEvent::EnemyKilled {
-                                    enemy_kind:  kind_e as u8,
-                                    weapon_kind: kind.as_u8(),
+                                    enemy_kind:  kind_e,
+                                    weapon_kind: wp.as_u8,
                                 });
-                                w.score += kind_e.exp_reward() * 2;
-                                w.exp   += kind_e.exp_reward();
+                                w.score += ep_chain.exp_reward * 2;
+                                w.exp   += ep_chain.exp_reward;
                                 if !w.level_up_pending {
                                     let required = exp_required_for_next(w.level);
                                     if w.exp >= required {
@@ -1101,7 +1077,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                                 } else if roll < 7 {
                                     (ItemKind::Potion, 20)
                                 } else {
-                                    (ItemKind::Gem, kind_e.exp_reward())
+                                    (ItemKind::Gem, ep_chain.exp_reward)
                                 };
                                 w.items.spawn(hit_x, hit_y, item_kind, item_value);
                             }
@@ -1136,6 +1112,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
+                _ => {} // 未知の武器 ID（6 以上）は何もしない
             }
         }
     }
@@ -1252,8 +1229,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             if !w.enemies.alive[ei] {
                 continue;
             }
-            let kind    = w.enemies.kinds[ei];
-            let enemy_r = kind.radius();
+            let kind_id = w.enemies.kind_ids[ei];
+            let ep = EnemyParams::get(kind_id);
+            let enemy_r = ep.radius;
             let hit_r   = BULLET_RADIUS + enemy_r;
             let ex  = w.enemies.positions_x[ei] + enemy_r;
             let ey  = w.enemies.positions_y[ei] + enemy_r;
@@ -1265,14 +1243,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     let weapon_k = w.bullets.weapon_kind[bi];
                     w.enemies.kill(ei);
                     w.frame_events.push(FrameEvent::EnemyKilled {
-                        enemy_kind:  kind as u8,
+                        enemy_kind:  kind_id,
                         weapon_kind: weapon_k,
                     });
                     // ── Step 13: 敵撃破でスコア加算 ──────────────
                     // Step 18: 敵タイプに応じたスコア（経験値 × 2）
-                    w.score += kind.exp_reward() * 2;
+                    w.score += ep.exp_reward * 2;
                     // ── Step 14/18: 経験値加算（タイプ別）────────
-                    w.exp += kind.exp_reward();
+                    w.exp += ep.exp_reward;
                     if !w.level_up_pending {
                         let required = exp_required_for_next(w.level);
                         if w.exp >= required {
@@ -1282,12 +1260,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         }
                     }
                     // ── Step 16/18: 敵タイプ別パーティクル ────────
-                    let particle_color = match kind {
-                        EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
-                        EnemyKind::Bat   => [0.7, 0.2, 0.9, 1.0],
-                        EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
-                    };
-                    w.particles.emit(ex, ey, 8, particle_color);
+                    w.particles.emit(ex, ey, 8, ep.particle_color);
                     // ── Step 19: アイテムドロップ（1体につき最大1種類）──
                     // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
                     let roll = w.rng.next_u32() % 100;
@@ -1296,7 +1269,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     } else if roll < 7 {
                         (ItemKind::Potion, 20)
                     } else {
-                        (ItemKind::Gem, kind.exp_reward())
+                        (ItemKind::Gem, ep.exp_reward)
                     };
                     w.items.spawn(ex, ey, item_kind, item_value);
                 } else {
@@ -1369,16 +1342,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             }
 
             // 移動 AI
-            match boss.kind {
-                BossKind::SlimeKing | BossKind::StoneGolem => {
+            let bp = BossParams::get(boss.kind_id);
+            match boss.kind_id {
+                0 | 2 => { // SlimeKing, StoneGolem
                     let ddx = px - boss.x;
                     let ddy = py - boss.y;
                     let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
-                    let spd = boss.kind.speed();
+                    let spd = bp.speed;
                     boss.x += (ddx / dist) * spd * dt;
                     boss.y += (ddy / dist) * spd * dt;
                 }
-                BossKind::BatLord => {
+                1 => { // BatLord
                     if boss.is_dashing {
                         boss.x += boss.dash_vx * dt;
                         boss.y += boss.dash_vy * dt;
@@ -1392,25 +1366,26 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         let ddx = px - boss.x;
                         let ddy = py - boss.y;
                         let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
-                        boss.x += (ddx / dist) * boss.kind.speed() * dt;
-                        boss.y += (ddy / dist) * boss.kind.speed() * dt;
+                        boss.x += (ddx / dist) * bp.speed * dt;
+                        boss.y += (ddy / dist) * bp.speed * dt;
                     }
                 }
+                _ => {}
             }
-            boss.x = boss.x.clamp(boss.kind.radius(), SCREEN_WIDTH  - boss.kind.radius());
-            boss.y = boss.y.clamp(boss.kind.radius(), SCREEN_HEIGHT - boss.kind.radius());
+            boss.x = boss.x.clamp(bp.radius, SCREEN_WIDTH  - bp.radius);
+            boss.y = boss.y.clamp(bp.radius, SCREEN_HEIGHT - bp.radius);
 
             // 特殊行動タイマー
             boss.phase_timer -= dt;
             if boss.phase_timer <= 0.0 {
-                boss.phase_timer = boss.kind.special_interval();
-                match boss.kind {
-                    BossKind::SlimeKing => {
+                boss.phase_timer = bp.special_interval;
+                match boss.kind_id {
+                    0 => { // SlimeKing
                         eff.spawn_slimes = true;
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;
                     }
-                    BossKind::BatLord => {
+                    1 => { // BatLord
                         let ddx = px - boss.x;
                         let ddy = py - boss.y;
                         let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
@@ -1424,16 +1399,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;
                     }
-                    BossKind::StoneGolem => {
+                    2 => { // StoneGolem
                         eff.spawn_rocks = true;
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;
                     }
+                    _ => {}
                 }
             }
 
             // ボス vs プレイヤー接触ダメージ: フラグだけ立てる
-            let boss_r = boss.kind.radius();
+            let boss_r = bp.radius;
             let hit_r  = PLAYER_RADIUS + boss_r;
             let ddx = px - boss.x;
             let ddy = py - boss.y;
@@ -1441,13 +1417,13 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                 eff.hurt_player = true;
                 eff.hurt_x = px;
                 eff.hurt_y = py;
-                eff.boss_damage = boss.kind.damage_per_sec();
+                eff.boss_damage = bp.damage_per_sec;
             }
 
             // 弾丸 vs ボス: ヒット判定に必要なデータをコピー
             eff.boss_invincible = boss.invincible;
-            eff.boss_r          = boss.kind.radius();
-            eff.boss_exp_reward = boss.kind.exp_reward();
+            eff.boss_r          = bp.radius;
+            eff.boss_exp_reward = bp.exp_reward;
             eff.boss_x          = boss.x;
             eff.boss_y          = boss.y;
             eff.boss_hp_ref     = boss.hp;
@@ -1512,7 +1488,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                 let angle = i as f32 * std::f32::consts::TAU / 8.0;
                 (eff.special_x + angle.cos() * 120.0, eff.special_y + angle.sin() * 120.0)
             }).collect();
-            w.enemies.spawn(&positions, EnemyKind::Slime);
+            w.enemies.spawn(&positions, 0); // Slime
             w.particles.emit(eff.special_x, eff.special_y, 16, [0.2, 1.0, 0.2, 1.0]);
         }
         if eff.spawn_rocks {
@@ -1525,7 +1501,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             w.particles.emit(eff.special_x, eff.special_y, 12, [0.8, 0.2, 1.0, 1.0]);
         }
         if eff.boss_killed {
-            let boss_k = w.boss.as_ref().map(|b| b.kind as u8).unwrap_or(0);
+            let boss_k = w.boss.as_ref().map(|b| b.kind_id).unwrap_or(0);
             w.frame_events.push(FrameEvent::BossDefeated { boss_kind: boss_k });
             w.score += eff.exp_reward * 2;
             w.exp   += eff.exp_reward;
@@ -1618,14 +1594,12 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8
     result.push((w.player.x, w.player.y, 0u8));
     // Step 24: ボスを描画（中心座標からスプライト左上に変換）
     if let Some(ref boss) = w.boss {
-        let boss_sprite_size = match boss.kind {
-            BossKind::StoneGolem => 128.0,
-            _ => 96.0,
-        };
+        let bp = BossParams::get(boss.kind_id);
+        let boss_sprite_size = if boss.kind_id == 2 { 128.0 } else { 96.0 }; // StoneGolem
         result.push((
             boss.x - boss_sprite_size / 2.0,
             boss.y - boss_sprite_size / 2.0,
-            boss.kind.render_kind(),
+            bp.render_kind,
         ));
     }
     for i in 0..w.enemies.len() {
@@ -1633,7 +1607,7 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8
             result.push((
                 w.enemies.positions_x[i],
                 w.enemies.positions_y[i],
-                w.enemies.kinds[i].render_kind(),
+                EnemyParams::get(w.enemies.kind_ids[i]).render_kind,
             ));
         }
     }
@@ -1762,33 +1736,23 @@ fn get_level_up_data(world: ResourceArc<GameWorld>) -> NifResult<(u32, u32, bool
 fn get_weapon_levels(world: ResourceArc<GameWorld>) -> NifResult<Vec<(String, u32)>> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     Ok(w.weapon_slots.iter()
-        .map(|s| (s.kind.name().to_string(), s.level))
+        .map(|s| (WeaponParams::get(s.kind_id).name.to_string(), s.level))
         .collect())
 }
 
-/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17/21）
-/// weapon_name: "magic_wand" | "axe" | "cross" | "whip" | "fireball" | "lightning"
+/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17/21/38）
+/// weapon_id: 0=MagicWand, 1=Axe, 2=Cross, 3=Whip, 4=Fireball, 5=Lightning
 /// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
 /// 新規武器は最大 6 スロットまで追加可能
 #[rustler::nif]
-fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> NifResult<Atom> {
+fn add_weapon(world: ResourceArc<GameWorld>, weapon_id: u8) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
 
-    let kind = match weapon_name {
-        "magic_wand" => WeaponKind::MagicWand,
-        "axe"        => WeaponKind::Axe,
-        "cross"      => WeaponKind::Cross,
-        "whip"       => WeaponKind::Whip,
-        "fireball"   => WeaponKind::Fireball,
-        "lightning"  => WeaponKind::Lightning,
-        _            => WeaponKind::MagicWand,
-    };
-
     // 同じ武器を選んだ場合はレベルアップ
-    if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind == kind) {
+    if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind_id == weapon_id) {
         slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
     } else if w.weapon_slots.len() < MAX_WEAPON_SLOTS {
-        w.weapon_slots.push(WeaponSlot::new(kind));
+        w.weapon_slots.push(WeaponSlot::new(weapon_id));
     }
     // Slots full + new weapon: no-op (Elixir-side generate_weapon_choices must not offer this)
 
@@ -1842,19 +1806,19 @@ fn get_magnet_timer(world: ResourceArc<GameWorld>) -> NifResult<f64> {
 
 // ─── Step 24: ボス関連 NIF ─────────────────────────────────────
 
-/// ボスをスポーンする（Elixir 側から呼び出す）
-/// kind: :slime_king | :bat_lord | :stone_golem
+/// ボスをスポーンする（Step 38: kind_id で指定。0=SlimeKing, 1=BatLord, 2=StoneGolem）
 /// スポーン位置はプレイヤーの右 600px
 #[rustler::nif]
-fn spawn_boss(world: ResourceArc<GameWorld>, kind: Atom) -> NifResult<Atom> {
+fn spawn_boss(world: ResourceArc<GameWorld>, kind_id: u8) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     if w.boss.is_some() { return Ok(ok()); }
-    if let Some(boss_kind) = BossKind::from_atom(kind) {
+    if kind_id <= 2 {
+        let bp = BossParams::get(kind_id);
         let px = w.player.x + PLAYER_RADIUS;
         let py = w.player.y + PLAYER_RADIUS;
-        let bx = (px + 600.0).min(SCREEN_WIDTH  - boss_kind.radius());
-        let by = py.clamp(boss_kind.radius(), SCREEN_HEIGHT - boss_kind.radius());
-        w.boss = Some(BossState::new(boss_kind, bx, by));
+        let bx = (px + 600.0).min(SCREEN_WIDTH  - bp.radius);
+        let by = py.clamp(bp.radius, SCREEN_HEIGHT - bp.radius);
+        w.boss = Some(BossState::new(kind_id, bx, by));
     }
     Ok(ok())
 }
@@ -1878,30 +1842,26 @@ fn is_player_dead(world: ResourceArc<GameWorld>) -> NifResult<bool> {
 }
 
 /// エリート敵をスポーンする（通常敵の hp_multiplier 倍の HP を持つ）
-/// kind: :slime | :bat | :golem
+/// kind_id: 0=Slime, 1=Bat, 2=Golem
 /// hp_multiplier: 1.0 = 通常、3.0 = エリート（HP 3 倍）
 #[rustler::nif]
-fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
+fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
-    let enemy_kind = EnemyKind::from_atom(kind);
+    let ep = EnemyParams::get(kind_id);
     let positions: Vec<(f32, f32)> = (0..count)
         .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
         .collect();
     // 通常スポーン後に HP を倍率で上書き
     let before_len = w.enemies.positions_x.len();
-    w.enemies.spawn(&positions, enemy_kind);
+    w.enemies.spawn(&positions, kind_id);
     let after_len = w.enemies.positions_x.len();
-    let base_hp = enemy_kind.max_hp() * hp_multiplier as f32;
+    let base_hp = ep.max_hp * hp_multiplier as f32;
     // 新規追加分と再利用スロット分の両方に倍率を適用
-    // 再利用スロットは spawn 内で hp をリセット済みのため、全 alive スロットを走査して
-    // 直近 count 体分（最後に alive になったもの）に倍率を掛ける
-    // 簡易実装: 末尾 count 体の alive スロットを倍率適用
     let mut applied = 0;
     for i in (0..after_len).rev() {
         if applied >= count { break; }
-        if w.enemies.alive[i] && w.enemies.kinds[i] == enemy_kind {
-            // 新規追加分（before_len 以降）または最近 alive になったスロット
-            if i >= before_len || (w.enemies.hp[i] - enemy_kind.max_hp()).abs() < 0.01 {
+        if w.enemies.alive[i] && w.enemies.kind_ids[i] == kind_id {
+            if i >= before_len || (w.enemies.hp[i] - ep.max_hp).abs() < 0.01 {
                 w.enemies.hp[i] = base_hp;
                 applied += 1;
             }
