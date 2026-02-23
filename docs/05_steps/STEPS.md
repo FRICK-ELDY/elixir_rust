@@ -442,7 +442,7 @@ image = "0.25"
 ### 4.2 テクスチャアトラスの準備
 
 `assets/sprites/atlas.png` を用意する（仮のプレースホルダー画像でも可）。  
-詳細な仕様は [SPEC.md § 5.5](SPEC.md#55-テクスチャアトラス仕様) を参照。
+詳細な仕様は [SPEC.md § 5.5](../01_setup/SPEC.md#55-テクスチャアトラス仕様) を参照。
 
 ### 4.3 頂点・インデックスバッファ
 
@@ -1214,7 +1214,7 @@ pub fn update_chase_ai(
 
 ### 10.1 Spatial Hash の実装
 
-詳細な実装は [SPEC.md § 6.1](SPEC.md#61-dual-spatial-hash) を参照。
+詳細な実装は [SPEC.md § 6.1](../01_setup/SPEC.md#61-dual-spatial-hash) を参照。
 
 ```rust
 // native/game_native/src/physics/spatial_hash.rs
@@ -1523,8 +1523,8 @@ flowchart LR
 
 ## 参考ドキュメント
 
-- [ゲーム仕様書](SPEC.md) — 各ステップの詳細な技術仕様
-- [Elixir 採用理由](WHY_ELIXIR.md) — アーキテクチャの設計思想
+- [ゲーム仕様書](../01_setup/SPEC.md) — 各ステップの詳細な技術仕様
+- [Elixir 採用理由](../03_tech_decisions/WHY_ELIXIR.md) — アーキテクチャの設計思想
 - [Rustler ドキュメント](https://docs.rs/rustler) — NIF 実装の詳細
 - [wgpu ドキュメント](https://docs.rs/wgpu) — GPU 描画の詳細
 - [Learn wgpu](https://sotrh.github.io/learn-wgpu/) — wgpu チュートリアル

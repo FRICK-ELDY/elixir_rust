@@ -1,6 +1,6 @@
 # G3: アセット管理システム設計
 
-**根拠**: [PRIORITY_STEPS.md](./PRIORITY_STEPS.md) G3 — 実行時ロードがないため大規模ゲームにスケールしない
+**根拠**: [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) G3 — 実行時ロードがないため大規模ゲームにスケールしない
 
 ---
 
@@ -121,5 +121,5 @@ cargo run --bin game_window
 
 ## 6. 関連ドキュメント
 
-- [PRIORITY_STEPS.md](./PRIORITY_STEPS.md) — G3 設計方針
-- [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) — 弱み分析（アセット埋め込み）
+- [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) — G3 設計方針
+- [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 弱み分析（アセット埋め込み）
