@@ -153,7 +153,7 @@ native/
 | 3 | `cargo build` でコンパイルエラーがないことを確認 | — |
 | 4 | `mix compile` で NIF が正常にビルドされることを確認 | — |
 | 5 | `cargo run --bin game_window` で描画が正常に動作することを確認 | — |
-| 6 | `STEPS.md` の Step 2〜5 のコードサンプルを更新 | `docs/STEPS.md` |
+| 6 | `STEPS.md` の Step 2〜5 のコードサンプルを更新 | `docs/05_steps/STEPS.md` |
 
 **所要時間の見積もり**: 1〜2 時間（テスト含む）
 

@@ -99,8 +99,14 @@ elixir_rust/
 │   ├── sprites/                     # スプライトシート（テクスチャアトラス）
 │   └── audio/
 ├── docs/
-│   ├── SPEC.md                      # ゲーム仕様書
-│   └── WHY_ELIXIR.md                # Elixir採用理由
+│   ├── docs_index.md                # ドキュメント索引
+│   ├── 01_setup/                    # 入門・セットアップ
+│   ├── 02_spec_design/              # 仕様・設計
+│   ├── 03_tech_decisions/           # 技術選定の背景
+│   ├── 04_roadmap/                  # 実装ロードマップ
+│   ├── 05_steps/                    # ステップガイド
+│   ├── 06_system_design/            # システム設計・提案
+│   └── 07_presentation/             # プレゼンテーション
 └── test/
 ```
 
@@ -110,12 +116,12 @@ elixir_rust/
 
 | ツール | バージョン | 備考 |
 |---|---|---|
-| Elixir | ~> 1.19 | [docs/SETUP_ELIXIR.md](docs/SETUP_ELIXIR.md) を参照 |
+| Elixir | ~> 1.19 | [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) を参照 |
 | Erlang/OTP | 26 以上 | Elixir に同梱、または別途インストール |
 | Rust | 1.80 以上 (stable) | `rustup` でインストール |
 | wgpu 対応 GPU ドライバ | — | Vulkan / Metal / DX12 いずれか |
 
-> **Windows での Elixir インストール**: 詳細は [docs/SETUP_ELIXIR.md](docs/SETUP_ELIXIR.md) を参照してください。
+> **Windows での Elixir インストール**: 詳細は [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) を参照してください。
 
 ### インストール
 
@@ -180,9 +186,10 @@ platform/windows/
 
 ## 関連ドキュメント
 
-- [実装ステップガイド](docs/STEPS.md) — Step 1〜15 の段階的な実装手順
-- [ゲーム仕様書](docs/SPEC.md) — ゲームデザイン・技術仕様・NIF API 定義
-- [Elixir 採用理由](docs/WHY_ELIXIR.md) — BEAM VM の強み・他言語との比較
+- [ドキュメント索引](docs/docs_index.md) — 全ドキュメントの一覧・ナビゲーション
+- [実装ステップガイド](docs/05_steps/STEPS.md) — Step 1〜15 の段階的な実装手順
+- [ゲーム仕様書](docs/01_setup/SPEC.md) — ゲームデザイン・技術仕様・NIF API 定義
+- [Elixir 採用理由](docs/03_tech_decisions/WHY_ELIXIR.md) — BEAM VM の強み・他言語との比較
 
 ## ライセンス
 

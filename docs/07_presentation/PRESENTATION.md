@@ -441,11 +441,11 @@ Step 15: ゲームオーバー・リスタート              ← ゲームと�
 
 | ドキュメント | 内容 |
 |---|---|
-| [STEPS.md](STEPS.md) | 15 ステップの実装ガイド（コード全文付き） |
-| [SPEC.md](SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |
-| [WHY_ELIXIR.md](WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
-| [WHY_RAYON.md](WHY_RAYON.md) | rayon 並列化の詳細 |
-| [REFACTOR_PROPOSAL.md](REFACTOR_PROPOSAL.md) | 今後のリファクタリング提案 |
+| [STEPS.md](../05_steps/STEPS.md) | 15 ステップの実装ガイド（コード全文付き） |
+| [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |
+| [WHY_ELIXIR.md](../03_tech_decisions/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
+| [WHY_RAYON.md](../03_tech_decisions/WHY_RAYON.md) | rayon 並列化の詳細 |
+| [REFACTOR_PROPOSAL.md](../06_system_design/REFACTOR_PROPOSAL.md) | 今後のリファクタリング提案 |
 
 ---
 

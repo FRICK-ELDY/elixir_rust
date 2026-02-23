@@ -8,13 +8,13 @@ Step 25 までで完成したゲームをベースに、**Elixir/OTP の強み�
 
 > **実装順序の優先度**  
 > パフォーマンス最優先・汎用化重視の観点で整理したロードマップは  
-> [PRIORITY_STEPS.md](./PRIORITY_STEPS.md) を参照してください。
+> [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) を参照してください。
 
 ---
 
 ## 全体ロードマップ
 
-**推奨実施順序**（[PRIORITY_STEPS.md](./PRIORITY_STEPS.md) 準拠）:
+**推奨実施順序**（[PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) 準拠）:
 
 ```
 【フェーズ1: Rust コア — パフォーマンス即効】
@@ -1230,7 +1230,7 @@ cargo bench --bench ai_bench
 
 ## 改善効果まとめ
 
-推奨実施順序は [PRIORITY_STEPS.md](./PRIORITY_STEPS.md) を参照。
+推奨実施順序は [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) を参照。
 
 | ステップ | 改善内容 | 期待効果 | Elixir の真価 |
 |---|---|---|---|

@@ -1,10 +1,10 @@
 # 実装優先度ステップガイド
 
-**根拠**: [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) の分析に基づく  
+**根拠**: [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) の分析に基づく  
 **方針**: **パフォーマンス最優先** → **汎用化重視** → 品質・拡張
 
 本ドキュメントは、改善項目を「何から手をつけるか」の優先度で整理したロードマップです。  
-詳細な実装手順は [STEPS_PERF.md](./STEPS_PERF.md) を参照してください。
+詳細な実装手順は [STEPS_PERF.md](../05_steps/STEPS_PERF.md) を参照してください。
 
 ---
 
@@ -63,7 +63,7 @@
 | **Lightning** | 連鎖先の探索も同様に空間ハッシュで候補を絞る（最大 6 チェーン × O(n) → O(数十)） |
 | **参照** | STEPS_PERF Step 29.1, 29.2 |
 
-**詳細手順**: [STEPS_PERF.md § Step 29](./STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.1, 29.2）
+**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.1, 29.2）
 
 **追加タスク**（Lightning チェーン）:
 - `physics_step` 内の Lightning 武器処理で、`find_nearest_enemy_spatial` を連鎖ごとに呼ぶ
@@ -82,7 +82,7 @@
 | **効果** | StressMonitor と GameLoop が同時に NIF を呼んでもデッドロックしない |
 | **参照** | STEPS_PERF Step 29.3 |
 
-**詳細手順**: [STEPS_PERF.md § Step 29](./STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.3）
+**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.3）
 
 ---
 
@@ -96,7 +96,7 @@
 | **解決** | `free_list: Vec<usize>` で空きインデックスをスタック管理、O(1) で取得・返却 |
 | **参照** | STEPS_PERF Step 28 |
 
-**詳細手順**: [STEPS_PERF.md § Step 28](./STEPS_PERF.md#step-28-rust-フリーリストスポーン-o1-化)
+**詳細手順**: [STEPS_PERF.md § Step 28](../05_steps/STEPS_PERF.md#step-28-rust-フリーリストスポーン-o1-化)
 
 ---
 
@@ -115,7 +115,7 @@
 - `physics_step` で `#[cfg(target_arch = "x86_64")]` により自動切り替え
 - ベンチマーク: `cargo bench --bench ai_bench` で比較可能
 
-**詳細手順**: [STEPS_PERF.md § Step 31](./STEPS_PERF.md#step-31-simd-ai-高速化上級オプション)
+**詳細手順**: [STEPS_PERF.md § Step 31](../05_steps/STEPS_PERF.md#step-31-simd-ai-高速化上級オプション)
 
 ---
 
@@ -132,7 +132,7 @@
 | **効果** | 以降のステップで「ゲームループを触らずに」リプレイ・実績などを追加可能 |
 | **参照** | STEPS_PERF Step 26 |
 
-**詳細手順**: [STEPS_PERF.md § Step 26](./STEPS_PERF.md#step-26-イベントバスotp-の関心分離)
+**詳細手順**: [STEPS_PERF.md § Step 26](../05_steps/STEPS_PERF.md#step-26-イベントバスotp-の関心分離)
 
 ---
 
@@ -146,7 +146,7 @@
 | **解決** | ETS にスナップショット・入力状態を書き込み、ロックフリー読み取り |
 | **参照** | STEPS_PERF Step 27 |
 
-**詳細手順**: [STEPS_PERF.md § Step 27](./STEPS_PERF.md#step-27-ets-キャッシュ-入力ポーリング化)
+**詳細手順**: [STEPS_PERF.md § Step 27](../05_steps/STEPS_PERF.md#step-27-ets-キャッシュ-入力ポーリング化)
 
 ---
 
@@ -160,7 +160,7 @@
 | **効果** | 計測コードとゲームロジックの分離、エコシステム連携 |
 | **参照** | STEPS_PERF Step 30 |
 
-**詳細手順**: [STEPS_PERF.md § Step 30](./STEPS_PERF.md#step-30-telemetry-計測基盤)
+**詳細手順**: [STEPS_PERF.md § Step 30](../05_steps/STEPS_PERF.md#step-30-telemetry-計測基盤)
 
 ---
 
@@ -218,7 +218,7 @@
 - **Elixir**: アセット ID やパスなどの状態・ロード指示を管理する。画像バイナリは扱わない。
 - **Rust**: 実際の画像バイナリの読み込み・GPU テクスチャ化・キャッシュを担当。NIF 境界でバイナリを渡さない。
 
-**Phase 1 実装内容**（[ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md)）:
+**Phase 1 実装内容**（[ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md)）:
 - `native/game_native/src/asset/mod.rs`: `AssetId`、`AssetLoader`
 - 実行時ロード: `GAME_ASSETS_PATH` 環境変数またはカレントディレクトリから読み込み
 - 埋め込みフォールバック: ファイルが存在しない場合は `include_bytes!` を使用
@@ -302,8 +302,8 @@
 
 ## 関連ドキュメント
 
-- [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) — 強み・弱みの分析（本ロードマップの根拠）
-- [ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md) — G3 アセット管理システムの設計・実装
-- [STEPS_PERF.md](./STEPS_PERF.md) — パフォーマンス改善の詳細実装手順
-- [STEPS.md](./STEPS.md) — 初回実装ステップ（Step 1〜25）
-- [SPEC.md](./SPEC.md) — ゲーム仕様書
+- [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 強み・弱みの分析（本ロードマップの根拠）
+- [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) — G3 アセット管理システムの設計・実装
+- [STEPS_PERF.md](../05_steps/STEPS_PERF.md) — パフォーマンス改善の詳細実装手順
+- [STEPS.md](../05_steps/STEPS.md) — 初回実装ステップ（Step 1〜25）
+- [SPEC.md](../01_setup/SPEC.md) — ゲーム仕様書
