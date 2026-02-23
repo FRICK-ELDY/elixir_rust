@@ -2,27 +2,21 @@ defmodule Game.GameLoop do
   @moduledoc """
   60 Hz game loop implemented as a GenServer.
 
-  Elixir strengths on display:
-  - The tick loop uses `Process.send_after/3` — no OS thread, just a message
-  - Pattern matching on `phase` dispatches to different tick handlers cleanly
-  - Immutable state: every tick returns a new map; no mutation anywhere
-  - The loop is supervised: if it crashes, the supervisor restarts it instantly
+  G2: シーン管理システム — SceneManager がスタックでシーンを管理。
+  各シーンが独立した init/update を持ち、GameLoop は tick をディスパッチする。
 
-  Phase transitions (Elixir が司令塔として管理):
+  Phase transitions (SceneManager + 各シーンが管理):
     :playing    → :boss_alert  (ボス出現タイミングに達したとき)
     :boss_alert → :playing     (警告演出が終わったとき → Rust に spawn_boss を指示)
     :playing    → :level_up    (レベルアップ待機フラグが立ったとき)
     :level_up   → :playing     (武器選択が完了したとき)
     :playing    → :game_over   (プレイヤー HP が 0 になったとき)
-    :game_over  → :playing     (リスタートしたとき)
   """
 
   use GenServer
   require Logger
 
   @tick_ms 16
-  # Elixir-side fallback: auto-selects after this duration when no UI is connected.
-  @level_up_auto_select_ms 3_000
 
   # ── Public API ──────────────────────────────────────────────────
 
@@ -34,262 +28,214 @@ defmodule Game.GameLoop do
   def init(_opts) do
     world_ref = Game.NifBridge.create_world()
     Game.FrameCache.init()
-    start_ms  = now_ms()
+    start_ms = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
+    # SceneManager は Application で GameLoop より前に起動
     {:ok, %{
-      world_ref:           world_ref,
-      last_tick:           start_ms,
-      frame_count:         0,
-      start_ms:            start_ms,
-      last_spawn_ms:       start_ms,
-      phase:               :playing,
-      weapon_levels:       initial_weapon_levels,
-      level_up_entered_ms: nil,
-      weapon_choices:      [],
-      # ── ボス管理（Elixir が司令塔として保持）──────────────────
-      spawned_bosses:      [],          # 既に出現したボス種別リスト
-      boss_alert_ms:       nil,         # :boss_alert フェーズ開始時刻
-      pending_boss:        nil,         # 警告演出後にスポーンするボス種別
-      pending_boss_name:   nil,         # 警告表示用ボス名
+      world_ref: world_ref,
+      last_tick: start_ms,
+      frame_count: 0,
+      start_ms: start_ms,
+      last_spawn_ms: start_ms,
+      weapon_levels: initial_weapon_levels,
     }}
   end
 
   @impl true
-  def handle_cast({:select_weapon, :__skip__}, %{phase: :level_up} = state) do
-    Game.NifBridge.skip_level_up(state.world_ref)
-    Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
-    {:noreply, %{state |
-      phase:               :playing,
-      level_up_entered_ms: nil,
-      weapon_choices:      [],
-    }}
-  end
+  def handle_cast({:select_weapon, :__skip__}, state) do
+    case Game.SceneManager.current() do
+      {:ok, %{module: Game.Scenes.LevelUp}} ->
+        Game.NifBridge.skip_level_up(state.world_ref)
+        Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
+        Game.SceneManager.pop_scene()
+        {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
 
-  @impl true
-  def handle_cast({:select_weapon, weapon}, %{phase: :level_up} = state) do
-    Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
-
-    new_weapon_levels = fetch_weapon_levels(state.world_ref)
-    lv = Map.get(new_weapon_levels, weapon, 1)
-    Logger.info("[LEVEL UP] Weapon selected: #{Game.LevelSystem.weapon_label(weapon, lv)} -> resuming")
-
-    {:noreply, %{state |
-      phase:               :playing,
-      weapon_levels:       new_weapon_levels,
-      level_up_entered_ms: nil,
-      weapon_choices:      [],
-    }}
-  end
-
-  def handle_cast({:select_weapon, _weapon}, state), do: {:noreply, state}
-
-  # ── Tick: game_over phase ────────────────────────────────────────
-
-  @impl true
-  def handle_info(:tick, %{phase: :game_over} = state) do
-    Process.send_after(self(), :tick, @tick_ms)
-    {:noreply, %{state | last_tick: now_ms()}}
-  end
-
-  # ── Tick: boss_alert phase ───────────────────────────────────────
-
-  @impl true
-  def handle_info(:tick, %{phase: :boss_alert} = state) do
-    now = now_ms()
-    Process.send_after(self(), :tick, @tick_ms)
-
-    alert_elapsed = now - (state.boss_alert_ms || now)
-
-    if alert_elapsed >= Game.BossSystem.alert_duration_ms() do
-      # 警告演出終了 → Rust にボスをスポーンさせる
-      Game.NifBridge.spawn_boss(state.world_ref, state.pending_boss)
-      Logger.info("[BOSS] Spawned: #{state.pending_boss_name}")
-
-      {:noreply, %{state |
-        phase:             :playing,
-        last_tick:         now,
-        boss_alert_ms:     nil,
-        pending_boss:      nil,
-        pending_boss_name: nil,
-      }}
-    else
-      {:noreply, %{state | last_tick: now}}
+      _ ->
+        {:noreply, state}
     end
   end
 
-  # ── Tick: level_up phase (physics paused) ───────────────────────
-
   @impl true
-  def handle_info(:tick, %{phase: :level_up} = state) do
-    now = now_ms()
-    Process.send_after(self(), :tick, @tick_ms)
+  def handle_cast({:select_weapon, weapon}, state) do
+    case Game.SceneManager.current() do
+      {:ok, %{module: Game.Scenes.LevelUp}} ->
+        Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
+        new_weapon_levels = fetch_weapon_levels(state.world_ref)
+        lv = Map.get(new_weapon_levels, weapon, 1)
+        Logger.info("[LEVEL UP] Weapon selected: #{Game.LevelSystem.weapon_label(weapon, lv)} -> resuming")
+        Game.SceneManager.pop_scene()
+        {:noreply, %{state | weapon_levels: new_weapon_levels}}
 
-    elapsed_in_level_up = now - (state.level_up_entered_ms || now)
-    if elapsed_in_level_up >= @level_up_auto_select_ms do
-      chosen = List.first(state.weapon_choices) || :__skip__
-      GenServer.cast(self(), {:select_weapon, chosen})
+      _ ->
+        {:noreply, state}
     end
-
-    {:noreply, %{state | last_tick: now}}
   end
 
-  # ── Tick: playing phase ─────────────────────────────────────────
+  # ── Tick: 全シーン共通ディスパッチ ───────────────────────────────
 
   @impl true
   def handle_info(:tick, state) do
-    now     = now_ms()
-    delta   = now - state.last_tick
+    now = now_ms()
+    delta = now - state.last_tick
     elapsed = now - state.start_ms
 
-    # P6: ETS からロックフリーで入力を読む（cast が届くのを待たない）
+    case Game.SceneManager.current() do
+      :empty ->
+        Process.send_after(self(), :tick, @tick_ms)
+        {:noreply, %{state | last_tick: now}}
+
+      {:ok, %{module: mod, state: scene_state}} ->
+        # Playing シーンのみ物理演算・入力・イベント処理
+        state = maybe_run_physics(state, mod, delta)
+
+        context = build_context(state, now, elapsed)
+        result = mod.update(context, scene_state)
+
+        # シーンの state を SceneManager に反映
+        {new_scene_state, opts} = extract_state_and_opts(result)
+        Game.SceneManager.update_current(fn _ -> new_scene_state end)
+
+        # context_updates の適用
+        state = apply_context_updates(state, opts)
+
+        # 遷移の処理
+        state = process_transition(result, state, now)
+
+        # 毎秒ログ出力 + ETS キャッシュ
+        state = maybe_log_and_cache(state, mod, elapsed)
+
+        Process.send_after(self(), :tick, @tick_ms)
+
+        {:noreply, %{state |
+          last_tick: now,
+          frame_count: state.frame_count + 1,
+        }}
+    end
+  end
+
+  # ── ヘルパー ────────────────────────────────────────────────────
+
+  defp maybe_run_physics(state, Game.Scenes.Playing, delta) do
     {dx, dy} = Game.InputHandler.get_move_vector()
     Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-
-    # Physics step runs in Rust (DirtyCpu NIF — won't block the BEAM scheduler)
-    _frame_id = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
-
-    # Step 26: フレームイベントを drain して EventBus にブロードキャスト
+    _ = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
     events = Game.NifBridge.drain_frame_events(state.world_ref)
-    unless events == [] do
-      Game.EventBus.broadcast(events)
+    unless events == [], do: Game.EventBus.broadcast(events)
+    state
+  end
+  defp maybe_run_physics(state, _mod, _delta), do: state
+
+  defp build_context(state, now, elapsed) do
+    %{
+      tick_ms:       @tick_ms,
+      world_ref:     state.world_ref,
+      now:           now,
+      elapsed:       elapsed,
+      last_spawn_ms: state.last_spawn_ms,
+      weapon_levels: state.weapon_levels,
+      frame_count:   state.frame_count,
+      start_ms:      state.start_ms,
+    }
+  end
+
+  defp extract_state_and_opts({:continue, scene_state}), do: {scene_state, %{}}
+  defp extract_state_and_opts({:continue, scene_state, opts}), do: {scene_state, opts || %{}}
+  defp extract_state_and_opts({:transition, _action, scene_state}), do: {scene_state, %{}}
+  defp extract_state_and_opts({:transition, _action, scene_state, opts}), do: {scene_state, opts || %{}}
+
+  defp apply_context_updates(state, %{context_updates: updates}) when is_map(updates) do
+    Map.merge(state, updates)
+  end
+  defp apply_context_updates(state, _), do: state
+
+  defp process_transition({:continue, _, _}, state, _now), do: state
+
+  defp process_transition({:transition, :pop, scene_state}, state, _now) do
+    auto_select = Map.get(scene_state, :auto_select, false)
+    if auto_select do
+      # ポップ前に武器選択を適用（pop 後は LevelUp でなくなるため）
+      state =
+        case scene_state do
+          %{choices: [first | _]} ->
+            Game.NifBridge.add_weapon(state.world_ref, to_string(first))
+            new_levels = fetch_weapon_levels(state.world_ref)
+            Logger.info("[LEVEL UP] Auto-selected: #{Game.LevelSystem.weapon_label(first, Map.get(new_levels, first, 1))} -> resuming")
+            %{state | weapon_levels: new_levels}
+          _ ->
+            Game.NifBridge.skip_level_up(state.world_ref)
+            Logger.info("[LEVEL UP] Auto-skipped (no choices) -> resuming")
+            state
+        end
+      Game.SceneManager.pop_scene()
+    else
+      Game.SceneManager.pop_scene()
     end
+    state
+  end
 
-    # ── 1. ゲームオーバー検知（Elixir が HP 監視の司令塔）─────────
-    state =
-      if Game.NifBridge.is_player_dead(state.world_ref) do
-        Logger.info("[GAME OVER] Player HP reached 0 at #{div(elapsed, 1000)}s")
-        %{state | phase: :game_over}
-      else
-        state
-      end
+  defp process_transition({:transition, {:push, Game.Scenes.BossAlert, init_arg}, _}, state, _now) do
+    Game.SceneManager.push_scene(Game.Scenes.BossAlert, init_arg)
+    state
+  end
 
-    # ゲームオーバーになった場合はここで早期リターン
-    if state.phase == :game_over do
-      # P7: Telemetry セッション終了イベント（measurements: 数値データ, metadata: コンテキスト）
-      {_hp, _max_hp, score, _elapsed_s} = Game.NifBridge.get_hud_data(state.world_ref)
-      :telemetry.execute(
-        [:game, :session_end],
-        %{elapsed_seconds: elapsed / 1000.0, score: score},
-        %{}
+  defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now) do
+    Game.SceneManager.push_scene(mod, init_arg)
+    state
+  end
+
+  defp process_transition({:transition, {:replace, Game.Scenes.GameOver, _}, _}, state, now) do
+    {_hp, _max_hp, score, _} = Game.NifBridge.get_hud_data(state.world_ref)
+    :telemetry.execute(
+      [:game, :session_end],
+      %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
+      %{}
+    )
+    Game.SceneManager.replace_scene(Game.Scenes.GameOver, %{})
+    state
+  end
+
+  defp process_transition(_, state, _), do: state
+
+  defp maybe_log_and_cache(state, _mod, _elapsed) do
+    if rem(state.frame_count, 60) == 0 do
+      enemy_count = Game.NifBridge.get_enemy_count(state.world_ref)
+      bullet_count = Game.NifBridge.get_bullet_count(state.world_ref)
+      physics_ms = Game.NifBridge.get_frame_time_ms(state.world_ref)
+      hud_data = Game.NifBridge.get_hud_data(state.world_ref)
+      render_type = Game.SceneManager.render_type()
+      Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
+
+      {_hp, _max_hp, _score, elapsed_s} = hud_data
+      {exp, level, _level_up_pending, _exp_to_next} = Game.NifBridge.get_level_up_data(state.world_ref)
+      wave = Game.SpawnSystem.wave_label(elapsed_s)
+      budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""
+
+      weapon_info =
+        state.weapon_levels
+        |> Enum.map_join(", ", fn {w, lv} -> "#{w}:Lv#{lv}" end)
+
+      boss_info =
+        case Game.NifBridge.get_boss_info(state.world_ref) do
+          {:alive, hp, max_hp} -> " | boss=#{Float.round(hp / max_hp * 100, 1)}%HP"
+          _ -> ""
+        end
+
+      Logger.info(
+        "[LOOP] #{wave} | scene=#{render_type} | enemies=#{enemy_count} | " <>
+          "physics=#{Float.round(physics_ms, 2)}ms#{budget_warn} | " <>
+          "lv=#{level} exp=#{exp} | weapons=[#{weapon_info}]" <> boss_info
       )
 
-      Process.send_after(self(), :tick, @tick_ms)
-      {:noreply, %{state | last_tick: now, frame_count: state.frame_count + 1}}
-    else
-      # ── 2. ボス出現チェック（Elixir がスケジュール管理）──────────
-      elapsed_sec = elapsed / 1000.0
-      {state, new_last_spawn} =
-        case Game.BossSystem.check_spawn(elapsed_sec, state.spawned_bosses) do
-          {:spawn, boss_kind, boss_name} ->
-            # P7: Telemetry ボス出現イベント
-            :telemetry.execute([:game, :boss_spawn], %{count: 1}, %{boss: boss_name})
-
-            Logger.info("[BOSS] Alert: #{boss_name} incoming!")
-            new_state = %{state |
-              phase:             :boss_alert,
-              boss_alert_ms:     now,
-              pending_boss:      boss_kind,
-              pending_boss_name: boss_name,
-              spawned_bosses:    [boss_kind | state.spawned_bosses],
-            }
-            {new_state, state.last_spawn_ms}
-
-          :no_boss ->
-            # ── 3. 通常スポーン（SpawnSystem が難易度エスカレーション含む）
-            new_spawn_ms =
-              Game.SpawnSystem.maybe_spawn(state.world_ref, elapsed, state.last_spawn_ms)
-            {state, new_spawn_ms}
-        end
-
-      # ── 4. レベルアップチェック ───────────────────────────────────
-      {exp, level, level_up_pending, exp_to_next} =
-        Game.NifBridge.get_level_up_data(state.world_ref)
-
-      state =
-        if level_up_pending and state.phase == :playing do
-          # P7: Telemetry レベルアップイベント
-          :telemetry.execute([:game, :level_up], %{level: level, count: 1}, %{})
-
-          choices = Game.LevelSystem.generate_weapon_choices(state.weapon_levels)
-
-          if choices == [] do
-            Logger.info("[LEVEL UP] All weapons at max level — skipping weapon selection")
-            Game.NifBridge.skip_level_up(state.world_ref)
-            state
-          else
-            choice_labels =
-              Enum.map_join(choices, " / ", fn w ->
-                lv = Map.get(state.weapon_levels, w, 0)
-                Game.LevelSystem.weapon_label(w, lv)
-              end)
-
-            Logger.info(
-              "[LEVEL UP] Level #{level} -> #{level + 1} | " <>
-              "EXP: #{exp} | to next: #{exp_to_next} | " <>
-              "choices: #{choice_labels}"
-            )
-            Logger.info("[LEVEL UP] Waiting for player selection...")
-
-            %{state |
-              phase:               :level_up,
-              weapon_choices:      choices,
-              level_up_entered_ms: now,
-            }
-          end
-        else
-          state
-        end
-
-      # ── 5. 毎秒ログ出力 + ETS キャッシュ書き込み ─────────────────────
-      if rem(state.frame_count, 60) == 0 do
-        enemy_count  = Game.NifBridge.get_enemy_count(state.world_ref)
-        bullet_count = Game.NifBridge.get_bullet_count(state.world_ref)
-        physics_ms   = Game.NifBridge.get_frame_time_ms(state.world_ref)
-        hud_data     = Game.NifBridge.get_hud_data(state.world_ref)
-        Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data)
-
-        {_hp, _max_hp, _score, elapsed_s} = hud_data
-        wave        = Game.SpawnSystem.wave_label(elapsed_s)
-        budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""
-
-        weapon_info =
-          state.weapon_levels
-          |> Enum.map_join(", ", fn {w, lv} -> "#{w}:Lv#{lv}" end)
-
-        boss_info =
-          case Game.NifBridge.get_boss_info(state.world_ref) do
-            {:alive, hp, max_hp} ->
-              " | boss=#{Float.round(hp / max_hp * 100, 1)}%HP"
-            _ ->
-              ""
-          end
-
-        Logger.info(
-          "[LOOP] #{wave} | enemies=#{enemy_count} | " <>
-          "physics=#{Float.round(physics_ms, 2)}ms#{budget_warn} | " <>
-          "lv=#{level} exp=#{exp}(+#{exp_to_next}) | weapons=[#{weapon_info}]" <>
-          "#{boss_info}"
-        )
-
-        # P7: Telemetry tick イベント（毎秒サンプル）
-        :telemetry.execute(
-          [:game, :tick],
-          %{physics_ms: physics_ms, enemy_count: enemy_count},
-          %{phase: state.phase, wave: wave}
-        )
-      end
-
-      Process.send_after(self(), :tick, @tick_ms)
-
-      {:noreply, %{state |
-        last_tick:     now,
-        frame_count:   state.frame_count + 1,
-        last_spawn_ms: new_last_spawn,
-      }}
+      :telemetry.execute(
+        [:game, :tick],
+        %{physics_ms: physics_ms, enemy_count: enemy_count},
+        %{phase: render_type, wave: wave}
+      )
     end
+    state
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)

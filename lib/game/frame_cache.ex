@@ -18,12 +18,13 @@ defmodule Game.FrameCache do
   end
 
   @doc "GameLoop が毎秒（60 フレームごと）書き込む"
-  def put(enemy_count, bullet_count, physics_ms, hud_data) do
+  def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing) do
     :ets.insert(@table, {:snapshot, %{
       enemy_count:  enemy_count,
       bullet_count: bullet_count,
       physics_ms:   physics_ms,
       hud_data:     hud_data,
+      render_type:  render_type,
       updated_at:   System.monotonic_time(:millisecond),
     }})
   end

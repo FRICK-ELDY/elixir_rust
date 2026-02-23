@@ -1,0 +1,40 @@
+defmodule Game.SceneBehaviour do
+  @moduledoc """
+  シーンコールバックの動作定義。
+
+  各シーンは init/1, update/2, render_type/0 を実装する。
+  Game.SceneManager がスタックで管理し、GameLoop が update を呼び出す。
+  """
+
+  @doc """
+  シーン初期化。init_arg は push_scene / replace_scene で渡された値。
+  """
+  @callback init(init_arg :: term()) :: {:ok, state :: term()}
+
+  @doc """
+  毎 tick 呼ばれる更新。context は GameLoop が構築する共有状態。
+
+  戻り値（最後の opts は省略可。省略時は %{}）:
+  - `{:continue, new_state}` または `{:continue, new_state, opts}`
+  - `{:transition, :pop, new_state}` または `{:transition, :pop, new_state, opts}`
+  - `{:transition, {:push, module(), init_arg}, new_state}` など
+
+  opts の :context_updates で呼び出し元の共有状態を更新できる。
+  """
+  @callback update(context :: map(), state :: term()) ::
+              {:continue, state :: term()}
+              | {:continue, state :: term(), opts :: map()}
+              | {:transition, :pop, state :: term()}
+              | {:transition, :pop, state :: term(), opts :: map()}
+              | {:transition, {:push, module(), init_arg :: term()}, state :: term()}
+              | {:transition, {:push, module(), init_arg :: term()}, state :: term(), opts :: map()}
+              | {:transition, {:replace, module(), init_arg :: term()}, state :: term()}
+              | {:transition, {:replace, module(), init_arg :: term()}, state :: term(), opts :: map()}
+
+  @doc """
+  描画用のシーン種別。Rust 側の GamePhase に渡す値。
+  将来的にタイトルシーンを追加する場合は :title を返す。
+  """
+  @callback render_type() ::
+              :playing | :level_up | :boss_alert | :game_over
+end

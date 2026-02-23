@@ -4,6 +4,8 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      # G2: シーン管理 — GameLoop より前に起動
+      Game.SceneManager,
       # Input handler: translates key events to GameLoop casts
       Game.InputHandler,
       # Step 26: イベントバス — GameLoop より前に起動
