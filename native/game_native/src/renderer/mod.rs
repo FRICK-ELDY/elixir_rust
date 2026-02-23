@@ -289,9 +289,10 @@ impl Renderer {
             .expect("サーフェス設定の取得に失敗しました");
         surface.configure(&device, &config);
 
-        // ─── テクスチャアトラス ──────────────────────────────────
-        let atlas_bytes = include_bytes!("../../../../assets/sprites/atlas.png");
-        let atlas_image = image::load_from_memory(atlas_bytes)
+        // ─── テクスチャアトラス（G3: AssetLoader 経由で実行時ロード or 埋め込み）──
+        let loader = crate::asset::AssetLoader::new();
+        let atlas_bytes = loader.load_sprite_atlas();
+        let atlas_image = image::load_from_memory(&atlas_bytes)
             .expect("atlas.png の読み込みに失敗しました")
             .to_rgba8();
         let atlas_size = wgpu::Extent3d {
