@@ -41,7 +41,7 @@ mod tests {
         assert_eq!(exp_required_for_next(1), 10);
         assert_eq!(exp_required_for_next(2), 25);
         assert_eq!(exp_required_for_next(9), 270);
-        assert!(exp_required_for_next(10) >= 270);
+        assert_eq!(exp_required_for_next(10), 320);
     }
 
     #[test]

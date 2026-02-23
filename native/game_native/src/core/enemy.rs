@@ -128,11 +128,13 @@ mod tests {
     fn enemy_radius() {
         assert!((EnemyKind::Slime.radius() - 20.0).abs() < 0.001);
         assert!((EnemyKind::Bat.radius() - 12.0).abs() < 0.001);
+        assert!((EnemyKind::Golem.radius() - 32.0).abs() < 0.001);
     }
 
     #[test]
     fn enemy_exp_reward() {
         assert_eq!(EnemyKind::Slime.exp_reward(), 5);
+        assert_eq!(EnemyKind::Bat.exp_reward(), 3);
         assert_eq!(EnemyKind::Golem.exp_reward(), 20);
     }
 

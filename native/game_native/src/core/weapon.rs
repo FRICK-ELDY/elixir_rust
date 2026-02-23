@@ -105,6 +105,8 @@ mod tests {
         assert!((WeaponKind::MagicWand.cooldown() - 1.0).abs() < 0.001);
         assert!((WeaponKind::Axe.cooldown() - 1.5).abs() < 0.001);
         assert!((WeaponKind::Cross.cooldown() - 2.0).abs() < 0.001);
+        assert!((WeaponKind::Whip.cooldown() - 1.0).abs() < 0.001);
+        assert!((WeaponKind::Fireball.cooldown() - 1.0).abs() < 0.001);
         assert!((WeaponKind::Lightning.cooldown() - 1.0).abs() < 0.001);
     }
 
@@ -112,6 +114,8 @@ mod tests {
     fn weapon_kind_damage() {
         assert_eq!(WeaponKind::MagicWand.damage(), 10);
         assert_eq!(WeaponKind::Axe.damage(), 25);
+        assert_eq!(WeaponKind::Cross.damage(), 15);
+        assert_eq!(WeaponKind::Whip.damage(), 30);
         assert_eq!(WeaponKind::Fireball.damage(), 20);
         assert_eq!(WeaponKind::Lightning.damage(), 15);
     }
@@ -166,7 +170,8 @@ mod tests {
     fn weapon_slot_effective_damage() {
         let mut slot = WeaponSlot::new(WeaponKind::MagicWand);
         slot.level = 2;
-        assert!(slot.effective_damage() >= 10);
+        // 10 + (2 - 1) * (10 / 4).max(1) = 12
+        assert_eq!(slot.effective_damage(), 12);
     }
 }
 
