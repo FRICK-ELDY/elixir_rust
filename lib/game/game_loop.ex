@@ -168,6 +168,14 @@ defmodule Game.GameLoop do
 
     # ゲームオーバーになった場合はここで早期リターン
     if state.phase == :game_over do
+      # P7: Telemetry セッション終了イベント（measurements: 数値データ, metadata: コンテキスト）
+      {_hp, _max_hp, score, _elapsed_s} = Game.NifBridge.get_hud_data(state.world_ref)
+      :telemetry.execute(
+        [:game, :session_end],
+        %{elapsed_seconds: elapsed / 1000.0, score: score},
+        %{}
+      )
+
       Process.send_after(self(), :tick, @tick_ms)
       {:noreply, %{state | last_tick: now, frame_count: state.frame_count + 1}}
     else
@@ -176,6 +184,9 @@ defmodule Game.GameLoop do
       {state, new_last_spawn} =
         case Game.BossSystem.check_spawn(elapsed_sec, state.spawned_bosses) do
           {:spawn, boss_kind, boss_name} ->
+            # P7: Telemetry ボス出現イベント
+            :telemetry.execute([:game, :boss_spawn], %{count: 1}, %{boss: boss_name})
+
             Logger.info("[BOSS] Alert: #{boss_name} incoming!")
             new_state = %{state |
               phase:             :boss_alert,
@@ -199,6 +210,9 @@ defmodule Game.GameLoop do
 
       state =
         if level_up_pending and state.phase == :playing do
+          # P7: Telemetry レベルアップイベント
+          :telemetry.execute([:game, :level_up], %{level: level, count: 1}, %{})
+
           choices = Game.LevelSystem.generate_weapon_choices(state.weapon_levels)
 
           if choices == [] do
@@ -258,6 +272,13 @@ defmodule Game.GameLoop do
           "physics=#{Float.round(physics_ms, 2)}ms#{budget_warn} | " <>
           "lv=#{level} exp=#{exp}(+#{exp_to_next}) | weapons=[#{weapon_info}]" <>
           "#{boss_info}"
+        )
+
+        # P7: Telemetry tick イベント（毎秒サンプル）
+        :telemetry.execute(
+          [:game, :tick],
+          %{physics_ms: physics_ms, enemy_count: enemy_count},
+          %{phase: state.phase, wave: wave}
         )
       end
 

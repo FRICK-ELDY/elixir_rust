@@ -16,6 +16,8 @@ defmodule Game.Application do
       Game.StressMonitor,
       # Step 25: ゲームセッション統計収集（Elixir の強みを活かした独立プロセス）
       Game.Stats,
+      # P7: Telemetry 計測基盤 — LiveDashboard / Prometheus 連携の基盤
+      Game.Telemetry,
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]
