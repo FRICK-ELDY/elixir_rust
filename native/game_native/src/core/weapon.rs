@@ -100,6 +100,7 @@ pub struct WeaponSlot {
 
 #[cfg(test)]
 mod tests {
+    use super::super::entity_params::WEAPON_ID_MAGIC_WAND;
     use super::*;
 
     #[test]
@@ -164,13 +165,13 @@ mod tests {
 
     #[test]
     fn weapon_slot_bullet_count() {
-        let slot = WeaponSlot::new(WeaponKind::MagicWand.as_u8());
+        let slot = WeaponSlot::new(WEAPON_ID_MAGIC_WAND);
         assert_eq!(slot.bullet_count(), 1);
     }
 
     #[test]
     fn weapon_slot_effective_damage() {
-        let mut slot = WeaponSlot::new(WeaponKind::MagicWand.as_u8());
+        let mut slot = WeaponSlot::new(WEAPON_ID_MAGIC_WAND);
         slot.level = 2;
         // 10 + (2 - 1) * (10 / 4).max(1) = 12
         assert_eq!(slot.effective_damage(), 12);

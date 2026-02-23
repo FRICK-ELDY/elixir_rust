@@ -29,7 +29,7 @@ static ENEMY_TABLE: [EnemyParams; 3] = [
 
 impl EnemyParams {
     pub fn get(id: u8) -> &'static EnemyParams {
-        ENEMY_TABLE.get(id as usize).unwrap_or(&ENEMY_TABLE[0])
+        ENEMY_TABLE.get(id as usize).expect("Invalid enemy ID")
     }
 }
 
@@ -77,7 +77,7 @@ static WEAPON_TABLE: [WeaponParams; 6] = [
 
 impl WeaponParams {
     pub fn get(id: u8) -> &'static WeaponParams {
-        WEAPON_TABLE.get(id as usize).unwrap_or(&WEAPON_TABLE[0])
+        WEAPON_TABLE.get(id as usize).expect("Invalid weapon ID")
     }
 
     pub fn bullet_count(&self, level: u32) -> usize {
@@ -113,6 +113,6 @@ static BOSS_TABLE: [BossParams; 3] = [
 
 impl BossParams {
     pub fn get(id: u8) -> &'static BossParams {
-        BOSS_TABLE.get(id as usize).unwrap_or(&BOSS_TABLE[0])
+        BOSS_TABLE.get(id as usize).expect("Invalid boss ID")
     }
 }

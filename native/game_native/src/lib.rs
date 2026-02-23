@@ -4,7 +4,12 @@ mod core;
 pub use core::enemy::EnemyKind;
 pub use core::boss::BossKind;
 
-use core::entity_params::{BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count};
+use core::entity_params::{
+    BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count,
+    BOSS_ID_BAT_LORD, BOSS_ID_SLIME_KING, BOSS_ID_STONE_GOLEM,
+    WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_LIGHTNING,
+    WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP,
+};
 use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_SEPARATION_FORCE,
@@ -889,7 +894,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             let level = w.weapon_slots[si].level;
             let bcount = w.weapon_slots[si].bullet_count();
             match kind_id {
-                0 => { // MagicWand
+                WEAPON_ID_MAGIC_WAND => {
                     if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, WEAPON_SEARCH_RADIUS) {
                         let target_r = EnemyParams::get(w.enemies.kind_ids[ti]).radius;
                         let tx   = w.enemies.positions_x[ti] + target_r;
@@ -910,12 +915,12 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
-                1 => { // Axe
+                WEAPON_ID_AXE => {
                     // 上方向に直進（簡易実装）
                     w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME, wp.as_u8);
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                2 => { // Cross
+                WEAPON_ID_CROSS => {
                     // Lv1〜3: 上下左右 4 方向、Lv4 以上: 斜め 4 方向も追加
                     let dirs_4: [(f32, f32); 4] = [
                         (0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0),
@@ -932,7 +937,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 // ── Step 21: Whip ──────────────────────────────────────────
-                3 => {
+                WEAPON_ID_WHIP => {
                     // プレイヤーの移動方向に扇状の判定を出す（弾丸を生成しない直接判定）
                     let whip_range = whip_range(kind_id, level);
                     let whip_half_angle = std::f32::consts::PI * 0.3; // 108度 / 2 = 54度
@@ -1017,7 +1022,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                4 => {
+                WEAPON_ID_FIREBALL => {
                     // 最近接敵に向かって貫通弾を発射
                     if let Some(ti) = find_nearest_enemy_spatial(&w.collision, &w.enemies, px, py, WEAPON_SEARCH_RADIUS) {
                         let target_r = EnemyParams::get(w.enemies.kind_ids[ti]).radius;
@@ -1033,7 +1038,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     }
                 }
                 // ── Step 21: Lightning ─────────────────────────────────────
-                5 => {
+                WEAPON_ID_LIGHTNING => {
                     // 最近接敵から始まり、最大 chain_count 体に連鎖
                     let chain_count = lightning_chain_count(kind_id, level);
                     // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
@@ -1344,7 +1349,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             // 移動 AI
             let bp = BossParams::get(boss.kind_id);
             match boss.kind_id {
-                0 | 2 => { // SlimeKing, StoneGolem
+                BOSS_ID_SLIME_KING | BOSS_ID_STONE_GOLEM => {
                     let ddx = px - boss.x;
                     let ddy = py - boss.y;
                     let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
@@ -1352,7 +1357,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     boss.x += (ddx / dist) * spd * dt;
                     boss.y += (ddy / dist) * spd * dt;
                 }
-                1 => { // BatLord
+                BOSS_ID_BAT_LORD => {
                     if boss.is_dashing {
                         boss.x += boss.dash_vx * dt;
                         boss.y += boss.dash_vy * dt;
@@ -1380,12 +1385,12 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             if boss.phase_timer <= 0.0 {
                 boss.phase_timer = bp.special_interval;
                 match boss.kind_id {
-                    0 => { // SlimeKing
+                    BOSS_ID_SLIME_KING => {
                         eff.spawn_slimes = true;
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;
                     }
-                    1 => { // BatLord
+                    BOSS_ID_BAT_LORD => {
                         let ddx = px - boss.x;
                         let ddy = py - boss.y;
                         let dist = (ddx * ddx + ddy * ddy).sqrt().max(0.001);
@@ -1399,7 +1404,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;
                     }
-                    2 => { // StoneGolem
+                    BOSS_ID_STONE_GOLEM => {
                         eff.spawn_rocks = true;
                         eff.special_x = boss.x;
                         eff.special_y = boss.y;

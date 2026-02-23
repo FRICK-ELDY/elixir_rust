@@ -233,16 +233,16 @@ defmodule Engine do
 
   defp resolve_enemy_id(kind) do
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
-    Map.get(game.entity_registry().enemies, kind, 0)
+    Map.fetch!(game.entity_registry().enemies, kind)
   end
 
   defp resolve_boss_id(kind) do
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
-    Map.get(game.entity_registry().bosses, kind, 0)
+    Map.fetch!(game.entity_registry().bosses, kind)
   end
 
   defp resolve_weapon_id(weapon) do
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
-    Map.get(game.entity_registry().weapons, weapon, 0)
+    Map.fetch!(game.entity_registry().weapons, weapon)
   end
 end
