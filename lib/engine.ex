@@ -173,6 +173,9 @@ defmodule Engine do
   @doc """
   武器を追加する。GameLoop の weapon 選択処理で呼ばれる。
   ゲームは LevelUp シーンの戻り値 `{:transition, :pop, state}` 等で間接的にトリガーする。
+
+  ## 引数
+  - `weapon_name` - 追加する武器の名前（atom または string）
   """
   def add_weapon(world_ref, weapon_name) when is_binary(weapon_name) do
     Game.NifBridge.add_weapon(world_ref, weapon_name)
