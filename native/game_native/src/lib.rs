@@ -1627,23 +1627,24 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
 }
 
 /// Step 26: フレームイベントを取り出してクリアする（毎フレーム GameLoop が呼ぶ）
-/// 戻り値: [{:enemy_killed, enemy_kind, weapon_kind}, {:player_damaged, damage_x100, 0}, ...]
+/// 戻り値: [{:enemy_killed, enemy_kind, weapon_kind}, {:player_damaged, damage_x1000, 0}, ...]
+/// 引数は u32 で統一（damage は 1000 倍で精度を保つ、その他は 0 パディング）
 #[rustler::nif]
-fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u8, u8)>> {
+fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     let events = w.frame_events
         .drain(..)
         .map(|e| match e {
             FrameEvent::EnemyKilled { enemy_kind, weapon_kind } =>
-                (enemy_killed(), enemy_kind, weapon_kind),
+                (enemy_killed(), enemy_kind as u32, weapon_kind as u32),
             FrameEvent::PlayerDamaged { damage } =>
-                (player_damaged(), (damage * 100.0).min(255.0) as u8, 0),
+                (player_damaged(), (damage * 1000.0) as u32, 0),
             FrameEvent::LevelUp { new_level } =>
-                (level_up_event(), new_level.min(255) as u8, 0),
+                (level_up_event(), new_level as u32, 0),
             FrameEvent::ItemPickup { item_kind } =>
-                (item_pickup(), item_kind, 0),
+                (item_pickup(), item_kind as u32, 0),
             FrameEvent::BossDefeated { boss_kind } =>
-                (boss_defeated(), boss_kind, 0),
+                (boss_defeated(), boss_kind as u32, 0),
         })
         .collect();
     Ok(events)

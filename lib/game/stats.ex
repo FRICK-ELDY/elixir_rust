@@ -65,7 +65,7 @@ defmodule Game.Stats do
           |> Map.update(:total_kills, 1, &(&1 + 1))
 
         {:level_up_event, new_level, _}, acc ->
-          Map.update(acc, :max_level_reached, new_level, &max(&1, new_level))
+          Map.put(acc, :max_level_reached, new_level)
 
         {:item_pickup, item_kind, _}, acc ->
           Map.update(acc, :items_collected, %{item_kind => 1}, &Map.update(&1, item_kind, 1, fn n -> n + 1 end))
