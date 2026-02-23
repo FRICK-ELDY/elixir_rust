@@ -1,6 +1,7 @@
 /// Standalone rendering binary.
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.
+mod asset;
 mod audio;
 mod core;
 mod renderer;

@@ -204,7 +204,7 @@
 
 ---
 
-### G3: アセット管理システムの設計
+### G3: アセット管理システムの設計 ✅ Phase 1 実装済み
 
 **根拠**: 実行時ロードがないため大規模ゲームにスケールしない
 
@@ -213,6 +213,16 @@
 | **現状** | スプライトアトラスを `include_bytes!` でバイナリ埋め込み |
 | **目標** | アセット ID → パス のマッピング、非同期ロード、キャッシュ |
 | **段階** | まず設計ドキュメントを作成し、Phase 1 のスプライト差し替えから開始 |
+
+**設計方針（責務分離）**:
+- **Elixir**: アセット ID やパスなどの状態・ロード指示を管理する。画像バイナリは扱わない。
+- **Rust**: 実際の画像バイナリの読み込み・GPU テクスチャ化・キャッシュを担当。NIF 境界でバイナリを渡さない。
+
+**Phase 1 実装内容**（[ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md)）:
+- `native/game_native/src/asset/mod.rs`: `AssetId`、`AssetLoader`
+- 実行時ロード: `GAME_ASSETS_PATH` 環境変数またはカレントディレクトリから読み込み
+- 埋め込みフォールバック: ファイルが存在しない場合は `include_bytes!` を使用
+- Renderer を `AssetLoader::load_sprite_atlas()` 経由に変更
 
 ---
 
@@ -232,13 +242,18 @@
 
 ### Q2: NIF オーバーヘッド対策（将来検討）
 
-**根拠**: `get_render_data()` が毎フレーム大量データを Elixir に返す設計
+**根拠**: `get_render_data()` が毎フレーム大量データを Elixir に返す設計（注: 現状は Elixir から未呼び出し）
 
 | 項目 | 内容 |
 |------|------|
 | **現状** | 描画データが Elixir 経由で受け渡されており、ゼロコピーではない |
 | **選択肢** | Rust 側で描画ループを完結させる、または NIF でバイナリを返し Elixir では透過的に扱う |
 | **優先度** | 低（現状 60 FPS が維持できていれば後回し） |
+
+**設計方針（バイナリは Rust 側で完結）**:
+- **描画ループ**: Rust 内で完結。`get_render_data` 相当の処理結果を Elixir に返さず wgpu レンダラへ直接渡す。
+- **Elixir への受け渡し**: HUD 用の数値（HP、スコアなど）や `render_type` など、描画に必要なメタデータのみを NIF で返す。
+- **バイナリ非経由**: 画像や頂点バッファは NIF 境界を跨がない。Elixir は状態管理のみに徹する。
 
 ---
 
@@ -282,6 +297,7 @@
 ## 関連ドキュメント
 
 - [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) — 強み・弱みの分析（本ロードマップの根拠）
+- [ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md) — G3 アセット管理システムの設計・実装
 - [STEPS_PERF.md](./STEPS_PERF.md) — パフォーマンス改善の詳細実装手順
 - [STEPS.md](./STEPS.md) — 初回実装ステップ（Step 1〜25）
 - [SPEC.md](./SPEC.md) — ゲーム仕様書
