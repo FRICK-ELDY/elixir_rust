@@ -45,10 +45,6 @@ defmodule Game.VampireSurvivor do
   @impl Engine.Game
   def context_defaults, do: %{}
 
-  # Step 39: ゲーム別アセットパス
-  @impl Engine.Game
-  def assets_path, do: "vampire_survivor"
-
   # ── Vampire Survivor 固有（シーン遷移等で GameLoop が参照）──
 
   @doc "レベルアップ武器選択シーンのモジュール"

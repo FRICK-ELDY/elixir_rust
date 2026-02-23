@@ -149,15 +149,14 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 39: ゲーム別アセットパス ✅ 実装済み
+#### Step 39: ゲーム別アセットパス
 
 **目標**: ゲームごとにアセットのベースパスを切り替えられるようにする。
 
 **対応**:
-- `AssetLoader` に `with_game_assets(game_id)` API を追加
-- `GAME_ASSETS_ID` 環境変数でゲーム別ディレクトリを指定（例: `assets/vampire_survivor/`）
-- `Engine.Game` に `assets_path/0` コールバックを追加、Application 起動時に env を設定
-- `bin/start.bat` で未設定時にデフォルト `vampire_survivor` を設定
+- `AssetLoader` に `with_game_assets(game_id)` のような API を追加
+- `GAME_ASSETS_PATH` または `config :game, :assets_path` でゲーム別ディレクトリを指定
+- 例: `assets/vampire_survivor/`, `assets/rhythm_game/`
 
 ---
 
