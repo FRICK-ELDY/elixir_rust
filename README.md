@@ -57,29 +57,43 @@ cd native/game_native && cargo test
 
 ## アーキテクチャ
 
+### 現状（Elixir 主導）
+
+```mermaid
+flowchart TB
+    subgraph Elixir [Elixir / BEAM VM]
+        GL[GameLoop\n60Hz tick]
+        SM[SceneManager]
+        EB[EventBus / FrameCache]
+        IH[InputHandler / ETS]
+        SS[SpawnSystem / BossSystem\nLevelSystem / Stats]
+
+        GL -->|"send_after 16ms"| GL
+        GL -->|current scene| SM
+        GL -->|broadcast| EB
+        IH -->|input| GL
+        SM --> SS
+    end
+
+    subgraph Rust [Rust / NIF]
+        PS[physics_step]
+        GWM[get_frame_metadata]
+        GW[GameWorld\nRwLock]
+
+        PS --> GW
+        GWM --> GW
+    end
+
+    subgraph Render [Rust 描画]
+        WG[wgpu レンダラ]
+    end
+
+    GL -->|"physics_step world_ref delta_ms"| PS
+    GL -->|get_frame_metadata| GWM
+    PS -->|描画データ| WG
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Elixir (BEAM VM)                                                │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
-│  │ GameLoop     │  │ SceneManager │  │ EventBus / FrameCache  │ │
-│  │ (60Hz tick)  │  │ (Playing,    │  │ ETS 入力 / StressMonitor│ │
-│  └──────┬───────┘  │  LevelUp,    │  └────────────────────────┘ │
-│         │          │  BossAlert,  │                             │
-│         │          │  GameOver)   │  SpawnSystem / BossSystem   │
-│         │          └──────────────┘  LevelSystem / Stats        │
-└─────────┼───────────────────────────────────────────────────────┘
-          │ physics_step(world_ref, delta_ms)
-          │ get_frame_metadata(world_ref)  ※ HUD 用
-          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Rust (NIF + 描画スレッド)                                        │
-│  ┌──────────────────────────────────────────────────────────────┐│
-│  │ physics_step: 移動・衝突・AI・武器処理 → 描画データ生成       ││
-│  │ 描画は Rust 内で完結（wgpu に直接渡す）                       ││
-│  └──────────────────────────────────────────────────────────────┘│
-│  SoA ECS | 空間ハッシュ | フリーリスト | SIMD Chase AI | RwLock  │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+**Rust レイヤーの構成**: SoA ECS | 空間ハッシュ | フリーリスト | SIMD Chase AI | RwLock
 
 ### 1 フレームの流れ
 

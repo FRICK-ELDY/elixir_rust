@@ -26,7 +26,7 @@
 |------|----------|
 | **強み** | パフォーマンス（GPU/SoA/空間ハッシュ/SIMD）、OTP による耐障害性、分散システムへの拡張性 |
 | **弱み** | ビルド・デバッグの複雑さ、汎用 ECS ではない、マップ・セーブ等の機能不足 |
-| **向く用途** | サーバーサイドゲームロジック、バレットヘル系、大量エンティティシミュレーション |
+| **向く用途** | サーバーサイドゲームロジック、バレットヘル系、大量エンティティシミュレーション。Step 41 完了後はリズム・競技FPS にも対応 |
 | **向かない用途** | 3D ゲーム、モバイル、大規模 RPG、インディー商業展開 |
 
 ---
@@ -52,7 +52,7 @@
 
 | 項目 | 説明 |
 |------|------|
-| **OTP Supervisor** | `one_for_one` 戦略で SceneManager, InputHandler, EventBus, GameLoop, StressMonitor, Stats, Telemetry を監視。クラッシュしたプロセスのみ自動再起動。 |
+| **OTP Supervisor** | `one_for_one` 戦略で SceneManager, InputHandler, EventBus, イベント受信プロセス（GameLoop 移行後）, StressMonitor, Stats, Telemetry を監視。クラッシュしたプロセスのみ自動再起動。 |
 | **Elixir のプロセス分離** | 各システムが独立したプロセスで動作。一つの障害が他に波及しない。メッセージパッシングによる疎結合。 |
 | **EventBus** | フレームイベントを Stats 等にノンブロッキング配信。ゲームループへの影響なし。 |
 | **ETS** | FrameCache と InputState でプロセス間ロックフリー共有。 |
@@ -63,7 +63,7 @@
 
 | 項目 | 説明 |
 |------|------|
-| **言語特性の役割分担** | Elixir: ゲームロジック・ウェーブ制御・シーン管理。Rust: 物理演算・描画・音声。各レイヤーを独立して開発・テスト可能。 |
+| **言語特性の役割分担** | Elixir: イベント駆動の司令塔・ウェーブ制御・シーン管理・EventBus。Rust: tick 駆動・物理演算・描画・音声。GameLoop は [Step 41](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#3-step-41-gameloop-rust-移行) で Rust 移行予定。 |
 | **シーン管理** | Playing, LevelUp, BossAlert, GameOver を独立シーンとして分離。`SceneBehaviour` で init/update を定義。 |
 | **core モジュール統合** | `main.rs` と `lib.rs` の重複を解消。定数・武器・敵・物理を `native/game_native/src/core/` に集約。 |
 | **ホットリロードの可能性** | Elixir コードは BEAM VM 上で動的更新が可能。ゲームロジックの変更を実行中に反映できる潜在能力。 |
@@ -87,7 +87,7 @@
 
 | 課題 | 説明 | 対応状況 |
 |------|------|----------|
-| **60Hz ゲームループのジッター** | `Process.send_after/3` は Erlang スケジューラ依存で ±数 ms のジッターが発生。高精度タイマーが必要なゲーム（リズムゲーム等）には不向き。 | 現状許容（バレットヘル系では実害小） |
+| **60Hz ゲームループのジッター** | `Process.send_after/3` は Erlang スケジューラ依存で ±数 ms のジッターが発生。高精度タイマーが必要なゲーム（リズムゲーム等）には不向き。 | **対応予定**: [Step 41](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#3-step-41-gameloop-rust-移行) で GameLoop を Rust に移行し、高精度タイマー（`std::time::Instant`）で固定間隔 tick を実現 |
 | **NIF 呼び出しオーバーヘッド** | Elixir → Rust の NIF 呼び出しごとに Erlang Term ↔ Rust 型変換コストが発生。`get_frame_metadata` で対策済みだが、依然として NIF 境界でのコピーは存在。 | 軽減済み |
 
 ### 3.2 開発体験・保守性面
@@ -103,7 +103,7 @@
 | 課題 | 説明 |
 |------|------|
 | **完全な ECS フレームワークではない** | SoA を手動実装。bevy_ecs や hecs のような汎用 ECS ではない。エンティティ間の親子・グループ関係やコンポーネントの動的追加はない。 |
-| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし。Ghost（壁すり抜け）は現状未実装（マップ・障害物システムが必要、[Step 41](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#2-step-41-マップ障害物システム) で対応予定）。 |
+| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし。Ghost（壁すり抜け）は現状未実装（マップ・障害物システムが必要、[Step 42](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#4-step-42-マップ障害物システム) で対応予定）。 |
 | **セーブ・ロード機能がない** | ゲーム状態の永続化なし。ハイスコア・実績の保存ができない。 |
 | **未実装仕様** | Skeleton, Ghost, Garlic 等は仕様書にあれど未実装（ゲームコンテンツの追加としてスコープ外判断可能）。 |
 | **UI/UX の制限** | egui 即時モードは複雑なアニメーション付き UI に不向き。リッチテキスト・多言語対応は限定的。 |
@@ -142,6 +142,7 @@
 | リアルタイムマルチプレイゲーム | ★★★★☆ | Phoenix Channels + Rust 物理演算の組み合わせが強力 |
 | 大量エンティティのシミュレーション | ★★★★☆ | SoA ECS + rayon 並列化 + 空間ハッシュの組み合わせ |
 | バレットヘル・サバイバー系ゲーム | ★★★★☆ | 現在の実装がこのジャンル向けに最適化されている |
+| リズムゲー・競技FPS | ★★★★☆ | Step 41 完了後。Rust 主導の高精度 tick で対応可能 |
 | 技術デモ・プロトタイプ | ★★★★☆ | 2言語の組み合わせの可能性を実証するのに最適 |
 
 **向いていないユースケース**
@@ -172,6 +173,7 @@
 
 | 優先度 | 項目 | 備考 |
 |--------|------|------|
+| **高** | **GameLoop Rust 移行** | [Step 41](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#3-step-41-gameloop-rust-移行) で実施。精度確保のため最優先 |
 | 中 | マップ・障害物システム | ゲーム要件に応じて検討 |
 | 中 | セーブ・ロード | ハイスコア永続化が必要なら検討 |
 | 低 | マルチプレイ対応 | サバイバー系ではスコープ外 |
@@ -181,7 +183,7 @@
 
 > **「本番サービスの信頼性でゲームを動かす」というアプローチを、コードレベルで実現している。**  
 > パフォーマンス最適化（空間ハッシュ、フリーリスト、RwLock、SIMD）、Elixir レイヤーの OTP 活用（EventBus、ETS、Telemetry）、汎用化基盤（シーン管理、アセットローダー、core 統合）が揃っている。  
-> 残る課題は主に機能拡張（マップ、セーブ、マルチプレイ）とデバッグ支援であり、アーキテクチャ上の弱点ではない。
+> **GameLoop の Rust 移行**（Step 41）により、タイミング精度を確保しリズムゲー・競技FPS にも対応可能にする方針。残る課題は主に機能拡張（マップ、セーブ、マルチプレイ）とデバッグ支援。
 
 ---
 
@@ -192,5 +194,6 @@
 | [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) | 元の詳細分析（アーカイブ） |
 | [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) | コードベース準拠の再評価版 |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外項目 |
+| [STEPS_MAP_SAVE_MULTI_DEBUG.md](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) | Step 40（GameLoop Rust 移行）含む実装ロードマップ |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計 |
