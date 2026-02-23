@@ -1,195 +1,178 @@
-# Elixir x Rust — ヴァンパイアサバイバーライクゲーム
+# Elixir × Rust ゲームエンジン
 
-Elixir をゲームロジックの司令塔として、Rust を高性能な描画・物理演算エンジンとして組み合わせた、数千体の敵が同時出現するサバイバーアクションゲームです。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## 技術スタック
+**Elixir と Rust を組み合わせたゲーム開発環境です。**  
+このエンジンでゲームを作り、同じ土台の上で自分も、みんなも、オリジナルゲームを開発できることを目指しています。
 
-| レイヤー | 技術 | 役割 |
-|---|---|---|
-| ゲームロジック | Elixir / BEAM VM | ゲームループ制御・スポーン管理・スコア・ルール |
-| Elixir-Rust 連携 | Rustler NIF (dirty_cpu) | 低レイテンシなネイティブ関数呼び出し |
-| 物理演算・衝突判定 | Rust | SoA ECS + Dual Spatial Hash |
-| 描画 | Rust + wgpu | GPU インスタンシング（1 draw call で数千体） |
-| ウィンドウ管理 | winit (Rust スレッド) | クロスプラットフォームウィンドウ |
-| 共有ステート | ETS (Erlang Term Storage) | 高速並行読み取り可能なコンポーネントストア |
+現在は **ヴァンサバ** をデモゲームとして含んでいます。数千体の敵が同時出現するサバイバーアクションが動作し、今後の汎用化に向けた基盤が整っています。
 
-## アーキテクチャ概要
+---
 
-```mermaid
-flowchart TD
-    subgraph elixir [Elixir BEAM VM]
-        GL["GameLoop GenServer (60Hz tick)"]
-        IH[InputHandler GenServer]
-        ETS["ETS Tables (positions / health / sprites)"]
-        SS[SpawnSystem]
-        SC[ScoreSystem]
-        GL --> SS
-        GL --> SC
-        GL --> ETS
-        IH -->|cast| GL
-    end
+## 主な特徴
 
-    subgraph rust [Rust Native]
-        NIF["Rustler NIF (dirty_cpu scheduler)"]
-        ECS["ECS World (SoA Layout)"]
-        PH["Physics (Dual Spatial Hash)"]
-        RD["wgpu Renderer (Instanced Drawing)"]
-        WIN["winit Window (Main Thread)"]
-        NIF --> ECS
-        ECS --> PH
-        ECS --> RD
-        WIN -->|"crossbeam channel"| RD
-    end
+| 観点 | 内容 |
+|------|------|
+| **ゲームロジック** | Elixir / OTP — 耐障害性、並行性、ホットリロード、宣言的ロジック |
+| **物理・描画** | Rust — 低レイテンシ、SoA ECS、空間ハッシュ、GPU インスタンシング |
+| **連携** | Rustler NIF — ゲームループと NIF のスムーズな統合 |
+| **描画** | wgpu — Vulkan / Metal / DX12 対応、1 draw call で数千体描画 |
 
-    GL -->|"physics_step(world_ref, delta_ms)"| NIF
-    IH -->|"input_event(world_ref, event)"| NIF
-    NIF -->|"OwnedBinary render data (50KB/frame)"| GL
-```
+---
 
-### データフロー（1フレーム）
-
-```
-1. GameLoop GenServer が :tick を受信（16ms間隔）
-2. NIF: physics_step(world_ref, delta) を呼び出し
-   └─ Rust: 移動計算 → 衝突判定 → AI更新 → レンダリング指示
-3. Rust がレンダリングデータ（バイナリ）を返却
-4. Elixir が ETS に差分書き込み
-5. winit スレッドが wgpu でフレームを描画
-6. 次の :tick をスケジュール
-```
-
-## ディレクトリ構造
-
-```
-elixir_rust/
-├── mix.exs                          # Elixir プロジェクト設定
-├── config/
-│   └── config.exs
-├── lib/
-│   └── game/
-│       ├── application.ex           # Supervisor ツリー
-│       ├── game_loop.ex             # メインゲームループ GenServer (60Hz)
-│       ├── input_handler.ex         # 入力イベント GenServer
-│       ├── component_store.ex       # ETS ラッパー（ECS コンポーネント）
-│       ├── nif_bridge.ex            # Rustler NIF 定義
-│       └── systems/
-│           ├── spawn_system.ex      # 敵スポーン管理
-│           ├── score_system.ex      # スコア・経験値計算
-│           └── level_system.ex      # レベル進行・難易度管理
-├── native/
-│   └── game_native/                 # Rust クレート（Rustler NIF）
-│       ├── Cargo.toml
-│       └── src/
-│           ├── lib.rs               # NIF エントリポイント
-│           ├── ecs/
-│           │   ├── world.rs         # EnemyWorld（SoA レイアウト）
-│           │   └── components.rs    # コンポーネント型定義
-│           ├── physics/
-│           │   ├── spatial_hash.rs  # Dual Spatial Hash
-│           │   ├── collision.rs     # 衝突判定
-│           │   └── movement.rs      # 移動・AI ステートマシン
-│           └── renderer/
-│               ├── mod.rs           # wgpu 初期化・パイプライン
-│               ├── sprite_renderer.rs # インスタンシング描画
-│               ├── texture_atlas.rs # テクスチャアトラス管理
-│               └── shaders/
-│                   ├── sprite.wgsl  # 頂点シェーダ
-│                   └── sprite_frag.wgsl
-├── assets/
-│   ├── sprites/                     # スプライトシート（テクスチャアトラス）
-│   └── audio/
-├── docs/
-│   ├── docs_index.md                # ドキュメント索引
-│   ├── 01_setup/                    # 入門・セットアップ
-│   ├── 02_spec_design/              # 仕様・設計
-│   ├── 03_tech_decisions/           # 技術選定の背景
-│   ├── 04_roadmap/                  # 実装ロードマップ
-│   ├── 05_steps/                    # ステップガイド
-│   ├── 06_system_design/            # システム設計・提案
-│   └── 07_presentation/             # プレゼンテーション
-└── test/
-```
-
-## セットアップ
+## クイックスタート
 
 ### 前提条件
 
-| ツール | バージョン | 備考 |
-|---|---|---|
-| Elixir | ~> 1.19 | [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) を参照 |
-| Erlang/OTP | 26 以上 | Elixir に同梱、または別途インストール |
-| Rust | 1.80 以上 (stable) | `rustup` でインストール |
-| wgpu 対応 GPU ドライバ | — | Vulkan / Metal / DX12 いずれか |
+| ツール | バージョン |
+|--------|------------|
+| Elixir | ~> 1.19 |
+| Erlang/OTP | 26 以上 |
+| Rust | 1.80 以上 (stable) |
+| wgpu 対応 GPU | Vulkan / Metal / DX12 いずれか |
 
-> **Windows での Elixir インストール**: 詳細は [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) を参照してください。
-
-### インストール
+### インストール & 実行
 
 ```bash
-# リポジトリのクローン
 git clone https://github.com/your-org/elixir_rust.git
 cd elixir_rust
 
-# Elixir 依存パッケージのインストール（Rustler が Rust クレートも自動ビルド）
 mix deps.get
 mix compile
-```
-
-> **注意**: 初回の `mix compile` 時に Rust クレートが Cargo でビルドされます。  
-> Rust のビルドには数分かかる場合があります。
-
-### 実行
-
-```bash
-# 開発モードで起動
 mix run --no-halt
-
-# または IEx セッションで起動
-iex -S mix
 ```
+
+> 初回の `mix compile` 時に Rust クレートがビルドされます。数分かかる場合があります。
 
 ### テスト
 
 ```bash
-# Elixir テスト
 mix test
-
-# Rust ユニットテスト
 cd native/game_native && cargo test
 ```
 
+> **環境構築の詳細**: [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md)（Windows を含む）
+
+---
+
+## アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Elixir (BEAM VM)                                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
+│  │ GameLoop     │  │ SceneManager │  │ EventBus / FrameCache  │ │
+│  │ (60Hz tick)  │  │ (Playing,    │  │ ETS 入力 / StressMonitor│ │
+│  └──────┬───────┘  │  LevelUp,    │  └────────────────────────┘ │
+│         │          │  BossAlert,  │                             │
+│         │          │  GameOver)   │  SpawnSystem / BossSystem   │
+│         │          └──────────────┘  LevelSystem / Stats        │
+└─────────┼───────────────────────────────────────────────────────┘
+          │ physics_step(world_ref, delta_ms)
+          │ get_frame_metadata(world_ref)  ※ HUD 用
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Rust (NIF + 描画スレッド)                                        │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │ physics_step: 移動・衝突・AI・武器処理 → 描画データ生成       ││
+│  │ 描画は Rust 内で完結（wgpu に直接渡す）                       ││
+│  └──────────────────────────────────────────────────────────────┘│
+│  SoA ECS | 空間ハッシュ | フリーリスト | SIMD Chase AI | RwLock  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 1 フレームの流れ
+
+1. GameLoop が `:tick` を受信（16 ms 間隔）
+2. NIF `physics_step(world_ref, delta)` を呼び出し  
+   → Rust: 移動・衝突・AI・武器処理 → 描画データを wgpu へ渡す
+3. NIF `get_frame_metadata` で HUD 用メタデータ（HP、敵数、弾数など）を取得
+4. EventBus でイベントを配信、FrameCache にキャッシュ
+5. 次の `:tick` をスケジュール
+
+---
+
+## プロジェクト構造
+
+```
+elixir_rust/
+├── mix.exs
+├── config/
+├── lib/
+│   ├── game.ex
+│   └── game/
+│       ├── application.ex         # Supervisor ツリー
+│       ├── game_loop.ex           # 60Hz ゲームループ
+│       ├── scene_manager.ex       # シーン管理
+│       ├── scene_behaviour.ex     # シーン共通インターフェース
+│       ├── event_bus.ex           # フレームイベント配信
+│       ├── frame_cache.ex         # ETS フレームキャッシュ
+│       ├── input_handler.ex       # 入力処理
+│       ├── stress_monitor.ex      # 負荷監視
+│       ├── stats.ex               # スコア・統計
+│       ├── telemetry.ex           # 観測
+│       ├── nif_bridge.ex          # Rustler NIF 定義
+│       ├── scenes/                # シーン実装
+│       │   ├── playing.ex
+│       │   ├── level_up.ex
+│       │   ├── boss_alert.ex
+│       │   └── game_over.ex
+│       └── systems/               # ゲームロジック
+│           ├── spawn_system.ex
+│           ├── boss_system.ex
+│           └── level_system.ex
+├── native/game_native/            # Rust クレート
+│   └── src/
+│       ├── lib.rs                 # NIF エントリポイント
+│       ├── main.rs                # スタンドアロン描画用
+│       ├── core/                  # 共通ロジック
+│       │   ├── enemy.rs, boss.rs, item.rs, weapon.rs
+│       │   ├── constants.rs, util.rs
+│       │   └── physics/
+│       ├── renderer/              # wgpu 描画
+│       ├── asset/                 # アセット管理
+│       └── audio.rs
+├── assets/
+│   ├── sprites/
+│   └── audio/
+├── docs/                          # 設計・仕様・ロードマップ
+└── test/
+```
+
+---
+
 ## パフォーマンス目標
 
-| 指標 | 目標値 |
-|---|---|
+| 指標 | 目標 |
+|------|------|
 | 同時敵エンティティ数 | 5,000 体 |
-| フレームレート | 60 FPS（16ms/frame） |
-| 物理演算時間 | 8ms 以下/フレーム |
-| 描画時間 | 4ms 以下/フレーム |
-| Elixir-Rust 転送量 | 約 50KB/フレーム（5000体 × 10 bytes） |
+| フレームレート | 60 FPS |
+| 物理演算 | 8 ms 以下/フレーム |
+| 描画 | 4 ms 以下/フレーム |
 
-## ビルド出力先
+---
 
-| 環境 | コマンド | 出力先 |
-|---|---|---|
-| デバッグ | `mix compile` | `platform/windows/_build/debug/` |
-| リリース | `MIX_ENV=prod mix compile` | `platform/windows/_build/release/` |
+## ビジョン・ロードマップ
 
-Rust クレートのビルド出力先は `native/game_native/.cargo/config.toml` で設定しています。
+- **現在**: ヴァンパイアサバイバーをデモとして含むエンジン基盤
+- **今後**: エンジン層とゲーム層の分離を進め、**誰もが Elixir × Rust 環境でゲームを作れる**形を目指す
 
-```
-platform/windows/
-└── _build/
-    ├── debug/    ← mix compile（開発時）
-    └── release/  ← MIX_ENV=prod mix compile（本番時）
-```
+詳細は [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) を参照してください。
 
-## 関連ドキュメント
+---
 
-- [ドキュメント索引](docs/docs_index.md) — 全ドキュメントの一覧・ナビゲーション
-- [実装ステップガイド](docs/05_steps/STEPS.md) — Step 1〜15 の段階的な実装手順
-- [ゲーム仕様書](docs/01_setup/SPEC.md) — ゲームデザイン・技術仕様・NIF API 定義
-- [Elixir 採用理由](docs/03_tech_decisions/WHY_ELIXIR.md) — BEAM VM の強み・他言語との比較
+## ドキュメント
+
+| 用途 | リンク |
+|------|--------|
+| ドキュメント一覧 | [docs/docs_index.md](docs/docs_index.md) |
+| 環境構築 | [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) |
+| ゲーム仕様 | [docs/01_setup/SPEC.md](docs/01_setup/SPEC.md) |
+| Elixir/Rust 役割分担 | [docs/03_tech_decisions/ELIXIR_RUST_DIVISION.md](docs/03_tech_decisions/ELIXIR_RUST_DIVISION.md) |
+| 汎用化ロードマップ | [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) |
+| 実装ステップ | [docs/05_steps/STEPS.md](docs/05_steps/STEPS.md) |
+
+---
 
 ## ライセンス
 
