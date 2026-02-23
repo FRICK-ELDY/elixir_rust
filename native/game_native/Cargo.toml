@@ -1,11 +1,11 @@
 [package]
 name = "game_native"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [lib]
 name = "game_native"
-crate-type = ["cdylib"]  # Rustler NIF 用（後のステップで使用）
+crate-type = ["cdylib", "rlib"]  # cdylib: Rustler NIF 用, rlib: ベンチ・テスト用
 
 [[bin]]
 name = "game_window"
@@ -32,3 +32,10 @@ opt-level = 1  # デバッグビルドでも最低限の最適化
 opt-level = 3
 lto = true
 codegen-units = 1
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "ai_bench"
+harness = false

@@ -100,7 +100,7 @@
 
 ---
 
-### P4: SIMD AI 高速化（オプション）
+### P4: SIMD AI 高速化（オプション）✅ 実装済み
 
 **根拠**: さらなる AI 計算の高速化。x86_64 限定・ARM はフォールバック必須
 
@@ -109,6 +109,11 @@
 | **内容** | `update_chase_ai` を SSE2 SIMD で 4 要素同時処理 |
 | **前提** | P1〜P3 を完了してから実施。ベンチマークで効果を確認 |
 | **参照** | STEPS_PERF Step 31 |
+
+**実装内容**:
+- `update_chase_ai_simd`: x86_64 向け SSE2 実装（`_mm_rsqrt_ps` で逆平方根を高速化）
+- `physics_step` で `#[cfg(target_arch = "x86_64")]` により自動切り替え
+- ベンチマーク: `cargo bench --bench ai_bench` で比較可能
 
 **詳細手順**: [STEPS_PERF.md § Step 31](./STEPS_PERF.md#step-31-simd-ai-高速化上級オプション)
 

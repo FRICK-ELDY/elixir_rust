@@ -98,6 +98,7 @@ pub struct PlayerState {
 }
 
 // ─── 敵 SoA ──────────────────────────────────────────────────
+#[derive(Clone)]
 pub struct EnemyWorld {
     pub positions_x:  Vec<f32>,
     pub positions_y:  Vec<f32>,
@@ -497,6 +498,115 @@ pub fn find_nearest_enemy_spatial_excluding(
     result.or_else(|| find_nearest_enemy_excluding(enemies, px, py, exclude))
 }
 
+/// 1 体分の Chase AI（スカラー版・SIMD フォールバック用）
+#[inline]
+fn scalar_chase_one(
+    enemies: &mut EnemyWorld,
+    i: usize,
+    player_x: f32,
+    player_y: f32,
+    dt: f32,
+) {
+    let dx = player_x - enemies.positions_x[i];
+    let dy = player_y - enemies.positions_y[i];
+    let dist = (dx * dx + dy * dy).sqrt().max(0.001);
+    let speed = enemies.speeds[i];
+    enemies.velocities_x[i] = (dx / dist) * speed;
+    enemies.velocities_y[i] = (dy / dist) * speed;
+    enemies.positions_x[i] += enemies.velocities_x[i] * dt;
+    enemies.positions_y[i] += enemies.velocities_y[i] * dt;
+}
+
+/// SIMD（SSE2）版 Chase AI — x86_64 専用
+/// rayon 版と同じ結果を返すが、4 要素を同時処理する
+#[cfg(target_arch = "x86_64")]
+pub fn update_chase_ai_simd(
+    enemies: &mut EnemyWorld,
+    player_x: f32,
+    player_y: f32,
+    dt: f32,
+) {
+    use std::arch::x86_64::*;
+
+    let len = enemies.len();
+    let simd_len = (len / 4) * 4;
+
+    unsafe {
+        let px4 = _mm_set1_ps(player_x);
+        let py4 = _mm_set1_ps(player_y);
+        let dt4 = _mm_set1_ps(dt);
+        let eps4 = _mm_set1_ps(0.001_f32);
+
+        for base in (0..simd_len).step_by(4) {
+            // 4 要素を同時ロード
+            let ex = _mm_loadu_ps(enemies.positions_x[base..].as_ptr());
+            let ey = _mm_loadu_ps(enemies.positions_y[base..].as_ptr());
+            let sp = _mm_loadu_ps(enemies.speeds[base..].as_ptr());
+
+            // 方向ベクトルを計算
+            let dx = _mm_sub_ps(px4, ex);
+            let dy = _mm_sub_ps(py4, ey);
+
+            // 距離の二乗
+            let dist_sq = _mm_add_ps(_mm_mul_ps(dx, dx), _mm_mul_ps(dy, dy));
+
+            // 逆平方根（高速近似）— max(eps) でゼロ除算を防ぐ
+            let dist_sq_safe = _mm_max_ps(dist_sq, eps4);
+            let inv_dist = _mm_rsqrt_ps(dist_sq_safe);
+
+            // 速度を計算
+            let vx = _mm_mul_ps(_mm_mul_ps(dx, inv_dist), sp);
+            let vy = _mm_mul_ps(_mm_mul_ps(dy, inv_dist), sp);
+
+            // 位置を更新
+            let new_ex = _mm_add_ps(ex, _mm_mul_ps(vx, dt4));
+            let new_ey = _mm_add_ps(ey, _mm_mul_ps(vy, dt4));
+
+            // alive フラグからマスクを作成（分岐を排除してブレンディングで生存者のみ更新）
+            let alive_mask = _mm_castsi128_ps(_mm_set_epi32(
+                if enemies.alive[base + 3] { -1i32 } else { 0 },
+                if enemies.alive[base + 2] { -1i32 } else { 0 },
+                if enemies.alive[base + 1] { -1i32 } else { 0 },
+                if enemies.alive[base + 0] { -1i32 } else { 0 },
+            ));
+
+            // SSE2 のビット演算でブレンディング（alive のとき新値、dead のとき旧値）
+            let old_vx = _mm_loadu_ps(enemies.velocities_x[base..].as_ptr());
+            let old_vy = _mm_loadu_ps(enemies.velocities_y[base..].as_ptr());
+
+            let final_ex = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, ex),
+                _mm_and_ps(alive_mask, new_ex),
+            );
+            let final_ey = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, ey),
+                _mm_and_ps(alive_mask, new_ey),
+            );
+            let final_vx = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, old_vx),
+                _mm_and_ps(alive_mask, vx),
+            );
+            let final_vy = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, old_vy),
+                _mm_and_ps(alive_mask, vy),
+            );
+
+            // 書き戻し
+            _mm_storeu_ps(enemies.positions_x[base..].as_mut_ptr(), final_ex);
+            _mm_storeu_ps(enemies.positions_y[base..].as_mut_ptr(), final_ey);
+            _mm_storeu_ps(enemies.velocities_x[base..].as_mut_ptr(), final_vx);
+            _mm_storeu_ps(enemies.velocities_y[base..].as_mut_ptr(), final_vy);
+        }
+
+        // 残り要素をスカラーで処理
+        for i in simd_len..len {
+            if enemies.alive[i] {
+                scalar_chase_one(enemies, i, player_x, player_y, dt);
+            }
+        }
+    }
+}
+
 /// Chase AI: 全敵をプレイヤーに向けて移動（rayon で並列化）
 pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, dt: f32) {
     let len = enemies.len();
@@ -757,9 +867,12 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
     w.player.x = w.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
     w.player.y = w.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
 
-    // Chase AI
+    // Chase AI（x86_64 では SIMD 版、それ以外は rayon 版）
     let px = w.player.x + PLAYER_RADIUS;
     let py = w.player.y + PLAYER_RADIUS;
+    #[cfg(target_arch = "x86_64")]
+    update_chase_ai_simd(&mut w.enemies, px, py, dt);
+    #[cfg(not(target_arch = "x86_64"))]
     update_chase_ai(&mut w.enemies, px, py, dt);
 
     // 敵同士の重なりを解消する分離パス
