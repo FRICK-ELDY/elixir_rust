@@ -76,18 +76,62 @@ pub enum AssetId {
 
 ```
 assets/
-├── sprites/
+├── sprites/               # デフォルト（game_id 未指定時）
 │   ├── atlas.png          # メインスプライトアトラス
 │   └── atlas_alt.png      # 差し替え用（将来的）
-└── audio/
-    ├── bgm.wav
-    ├── hit.wav
-    └── ...
+├── audio/
+│   ├── bgm.wav
+│   ├── hit.wav
+│   └── ...
+├── vampire_survivor/      # Step 39: ゲーム別アセット
+│   ├── sprites/
+│   │   └── atlas.png
+│   └── audio/
+│       └── ...
+└── rhythm_game/           # 別ゲーム例
+    ├── sprites/
+    └── audio/
 ```
 
 ---
 
-## 5. 使用方法
+## 5. Step 39: ゲーム別アセットパス
+
+ゲームごとに `assets/{game_id}/` をベースパスとして切り替え可能。
+
+### 5.1 環境変数
+
+| 変数 | 説明 |
+|------|------|
+| `GAME_ASSETS_PATH` | プロジェクトルート（任意） |
+| `GAME_ASSETS_ID` | ゲーム ID（例: `vampire_survivor`）。指定時は `assets/{id}/` を優先参照 |
+
+### 5.2 AssetLoader API
+
+```rust
+// 環境変数から自動読み込み（GAME_ASSETS_ID を参照）
+let loader = AssetLoader::new();
+
+// ゲーム ID を明示指定
+let loader = AssetLoader::with_game_assets("vampire_survivor");
+```
+
+### 5.3 ロード順序
+
+1. `assets/{game_id}/sprites/atlas.png`（GAME_ASSETS_ID 指定時）
+2. `assets/sprites/atlas.png`（デフォルト）
+3. 埋め込みフォールバック
+
+### 5.4 Elixir 連携
+
+- `Engine.Game` behaviour に `assets_path/0` コールバックを追加
+- `config :game, current: Game.VampireSurvivor` のゲームが `assets_path/0` を返す
+- Application 起動時に `GAME_ASSETS_ID` を設定
+- `bin/start.bat` で未設定時は `vampire_survivor` をデフォルトに設定
+
+---
+
+## 6. 使用方法
 
 ### Rust 側（レンダラ）
 
@@ -110,7 +154,17 @@ $env:GAME_ASSETS_PATH = (Get-Location).Path
 cargo run --bin game_window
 ```
 
-ファイルが存在しない場合は埋め込みデータを使用する。
+### ゲーム別アセット（Step 39）
+
+```powershell
+# ゲーム ID を指定して assets/vampire_survivor/ を参照
+$env:GAME_ASSETS_ID = "vampire_survivor"
+cargo run --bin game_window
+```
+
+`bin/start.bat` は未設定時に `GAME_ASSETS_ID=vampire_survivor` をデフォルトに設定する。
+
+ファイルが存在しない場合は従来パス・埋め込みデータへフォールバックする。
 
 ### Elixir 側（将来拡張）
 
@@ -119,7 +173,7 @@ cargo run --bin game_window
 
 ---
 
-## 6. 関連ドキュメント
+## 7. 関連ドキュメント
 
 - [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) — G3 設計方針
 - [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 弱み分析（アセット埋め込み）

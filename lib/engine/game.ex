@@ -41,4 +41,12 @@ defmodule Engine.Game do
   wave, difficulty 等ゲーム固有の値を追加可能。
   """
   @callback context_defaults() :: map()
+
+  @doc """
+  ゲーム別アセットのサブディレクトリ（Step 39）。
+  `assets/` 直下のサブディレクトリ名を返す。
+  例: `"vampire_survivor"` → `assets/vampire_survivor/sprites/atlas.png` を参照
+  空文字列の場合は `assets/sprites/atlas.png` を参照（従来どおり）。
+  """
+  @callback assets_path() :: String.t()
 end
