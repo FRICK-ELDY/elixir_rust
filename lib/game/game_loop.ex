@@ -33,6 +33,7 @@ defmodule Game.GameLoop do
   @impl true
   def init(_opts) do
     world_ref = Game.NifBridge.create_world()
+    Game.FrameCache.init()
     start_ms  = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
 
@@ -54,18 +55,6 @@ defmodule Game.GameLoop do
       pending_boss:        nil,         # 警告演出後にスポーンするボス種別
       pending_boss_name:   nil,         # 警告表示用ボス名
     }}
-  end
-
-  # StressMonitor から world_ref を取得するためのコールバック
-  @impl true
-  def handle_call(:get_world_ref, _from, state) do
-    {:reply, state.world_ref, state}
-  end
-
-  @impl true
-  def handle_cast({:input, :move, {dx, dy}}, state) do
-    Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-    {:noreply, state}
   end
 
   @impl true
@@ -155,6 +144,10 @@ defmodule Game.GameLoop do
     delta   = now - state.last_tick
     elapsed = now - state.start_ms
 
+    # P6: ETS からロックフリーで入力を読む（cast が届くのを待たない）
+    {dx, dy} = Game.InputHandler.get_move_vector()
+    Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+
     # Physics step runs in Rust (DirtyCpu NIF — won't block the BEAM scheduler)
     _frame_id = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
 
@@ -236,11 +229,15 @@ defmodule Game.GameLoop do
           state
         end
 
-      # ── 5. 毎秒ログ出力 ──────────────────────────────────────────
+      # ── 5. 毎秒ログ出力 + ETS キャッシュ書き込み ─────────────────────
       if rem(state.frame_count, 60) == 0 do
-        enemy_count = Game.NifBridge.get_enemy_count(state.world_ref)
-        physics_ms  = Game.NifBridge.get_frame_time_ms(state.world_ref)
-        {_hp, _max_hp, _score, elapsed_s} = Game.NifBridge.get_hud_data(state.world_ref)
+        enemy_count  = Game.NifBridge.get_enemy_count(state.world_ref)
+        bullet_count = Game.NifBridge.get_bullet_count(state.world_ref)
+        physics_ms   = Game.NifBridge.get_frame_time_ms(state.world_ref)
+        hud_data     = Game.NifBridge.get_hud_data(state.world_ref)
+        Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data)
+
+        {_hp, _max_hp, _score, elapsed_s} = hud_data
         wave        = Game.SpawnSystem.wave_label(elapsed_s)
         budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""
 

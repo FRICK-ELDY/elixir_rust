@@ -110,10 +110,12 @@ elixir_rust/
 
 | ツール | バージョン | 備考 |
 |---|---|---|
-| Elixir | 1.17 以上 | `asdf install elixir` 推奨 |
-| Erlang/OTP | 27 以上 | Elixir に同梱 |
+| Elixir | ~> 1.19 | [docs/SETUP_ELIXIR.md](docs/SETUP_ELIXIR.md) を参照 |
+| Erlang/OTP | 26 以上 | Elixir に同梱、または別途インストール |
 | Rust | 1.80 以上 (stable) | `rustup` でインストール |
 | wgpu 対応 GPU ドライバ | — | Vulkan / Metal / DX12 いずれか |
+
+> **Windows での Elixir インストール**: 詳細は [docs/SETUP_ELIXIR.md](docs/SETUP_ELIXIR.md) を参照してください。
 
 ### インストール
 
