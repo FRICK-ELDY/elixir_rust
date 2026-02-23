@@ -18,7 +18,7 @@ use physics::separation::{apply_separation, EnemySeparation};
 use physics::spatial_hash::CollisionWorld;
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 rustler::atoms! {
     ok,
@@ -664,7 +664,7 @@ impl GameWorldInner {
     }
 }
 
-pub struct GameWorld(pub Mutex<GameWorldInner>);
+pub struct GameWorld(pub RwLock<GameWorldInner>);
 
 // ─── NIF 関数 ─────────────────────────────────────────────────
 
@@ -675,7 +675,7 @@ fn add(a: i64, b: i64) -> NifResult<i64> {
 
 #[rustler::nif]
 fn create_world() -> ResourceArc<GameWorld> {
-    ResourceArc::new(GameWorld(Mutex::new(GameWorldInner {
+    ResourceArc::new(GameWorld(RwLock::new(GameWorldInner {
         frame_id:           0,
         player:             PlayerState {
             x:                SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
@@ -704,35 +704,41 @@ fn create_world() -> ResourceArc<GameWorld> {
     })))
 }
 
+/// RwLock の PoisonError を NifResult に変換するヘルパー
+#[inline]
+fn lock_poisoned_err() -> rustler::Error {
+    rustler::Error::RaiseAtom("lock_poisoned")
+}
+
 /// プレイヤーの入力方向を設定（Step 8）
 #[rustler::nif]
-fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> Atom {
-    let mut w = world.0.lock().unwrap();
+fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     w.player.input_dx = dx as f32;
     w.player.input_dy = dy as f32;
-    ok()
+    Ok(ok())
 }
 
 /// 敵をスポーン（Step 9 / Step 18）
 /// kind: :slime | :bat | :golem
 #[rustler::nif]
-fn spawn_enemies(world: ResourceArc<GameWorld>, kind: Atom, count: usize) -> Atom {
-    let mut w = world.0.lock().unwrap();
+fn spawn_enemies(world: ResourceArc<GameWorld>, kind: Atom, count: usize) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     let enemy_kind = EnemyKind::from_atom(kind);
     // rng の借用を先に終わらせてから enemies に渡す
     let positions: Vec<(f32, f32)> = (0..count)
         .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
         .collect();
     w.enemies.spawn(&positions, enemy_kind);
-    ok()
+    Ok(ok())
 }
 
 /// 物理ステップ: プレイヤー移動 + Chase AI + 衝突判定（Step 8/9/10/12）
 #[rustler::nif(schedule = "DirtyCpu")]
-fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
+fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
     let t_start = std::time::Instant::now();
 
-    let mut w = world.0.lock().unwrap();
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     w.frame_id += 1;
 
     let dt = delta_ms as f32 / 1000.0;
@@ -1445,29 +1451,29 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> u32 {
         );
     }
 
-    w.frame_id
+    Ok(w.frame_id)
 }
 
 /// プレイヤー座標を返す（Step 8）
 #[rustler::nif]
-fn get_player_pos(world: ResourceArc<GameWorld>) -> (f64, f64) {
-    let w = world.0.lock().unwrap();
-    (w.player.x as f64, w.player.y as f64)
+fn get_player_pos(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64)> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok((w.player.x as f64, w.player.y as f64))
 }
 
 /// プレイヤー HP を返す（Step 10）
 #[rustler::nif]
-fn get_player_hp(world: ResourceArc<GameWorld>) -> f64 {
-    let w = world.0.lock().unwrap();
-    w.player.hp as f64
+fn get_player_hp(world: ResourceArc<GameWorld>) -> NifResult<f64> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.player.hp as f64)
 }
 
 /// 描画データを返す: [{x, y, kind}] のリスト
 /// kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet,
 ///       11=SlimeKing, 12=BatLord, 13=StoneGolem, 14=rock_bullet
 #[rustler::nif]
-fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
-    let w = world.0.lock().unwrap();
+fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len() + 1);
     result.push((w.player.x, w.player.y, 0u8));
     // Step 24: ボスを描画（中心座標からスプライト左上に変換）
@@ -1496,13 +1502,13 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
             result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], w.bullets.render_kind[i]));
         }
     }
-    result
+    Ok(result)
 }
 
 /// パーティクル描画データを返す: [(x, y, r, g, b, alpha, size)]
 #[rustler::nif]
-fn get_particle_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, f32, f32, f32, f32, f32)> {
-    let w = world.0.lock().unwrap();
+fn get_particle_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, f32, f32, f32, f32, f32)>> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     let mut result = Vec::with_capacity(w.particles.count);
     for i in 0..w.particles.len() {
         if !w.particles.alive[i] { continue; }
@@ -1516,41 +1522,41 @@ fn get_particle_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, f32, f32, 
             w.particles.size[i],
         ));
     }
-    result
+    Ok(result)
 }
 
 /// 現在飛んでいる弾丸数を返す（Step 11）
 #[rustler::nif]
-fn get_bullet_count(world: ResourceArc<GameWorld>) -> usize {
-    let w = world.0.lock().unwrap();
-    w.bullets.count
+fn get_bullet_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.bullets.count)
 }
 
 /// 直近フレームの物理ステップ処理時間をミリ秒で返す（Step 12）
 #[rustler::nif]
-fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> f64 {
-    let w = world.0.lock().unwrap();
-    w.last_frame_time_ms
+fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> NifResult<f64> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.last_frame_time_ms)
 }
 
 /// 現在生存している敵の数を返す（Step 12）
 #[rustler::nif]
-fn get_enemy_count(world: ResourceArc<GameWorld>) -> usize {
-    let w = world.0.lock().unwrap();
-    w.enemies.count
+fn get_enemy_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.enemies.count)
 }
 
 /// HUD データを一括取得（Step 13）
 /// 戻り値: (hp, max_hp, score, elapsed_seconds)
 #[rustler::nif]
-fn get_hud_data(world: ResourceArc<GameWorld>) -> (f64, f64, u32, f64) {
-    let w = world.0.lock().unwrap();
-    (
+fn get_hud_data(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64, u32, f64)> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok((
         w.player.hp        as f64,
         w.player_max_hp    as f64,
         w.score,
         w.elapsed_seconds  as f64,
-    )
+    ))
 }
 
 // ─── Step 14: レベルアップ・武器選択 ──────────────────────────
@@ -1572,20 +1578,20 @@ fn exp_required_for_next(level: u32) -> u32 {
 /// レベルアップ関連データを一括取得（Step 14）
 /// 戻り値: (exp, level, level_up_pending, exp_to_next)
 #[rustler::nif]
-fn get_level_up_data(world: ResourceArc<GameWorld>) -> (u32, u32, bool, u32) {
-    let w = world.0.lock().unwrap();
+fn get_level_up_data(world: ResourceArc<GameWorld>) -> NifResult<(u32, u32, bool, u32)> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     let exp_to_next = exp_required_for_next(w.level).saturating_sub(w.exp);
-    (w.exp, w.level, w.level_up_pending, exp_to_next)
+    Ok((w.exp, w.level, w.level_up_pending, exp_to_next))
 }
 
 /// 装備中の武器スロット情報を返す（Step 17）
 /// 戻り値: [(weapon_name, level)] のリスト
 #[rustler::nif]
-fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
-    let w = world.0.lock().unwrap();
-    w.weapon_slots.iter()
+fn get_weapon_levels(world: ResourceArc<GameWorld>) -> NifResult<Vec<(String, u32)>> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.weapon_slots.iter()
         .map(|s| (s.kind.name().to_string(), s.level))
-        .collect()
+        .collect())
 }
 
 /// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17/21）
@@ -1593,8 +1599,8 @@ fn get_weapon_levels(world: ResourceArc<GameWorld>) -> Vec<(String, u32)> {
 /// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
 /// 新規武器は最大 6 スロットまで追加可能
 #[rustler::nif]
-fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
-    let mut w = world.0.lock().unwrap();
+fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
 
     let kind = match weapon_name {
         "magic_wand" => WeaponKind::MagicWand,
@@ -1617,24 +1623,24 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> Atom {
     // exp は累積値で管理するためリセットしない
     w.complete_level_up();
 
-    ok()
+    Ok(ok())
 }
 
 /// 武器選択をスキップしてレベルアップ待機を解除する
 /// 全武器がMaxLvの場合など、選択肢がない状態で呼び出す
 #[rustler::nif]
-fn skip_level_up(world: ResourceArc<GameWorld>) -> Atom {
-    let mut w = world.0.lock().unwrap();
+fn skip_level_up(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     w.complete_level_up();
-    ok()
+    Ok(ok())
 }
 
 // ─── Step 19: アイテム関連 NIF ─────────────────────────────────
 
 /// アイテム描画データを返す: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
 #[rustler::nif]
-fn get_item_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
-    let w = world.0.lock().unwrap();
+fn get_item_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     let mut result = Vec::with_capacity(w.items.count);
     for i in 0..w.items.len() {
         if w.items.alive[i] {
@@ -1645,14 +1651,14 @@ fn get_item_data(world: ResourceArc<GameWorld>) -> Vec<(f32, f32, u8)> {
             ));
         }
     }
-    result
+    Ok(result)
 }
 
 /// 磁石エフェクトの残り時間（秒）を返す
 #[rustler::nif]
-fn get_magnet_timer(world: ResourceArc<GameWorld>) -> f64 {
-    let w = world.0.lock().unwrap();
-    w.magnet_timer as f64
+fn get_magnet_timer(world: ResourceArc<GameWorld>) -> NifResult<f64> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.magnet_timer as f64)
 }
 
 // ─── Step 24: ボス関連 NIF ─────────────────────────────────────
@@ -1661,9 +1667,9 @@ fn get_magnet_timer(world: ResourceArc<GameWorld>) -> f64 {
 /// kind: :slime_king | :bat_lord | :stone_golem
 /// スポーン位置はプレイヤーの右 600px
 #[rustler::nif]
-fn spawn_boss(world: ResourceArc<GameWorld>, kind: Atom) -> Atom {
-    let mut w = world.0.lock().unwrap();
-    if w.boss.is_some() { return ok(); }
+fn spawn_boss(world: ResourceArc<GameWorld>, kind: Atom) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    if w.boss.is_some() { return Ok(ok()); }
     if let Some(boss_kind) = BossKind::from_atom(kind) {
         let px = w.player.x + PLAYER_RADIUS;
         let py = w.player.y + PLAYER_RADIUS;
@@ -1671,33 +1677,33 @@ fn spawn_boss(world: ResourceArc<GameWorld>, kind: Atom) -> Atom {
         let by = py.clamp(boss_kind.radius(), SCREEN_HEIGHT - boss_kind.radius());
         w.boss = Some(BossState::new(boss_kind, bx, by));
     }
-    ok()
+    Ok(ok())
 }
 
 /// ボスの状態を返す: {status_atom, hp, max_hp}
 /// status_atom: :alive | :none
 #[rustler::nif]
-fn get_boss_info(world: ResourceArc<GameWorld>) -> (Atom, f64, f64) {
-    let w = world.0.lock().unwrap();
-    match &w.boss {
+fn get_boss_info(world: ResourceArc<GameWorld>) -> NifResult<(Atom, f64, f64)> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(match &w.boss {
         Some(boss) => (alive(), boss.hp as f64, boss.max_hp as f64),
         None       => (none(),  0.0,            0.0),
-    }
+    })
 }
 
 /// プレイヤーが死亡しているかを返す（HP == 0 で true）
 #[rustler::nif]
-fn is_player_dead(world: ResourceArc<GameWorld>) -> bool {
-    let w = world.0.lock().unwrap();
-    w.player.hp <= 0.0
+fn is_player_dead(world: ResourceArc<GameWorld>) -> NifResult<bool> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    Ok(w.player.hp <= 0.0)
 }
 
 /// エリート敵をスポーンする（通常敵の hp_multiplier 倍の HP を持つ）
 /// kind: :slime | :bat | :golem
 /// hp_multiplier: 1.0 = 通常、3.0 = エリート（HP 3 倍）
 #[rustler::nif]
-fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp_multiplier: f64) -> Atom {
-    let mut w = world.0.lock().unwrap();
+fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     let enemy_kind = EnemyKind::from_atom(kind);
     let positions: Vec<(f32, f32)> = (0..count)
         .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -1722,7 +1728,7 @@ fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind: Atom, count: usize, hp
             }
         }
     }
-    ok()
+    Ok(ok())
 }
 
 // ─── ローダー ─────────────────────────────────────────────────
