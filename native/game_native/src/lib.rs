@@ -538,20 +538,6 @@ pub fn update_chase_ai_simd(
         let eps4 = _mm_set1_ps(0.001_f32);
 
         for base in (0..simd_len).step_by(4) {
-            // alive チェック（4 体すべて生存の場合のみ SIMD 処理）
-            if !enemies.alive[base]
-                || !enemies.alive[base + 1]
-                || !enemies.alive[base + 2]
-                || !enemies.alive[base + 3]
-            {
-                for i in base..(base + 4) {
-                    if enemies.alive[i] {
-                        scalar_chase_one(enemies, i, player_x, player_y, dt);
-                    }
-                }
-                continue;
-            }
-
             // 4 要素を同時ロード
             let ex = _mm_loadu_ps(enemies.positions_x[base..].as_ptr());
             let ey = _mm_loadu_ps(enemies.positions_y[base..].as_ptr());
@@ -576,11 +562,40 @@ pub fn update_chase_ai_simd(
             let new_ex = _mm_add_ps(ex, _mm_mul_ps(vx, dt4));
             let new_ey = _mm_add_ps(ey, _mm_mul_ps(vy, dt4));
 
+            // alive フラグからマスクを作成（分岐を排除してブレンディングで生存者のみ更新）
+            let alive_mask = _mm_castsi128_ps(_mm_set_epi32(
+                if enemies.alive[base + 3] { -1i32 } else { 0 },
+                if enemies.alive[base + 2] { -1i32 } else { 0 },
+                if enemies.alive[base + 1] { -1i32 } else { 0 },
+                if enemies.alive[base + 0] { -1i32 } else { 0 },
+            ));
+
+            // SSE2 のビット演算でブレンディング（alive のとき新値、dead のとき旧値）
+            let old_vx = _mm_loadu_ps(enemies.velocities_x[base..].as_ptr());
+            let old_vy = _mm_loadu_ps(enemies.velocities_y[base..].as_ptr());
+
+            let final_ex = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, ex),
+                _mm_and_ps(alive_mask, new_ex),
+            );
+            let final_ey = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, ey),
+                _mm_and_ps(alive_mask, new_ey),
+            );
+            let final_vx = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, old_vx),
+                _mm_and_ps(alive_mask, vx),
+            );
+            let final_vy = _mm_or_ps(
+                _mm_andnot_ps(alive_mask, old_vy),
+                _mm_and_ps(alive_mask, vy),
+            );
+
             // 書き戻し
-            _mm_storeu_ps(enemies.positions_x[base..].as_mut_ptr(), new_ex);
-            _mm_storeu_ps(enemies.positions_y[base..].as_mut_ptr(), new_ey);
-            _mm_storeu_ps(enemies.velocities_x[base..].as_mut_ptr(), vx);
-            _mm_storeu_ps(enemies.velocities_y[base..].as_mut_ptr(), vy);
+            _mm_storeu_ps(enemies.positions_x[base..].as_mut_ptr(), final_ex);
+            _mm_storeu_ps(enemies.positions_y[base..].as_mut_ptr(), final_ey);
+            _mm_storeu_ps(enemies.velocities_x[base..].as_mut_ptr(), final_vx);
+            _mm_storeu_ps(enemies.velocities_y[base..].as_mut_ptr(), final_vy);
         }
 
         // 残り要素をスカラーで処理
