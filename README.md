@@ -34,8 +34,8 @@
 ### インストール & 実行
 
 ```bash
-git clone https://github.com/your-org/elixir_rust.git
-cd elixir_rust
+git clone https://github.com/your-org/your-repository-name.git
+cd your-repository-name
 
 mix deps.get
 mix compile
