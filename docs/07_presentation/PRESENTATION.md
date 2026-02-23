@@ -27,25 +27,27 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Elixir BEAM VM（司令塔）                       │
 │                                                                 │
-│   GameLoop GenServer     SpawnSystem      LevelSystem           │
-│   ├─ 60Hz tick           ├─ ウェーブ制御   ├─ 武器選択肢生成     │
-│   ├─ ゲームフェーズ管理  ├─ 純粋関数設計  └─ EXP テーブル       │
-│   └─ OTP Supervisor      └─ 副作用なし                          │
+│   GameLoop GenServer     SceneManager      SpawnSystem          │
+│   ├─ 60Hz tick           ├─ シーンスタック ├─ ウェーブ制御       │
+│   ├─ ゲームフェーズ管理  ├─ Playing/       ├─ BossSystem        │
+│   └─ OTP Supervisor       LevelUp/BossAlert/GameOver            │
 │                                                                 │
-│   StressMonitor          InputHandler                           │
-│   └─ 独立プロセスで監視  └─ キー入力状態管理                    │
+│   EventBus / FrameCache  LevelSystem       StressMonitor        │
+│   ├─ フレームイベント配信├─ 武器選択肢     └─ 独立プロセスで監視  │
+│   ├─ ETS キャッシュ      └─ EXP テーブル                         │
+│   └─ InputHandler（キー入力状態）                                │
 └─────────────────────┬───────────────────────────────────────────┘
-                      │  Rustler NIF（dirty_cpu スケジューラ）
-                      │  ResourceArc<Mutex<GameWorld>>
-                      │  ← 8 バイトのポインタのみ渡す
+                      │  Rustler NIF（DirtyCpu スケジューラ）
+                      │  ResourceArc<RwLock<GameWorld>>
+                      │  ← 8 バイトのポインタのみ渡す（読み取り並列可能）
 ┌─────────────────────▼───────────────────────────────────────────┐
 │                   Rust Native（エンジン本体）                    │
 │                                                                 │
 │   ECS World (SoA)        Physics             Renderer           │
-│   ├─ positions_x/y[]     ├─ Spatial Hash     ├─ wgpu GPU        │
-│   ├─ velocities_x/y[]    ├─ rayon 並列 AI    ├─ インスタンシング │
-│   ├─ health[]            └─ 衝突判定 O(1)    ├─ WGSL シェーダ   │
-│   └─ alive[]                                 └─ egui HUD        │
+│   ├─ EnemyWorld/Bullet   ├─ Spatial Hash     ├─ wgpu GPU        │
+│   │  /Particle/Item      ├─ rayon 並列 AI    ├─ インスタンシング │
+│   ├─ フリーリスト        ├─ rayon（x86_64 では SIMD）├─ WGSL シェーダ   │
+│   └─ ID ベース参照      └─ 衝突・最近接 O(1) 近    └─ egui HUD + rodio│
 │                                                                 │
 │   winit EventLoop（メインスレッド）                              │
 └─────────────────────────────────────────────────────────────────┘
@@ -124,9 +126,9 @@ struct EnemyWorld {
 }
 ```
 
-位置更新のループは `positions_x` と `positions_y` の 2 配列だけを読みます。CPU の L1 キャッシュ（32KB）に **10,000 体分の座標データがすべて収まります**。
+位置更新のループは `positions_x` と `positions_y` の 2 配列だけを読みます。AoS よりキャッシュミスが少なく、**必要なデータがキャッシュに効率的に乗ります**。
 
-#### 技術 2: Spatial Hash — 衝突判定を O(n²) から O(1) へ
+#### 技術 2: Spatial Hash — 衝突判定を O(n²) から O(1) に近く
 
 ```
 従来の全ペア判定:
@@ -135,7 +137,7 @@ struct EnemyWorld {
 Spatial Hash:
   画面を 80px グリッドに分割
   各エンティティを該当セルに登録
-  近傍クエリ: 周辺 9 セルだけ検索 → O(1)
+  近傍クエリ: 周辺セルのみ検索 → O(1) に近い計算量
 ```
 
 ```rust
@@ -201,16 +203,17 @@ ResourceArc アプローチ（ポインタのみ渡す）:
 
 Rust のゲームワールド（10,000 体分のデータ）は **Elixir から不透明な参照として扱われます**。毎フレームのデータコピーは最小限です。
 
-### dirty_cpu スケジューラ — BEAM をブロックしない
+### DirtyCpu スケジューラ — BEAM をブロックしない
 
 ```rust
 // schedule = "DirtyCpu" により、物理演算が BEAM スケジューラをブロックしない
 #[rustler::nif(schedule = "DirtyCpu")]
-fn physics_step(world: ResourceArc<Mutex<GameWorldInner>>, delta_ms: f64) -> rustler::Atom {
-    let mut w = world.lock().unwrap();
-    w.step(delta_ms as f32);  // 8ms の物理演算
+fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> rustler::Atom {
+    let mut w = world.0.write().unwrap();
+    w.step(delta_ms as f32);  // 物理演算
     atoms::ok()
 }
+// GameWorld(RwLock<GameWorldInner>) により、読み取り専用 NIF は並列実行可能
 ```
 
 ```
@@ -226,14 +229,16 @@ dirty_cpu あり:
 
 ```
 1. GameLoop GenServer が :tick を受信（16ms 間隔）
-2. NifBridge.physics_step(world_ref, delta_ms) → Rust で物理演算
-   ├─ 移動計算（SoA + rayon）
-   ├─ 衝突判定（Spatial Hash）
-   ├─ 武器・弾丸更新
-   └─ 死亡処理・スロット回収
-3. SpawnSystem.maybe_spawn/3 でスポーン判断（純粋関数）
-4. レベルアップ判定 → LevelSystem.generate_weapon_choices/1
-5. StressMonitor が独立プロセスでパフォーマンスをサンプリング
+2. Engine.physics_step(world_ref, delta_ms) → Rust で物理演算
+   ├─ 移動計算（SoA + rayon、x86_64 では SIMD）
+   ├─ 衝突判定・最近接探索（Spatial Hash）
+   ├─ 武器・弾丸・パーティクル更新
+   └─ 死亡処理・フリーリストでスロット回収
+3. drain_frame_events → EventBus にブロードキャスト（Stats, Telemetry）
+4. get_frame_metadata で HUD 描画データを 1 回取得（FrameCache）
+5. SpawnSystem / BossSystem でスポーン判断（純粋関数）
+6. LevelSystem.generate_weapon_choices/1 でレベルアップ武器候補
+7. StressMonitor が独立プロセスでパフォーマンスをサンプリング
 ```
 
 ---
@@ -244,11 +249,11 @@ dirty_cpu あり:
 
 | 処理 | 目標時間 | 担当 | 技術 |
 |---|---|---|---|
-| NIF 呼び出しオーバーヘッド | < 0.1ms | Rustler | dirty_cpu |
-| 移動計算（10,000 体） | < 2ms | Rust | SoA + rayon |
-| 衝突判定 | < 3ms | Rust | Spatial Hash |
-| AI 更新（10,000 体） | < 2ms | Rust | rayon 並列化 |
-| GPU 描画 | < 4ms | Rust + GPU | インスタンシング |
+| NIF 呼び出しオーバーヘッド | < 0.1ms | Rustler | DirtyCpu |
+| 移動計算（10,000+ 体） | < 2ms | Rust | SoA + rayon（x86_64 では SIMD） |
+| 衝突判定・最近接探索 | < 3ms | Rust | Spatial Hash |
+| AI 更新 | < 2ms | Rust | rayon 並列化 |
+| GPU 描画 | < 4ms | Rust + GPU | インスタンシング（最大 14,502 インスタンスを 1 draw call：敵・弾・パーティクル等） |
 | Elixir ロジック | < 1ms | Elixir | GenServer |
 | **合計** | **< 12ms** | — | **余裕あり** |
 
@@ -269,27 +274,35 @@ dirty_cpu あり:
 
 ### 今すぐ拡張できること
 
+#### ゲームの差し替え — 汎用エンジンとして
+
+```elixir
+# config/config.exs でゲームを切り替え
+config :game, current: Game.VampireSurvivor
+# config :game, current: Game.MiniShooter  # 例: 他ゲーム
+```
+
+`Engine` API 経由でワールド操作。ゲームは `entity_registry` で敵・武器・ボスを定義し、`SceneBehaviour` でシーンを実装するだけで、**新ゲームをプラグインとして追加できます**。
+
 #### マルチプレイ対応 — Elixir の本領発揮
 
 ```elixir
 # Elixir の分散処理は言語に組み込まれている
-# ノード間通信は通常の関数呼び出しと同じ構文
 Node.connect(:"game_server@192.168.1.1")
-GenServer.call({GameLoop, :"game_server@192.168.1.1"}, :get_state)
+GenServer.call({Engine.GameLoop, :"game_server@192.168.1.1"}, :get_state)
 ```
 
-BEAM VM の分散処理機能を使えば、**マルチプレイサーバーへの拡張が自然に行えます**。Phoenix LiveView と組み合わせれば、ブラウザからリアルタイムでゲーム状態を観戦する機能も数行で実装できます。
+BEAM VM の分散処理機能を使えば、**マルチプレイサーバーへの拡張が自然に行えます**。
 
 #### ホットコードスワップ — 実行中にゲームロジックを変更
 
 ```elixir
 # ゲームを止めずにスポーンテーブルを変更
-# Elixir はネイティブでホットリロードをサポート
-:code.load_file(Game.SpawnSystem)
+:code.load_file(Game.VampireSurvivor.SpawnSystem)
 # → 次のフレームから新しいロジックが適用される
 ```
 
-**ゲームを再起動せずにバランス調整ができます。** ライブイベントや A/B テストに最適です。
+**ゲームを再起動せずにバランス調整ができます。**
 
 #### GPU コンピュートシェーダへの移行
 
@@ -347,26 +360,16 @@ Elixir の優位点:
 
 ---
 
-## 8. 実装の旅 — 15 ステップで作ったもの
+## 8. 実装の旅 — 段階的に構築したエンジン
 
-このゲームエンジンは、**15 のステップ**で段階的に構築されました。
+このゲームエンジンは、**Step 1〜40+** で段階的に構築されました。
 
 ```
-Step 1:  環境構築
-Step 2:  Rust クレート雛形 + ウィンドウ表示
-Step 3:  wgpu 初期化 + 単色クリア
-Step 4:  スプライト 1 枚描画
-Step 5:  インスタンシング（100 体描画）
-Step 6:  Elixir プロジェクト + Rustler NIF 連携    ← 2 言語が繋がる瞬間
-Step 7:  ゲームループ（GenServer 60Hz tick）
-Step 8:  プレイヤー移動
-Step 9:  敵スポーン + 追跡 AI（100 体）
-Step 10: 衝突判定（Spatial Hash）
-Step 11: 武器・弾丸システム
-Step 12: 大規模スポーン（5,000 体）+ パフォーマンス最適化
-Step 13: UI（HP バー・スコア・タイマー）
-Step 14: レベルアップ・武器選択
-Step 15: ゲームオーバー・リスタート              ← ゲームとして成立
+Step 1〜15:  基礎実装（環境構築 → NIF 連携 → ゲームループ → 武器・UI → ゲームオーバー）
+Step 16〜25: クオリティ（パーティクル・武器強化・敵タイプ・アイテム・カメラ・BGM/SE・ボス）
+Step 26〜31: パフォーマンス（EventBus・ETS・RwLock・フリーリスト・Spatial Hash 最近接・SIMD）
+Step 32〜40: 汎用化（Game インターフェース・ゲーム分離・Engine API 安定化・entity_registry）
+Step 41〜44: 拡張（マップ・障害物、セーブ・ロード、マルチプレイ、デバッグ支援）
 ```
 
 各ステップは「独立して動作確認できる単位」に分割されており、**誰でも再現できます**。
@@ -375,17 +378,18 @@ Step 15: ゲームオーバー・リスタート              ← ゲームと�
 
 ## 9. 技術スタックの全体像
 
-| レイヤー | 技術 | バージョン | 役割 |
-|---|---|---|---|
-| ゲームロジック | Elixir / BEAM VM | 1.19 | 司令塔・状態管理・耐障害性 |
-| Elixir-Rust 連携 | Rustler | 0.34 | NIF ブリッジ |
-| 物理演算・AI | Rust + rayon | 最新 | SoA ECS + 並列計算 |
-| 空間分割 | Rust（自作） | — | Spatial Hash 衝突判定 |
-| GPU 描画 | wgpu | 24 | クロスプラットフォーム GPU |
-| HUD/UI | egui + egui-wgpu | 0.31 | インゲーム UI |
-| ウィンドウ管理 | winit | 0.30 | クロスプラットフォームウィンドウ |
-| シェーダー | WGSL | — | スプライトインスタンシング |
-| アトラス生成 | Python（標準ライブラリのみ） | — | スプライトアトラス PNG 生成 |
+| レイヤー | 技術 | 役割 |
+|---|---|---|
+| ゲームロジック | Elixir / BEAM VM | 司令塔・状態管理・耐障害性 |
+| Elixir-Rust 連携 | Rustler | NIF ブリッジ（DirtyCpu スケジューラ） |
+| 物理演算・AI | Rust + rayon | SoA ECS + 並列計算（x86_64 では SIMD Chase AI） |
+| 空間分割 | Rust（自作） | Spatial Hash 衝突判定・最近接探索 |
+| GPU 描画 | wgpu | クロスプラットフォーム GPU |
+| HUD/UI | egui + egui-wgpu | インゲーム UI |
+| 音声 | rodio | BGM・SE 再生 |
+| ウィンドウ管理 | winit | クロスプラットフォームウィンドウ |
+| シェーダー | WGSL | スプライトインスタンシング |
+| アセット | include_bytes! / AssetLoader | スプライトアトラス・実行時ロード |
 
 **外部サービス依存ゼロ。すべてがローカルで動作します。**
 
@@ -399,7 +403,7 @@ Step 15: ゲームオーバー・リスタート              ← ゲームと�
    - BEAM VM の並行性・耐障害性・ソフトリアルタイム性はゲームロジック層に完璧に適合する
 
 2. **Rust は「システムプログラミング言語」だが「ゲームエンジンのコア」として最強**
-   - SoA + rayon + Spatial Hash + wgpu の組み合わせで 10,000 体を 60 FPS で動かせる
+   - SoA + rayon（x86_64 では SIMD）+ Spatial Hash + wgpu の組み合わせで 10,000 体を 60 FPS で動かせる
 
 3. **2 つの言語の組み合わせは、どちらか単独より強い**
    - Elixir だけ: 物理演算が遅く、大規模エンティティを扱えない
@@ -415,22 +419,22 @@ Step 15: ゲームオーバー・リスタート              ← ゲームと�
 
 ### 次のステップ
 
-このゲームエンジンはまだ始まりに過ぎません。
+このゲームエンジンは技術デモの域を超え、**実用に近い基盤**が整いました。
 
 ```
-近期:
-  ├─ アニメーション（スプライトシート切り替え）
-  ├─ オーディオ（rodio クレート）
-  ├─ セーブ/ロード（serde + bincode）
-  └─ より多くの武器・敵タイプ
+近期（Step 41〜44）:
+  ├─ マップ・障害物システム（Ghost 壁すり抜けの土台）
+  ├─ セーブ・ロード（ハイスコア永続化）
+  ├─ デバッグ支援（NIF クラッシュ時のトレース改善）
+  └─ マルチプレイ基盤（Phoenix Channels 連携）
 
 中期:
-  ├─ マップスクロール（カメラシステム）
-  ├─ パーティクルエフェクト
-  └─ GPU コンピュートシェーダ（100,000 体への挑戦）
+  ├─ GPU コンピュートシェーダ（100,000 体への挑戦）
+  ├─ より多くの武器・敵タイプ
+  └─ パーティクルエフェクト強化
 
 長期:
-  ├─ マルチプレイ対応（Phoenix + BEAM 分散処理）
+  ├─ マルチプレイ対応（BEAM 分散処理）
   ├─ ブラウザ観戦機能（Phoenix LiveView）
   └─ エディタ統合（ホットリロードを活かしたライブデザイン）
 ```
@@ -441,11 +445,15 @@ Step 15: ゲームオーバー・リスタート              ← ゲームと�
 
 | ドキュメント | 内容 |
 |---|---|
-| [STEPS.md](../05_steps/STEPS.md) | 15 ステップの実装ガイド（コード全文付き） |
+| [STEPS.md](../05_steps/STEPS.md) | Step 1〜15 の実装ガイド |
+| [STEPS_QUALITY.md](../05_steps/STEPS_QUALITY.md) | Step 16〜25 クオリティアップ |
+| [STEPS_PERF.md](../05_steps/STEPS_PERF.md) | Step 26〜31 パフォーマンス改善 |
+| [STEPS_MAP_SAVE_MULTI_DEBUG.md](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) | Step 41〜44 マップ・セーブ・マルチ・デバッグ |
+| [ENGINE_API.md](../06_system_design/ENGINE_API.md) | エンジン API 設計（安定化） |
+| [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱み総合サマリー |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |
 | [WHY_ELIXIR.md](../03_tech_decisions/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
 | [WHY_RAYON.md](../03_tech_decisions/WHY_RAYON.md) | rayon 並列化の詳細 |
-| [REFACTOR_PROPOSAL.md](../06_system_design/REFACTOR_PROPOSAL.md) | 今後のリファクタリング提案 |
 
 ---
 
