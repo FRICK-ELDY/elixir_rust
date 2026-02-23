@@ -32,9 +32,11 @@ defmodule Game.SceneBehaviour do
               | {:transition, {:replace, module(), init_arg :: term()}, state :: term(), opts :: map()}
 
   @doc """
-  描画用のシーン種別。Rust 側の GamePhase に渡す値。
-  将来的にタイトルシーンを追加する場合は :title を返す。
+  描画用のシーン種別。ゲームが任意の atom を定義して返せる。
+
+  FrameCache に格納され、レンダラやテレメトリで描画モード切り替えに利用される。
+  例: ヴァンサバは `:playing | :level_up | :boss_alert | :game_over`、
+  他ゲームは `:title | :menu | :playing` などを返す。
   """
-  @callback render_type() ::
-              :playing | :level_up | :boss_alert | :game_over
+  @callback render_type() :: atom()
 end

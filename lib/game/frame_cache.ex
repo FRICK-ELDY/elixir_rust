@@ -17,7 +17,7 @@ defmodule Game.FrameCache do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
   end
 
-  @doc "GameLoop が毎秒（60 フレームごと）書き込む"
+  @doc "GameLoop が毎秒（60 フレームごと）書き込む。render_type はシーンの render_type/0 の戻り値（任意の atom）。"
   def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing) do
     :ets.insert(@table, {:snapshot, %{
       enemy_count:  enemy_count,
