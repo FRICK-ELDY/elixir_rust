@@ -2,10 +2,10 @@ defmodule Engine.GameLoop do
   @moduledoc """
   60 Hz game loop implemented as a GenServer.
 
-  G2: シーン管理システム — Engine.SceneManager がスタックでシーンを管理。
-  各シーンが独立した init/update を持ち、Engine.GameLoop は tick をディスパッチする。
+  G2: シーン管理システム — SceneManager がスタックでシーンを管理。
+  各シーンが独立した init/update を持ち、GameLoop は tick をディスパッチする。
 
-  Phase transitions (Engine.SceneManager + 各シーンが管理):
+  Phase transitions (SceneManager + 各シーンが管理):
     :playing    → :boss_alert  (ボス出現タイミングに達したとき)
     :boss_alert → :playing     (警告演出が終わったとき → Rust に spawn_boss を指示)
     :playing    → :level_up    (レベルアップ待機フラグが立ったとき)

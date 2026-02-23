@@ -3,21 +3,21 @@ defmodule Engine.FrameCache do
   フレームごとのゲーム状態スナップショットを ETS に書き込む。
 
   ETS の特性:
-  - 書き込みは Engine.GameLoop（単一ライター）のみ — 競合なし
+  - 書き込みは GameLoop（単一ライター）のみ — 競合なし
   - 読み取りは任意のプロセスからロックフリーで可能
   - read_concurrency: true で並列読み取りを最適化
-  - Engine.GameLoop がクラッシュして ETS テーブルが消えても、
-    Supervisor 再起動後に Engine.GameLoop.init/1 で再作成される
+  - GameLoop がクラッシュして ETS テーブルが消えても、
+    Supervisor 再起動後に GameLoop.init/1 で再作成される
   """
 
   @table :frame_cache
 
-  @doc "Engine.GameLoop.init/1 から呼ぶ — ETS テーブルを作成する"
+  @doc "GameLoop.init/1 から呼ぶ — ETS テーブルを作成する"
   def init do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
   end
 
-  @doc "Engine.GameLoop が毎秒（60 フレームごと）書き込む。render_type はシーンの render_type/0 の戻り値（任意の atom）。"
+  @doc "GameLoop が毎秒（60 フレームごと）書き込む。render_type はシーンの render_type/0 の戻り値（任意の atom）。"
   def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing) do
     :ets.insert(@table, {:snapshot, %{
       enemy_count:  enemy_count,
@@ -29,7 +29,7 @@ defmodule Engine.FrameCache do
     }})
   end
 
-  @doc "Engine.StressMonitor など任意のプロセスがロックフリーで読み取る"
+  @doc "StressMonitor など任意のプロセスがロックフリーで読み取る"
   def get do
     case :ets.lookup(@table, :snapshot) do
       [{:snapshot, data}] -> {:ok, data}
