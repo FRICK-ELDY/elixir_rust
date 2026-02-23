@@ -4,11 +4,10 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     # Step 39: ゲーム別アセットパス — game_window 等が GAME_ASSETS_ID を参照
+    # 常に設定することで、再起動時に前回の値が残らないようにする（空文字列は Rust 側で None として扱う）
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
     assets_path = if function_exported?(game, :assets_path, 0), do: game.assets_path(), else: ""
-    if assets_path != "" do
-      System.put_env("GAME_ASSETS_ID", assets_path)
-    end
+    System.put_env("GAME_ASSETS_ID", assets_path)
 
     children = [
       # G2: シーン管理 — GameLoop より前に起動

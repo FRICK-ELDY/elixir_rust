@@ -58,17 +58,21 @@ impl Default for AssetLoader {
 }
 
 impl AssetLoader {
+    fn base_path_from_env() -> Option<std::path::PathBuf> {
+        std::env::var("GAME_ASSETS_PATH")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+    }
+
     /// 環境変数 `GAME_ASSETS_PATH` と `GAME_ASSETS_ID` から作成する。
     /// `GAME_ASSETS_ID` が設定されていれば、assets/{id}/ を優先して参照する。
     pub fn new() -> Self {
-        let base_path = std::env::var("GAME_ASSETS_PATH")
-            .ok()
-            .map(std::path::PathBuf::from);
         let game_assets_id = std::env::var("GAME_ASSETS_ID")
             .ok()
             .filter(|s| !s.is_empty());
         Self {
-            base_path,
+            base_path: Self::base_path_from_env(),
             game_assets_id,
         }
     }
@@ -77,16 +81,13 @@ impl AssetLoader {
     /// 例: `AssetLoader::with_game_assets("vampire_survivor")` → assets/vampire_survivor/ を参照
     #[allow(dead_code)] // 明示指定用。通常は new() が GAME_ASSETS_ID を読む
     pub fn with_game_assets(game_id: &str) -> Self {
-        let base_path = std::env::var("GAME_ASSETS_PATH")
-            .ok()
-            .map(std::path::PathBuf::from);
         let game_assets_id = if game_id.is_empty() {
             None
         } else {
             Some(game_id.to_string())
         };
         Self {
-            base_path,
+            base_path: Self::base_path_from_env(),
             game_assets_id,
         }
     }
