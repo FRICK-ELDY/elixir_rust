@@ -113,6 +113,8 @@ pub struct EnemyWorld {
     pub sep_y:        Vec<f32>,
     /// 近隣クエリ結果の再利用バッファ（毎フレームのヒープアロケーションを回避）
     pub neighbor_buf: Vec<usize>,
+    /// 空きスロットのインデックススタック — O(1) でスロットを取得・返却
+    free_list:        Vec<usize>,
 }
 
 impl EnemyWorld {
@@ -130,6 +132,7 @@ impl EnemyWorld {
             sep_x:        Vec::new(),
             sep_y:        Vec::new(),
             neighbor_buf: Vec::new(),
+            free_list:    Vec::new(),
         }
     }
 
@@ -141,37 +144,28 @@ impl EnemyWorld {
         if self.alive[i] {
             self.alive[i] = false;
             self.count = self.count.saturating_sub(1);
+            self.free_list.push(i);
         }
     }
 
-    /// 指定タイプの敵を `positions` の座標にスポーン（死んだスロットを再利用）
+    /// 指定タイプの敵を `positions` の座標にスポーン（O(1) でスロット取得）
     pub fn spawn(&mut self, positions: &[(f32, f32)], kind: EnemyKind) {
         let speed  = kind.speed();
         let max_hp = kind.max_hp();
-        let mut slot = 0usize;
-        for &(x, y) in positions {
-            // 死んでいるスロットを探して再利用
-            let reused = loop {
-                if slot >= self.positions_x.len() {
-                    break false;
-                }
-                if !self.alive[slot] {
-                    break true;
-                }
-                slot += 1;
-            };
 
-            if reused {
-                self.positions_x[slot]  = x;
-                self.positions_y[slot]  = y;
-                self.velocities_x[slot] = 0.0;
-                self.velocities_y[slot] = 0.0;
-                self.speeds[slot]       = speed;
-                self.hp[slot]           = max_hp;
-                self.alive[slot]        = true;
-                self.kinds[slot]        = kind;
-                self.count += 1;
-                slot += 1;
+        for &(x, y) in positions {
+            if let Some(i) = self.free_list.pop() {
+                // O(1): フリーリストから再利用
+                self.positions_x[i]  = x;
+                self.positions_y[i]  = y;
+                self.velocities_x[i] = 0.0;
+                self.velocities_y[i] = 0.0;
+                self.speeds[i]       = speed;
+                self.hp[i]           = max_hp;
+                self.alive[i]        = true;
+                self.kinds[i]        = kind;
+                self.sep_x[i]        = 0.0;
+                self.sep_y[i]        = 0.0;
             } else {
                 self.positions_x.push(x);
                 self.positions_y.push(y);
@@ -183,8 +177,8 @@ impl EnemyWorld {
                 self.kinds.push(kind);
                 self.sep_x.push(0.0);
                 self.sep_y.push(0.0);
-                self.count += 1;
             }
+            self.count += 1;
         }
     }
 }
@@ -235,6 +229,8 @@ pub struct BulletWorld {
     /// 描画種別（BULLET_KIND_* 定数）
     pub render_kind:  Vec<u8>,
     pub count:        usize,
+    /// 空きスロットのインデックススタック — O(1) でスロットを取得・返却
+    free_list:        Vec<usize>,
 }
 
 impl BulletWorld {
@@ -250,6 +246,7 @@ impl BulletWorld {
             piercing:     Vec::new(),
             render_kind:  Vec::new(),
             count:        0,
+            free_list:    Vec::new(),
         }
     }
 
@@ -267,31 +264,29 @@ impl BulletWorld {
     }
 
     fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, piercing: bool, render_kind: u8) {
-        // 死んでいるスロットを再利用
-        for i in 0..self.positions_x.len() {
-            if !self.alive[i] {
-                self.positions_x[i]  = x;
-                self.positions_y[i]  = y;
-                self.velocities_x[i] = vx;
-                self.velocities_y[i] = vy;
-                self.damage[i]       = damage;
-                self.lifetime[i]     = lifetime;
-                self.alive[i]        = true;
-                self.piercing[i]     = piercing;
-                self.render_kind[i]  = render_kind;
-                self.count += 1;
-                return;
-            }
+        if let Some(i) = self.free_list.pop() {
+            // O(1): フリーリストから空きスロットを取得
+            self.positions_x[i]  = x;
+            self.positions_y[i]  = y;
+            self.velocities_x[i] = vx;
+            self.velocities_y[i] = vy;
+            self.damage[i]       = damage;
+            self.lifetime[i]     = lifetime;
+            self.alive[i]        = true;
+            self.piercing[i]     = piercing;
+            self.render_kind[i]  = render_kind;
+        } else {
+            // フリーリストが空なら末尾に追加
+            self.positions_x.push(x);
+            self.positions_y.push(y);
+            self.velocities_x.push(vx);
+            self.velocities_y.push(vy);
+            self.damage.push(damage);
+            self.lifetime.push(lifetime);
+            self.alive.push(true);
+            self.piercing.push(piercing);
+            self.render_kind.push(render_kind);
         }
-        self.positions_x.push(x);
-        self.positions_y.push(y);
-        self.velocities_x.push(vx);
-        self.velocities_y.push(vy);
-        self.damage.push(damage);
-        self.lifetime.push(lifetime);
-        self.alive.push(true);
-        self.piercing.push(piercing);
-        self.render_kind.push(render_kind);
         self.count += 1;
     }
 
@@ -299,6 +294,7 @@ impl BulletWorld {
         if self.alive[i] {
             self.alive[i] = false;
             self.count = self.count.saturating_sub(1);
+            self.free_list.push(i);
         }
     }
 
@@ -320,6 +316,8 @@ pub struct ParticleWorld {
     pub alive:        Vec<bool>,
     pub count:        usize,
     rng:              SimpleRng,
+    /// 空きスロットのインデックススタック — O(1) でスロットを取得・返却
+    free_list:        Vec<usize>,
 }
 
 impl ParticleWorld {
@@ -336,6 +334,7 @@ impl ParticleWorld {
             alive:        Vec::new(),
             count:        0,
             rng:          SimpleRng::new(seed),
+            free_list:    Vec::new(),
         }
     }
 
@@ -351,30 +350,29 @@ impl ParticleWorld {
         color: [f32; 4],
         size: f32,
     ) {
-        for i in 0..self.positions_x.len() {
-            if !self.alive[i] {
-                self.positions_x[i]  = x;
-                self.positions_y[i]  = y;
-                self.velocities_x[i] = vx;
-                self.velocities_y[i] = vy;
-                self.lifetime[i]     = lifetime;
-                self.max_lifetime[i] = lifetime;
-                self.color[i]        = color;
-                self.size[i]         = size;
-                self.alive[i]        = true;
-                self.count += 1;
-                return;
-            }
+        if let Some(i) = self.free_list.pop() {
+            // O(1): フリーリストから空きスロットを取得
+            self.positions_x[i]  = x;
+            self.positions_y[i]  = y;
+            self.velocities_x[i] = vx;
+            self.velocities_y[i] = vy;
+            self.lifetime[i]     = lifetime;
+            self.max_lifetime[i] = lifetime;
+            self.color[i]        = color;
+            self.size[i]         = size;
+            self.alive[i]        = true;
+        } else {
+            // フリーリストが空なら末尾に追加
+            self.positions_x.push(x);
+            self.positions_y.push(y);
+            self.velocities_x.push(vx);
+            self.velocities_y.push(vy);
+            self.lifetime.push(lifetime);
+            self.max_lifetime.push(lifetime);
+            self.color.push(color);
+            self.size.push(size);
+            self.alive.push(true);
         }
-        self.positions_x.push(x);
-        self.positions_y.push(y);
-        self.velocities_x.push(vx);
-        self.velocities_y.push(vy);
-        self.lifetime.push(lifetime);
-        self.max_lifetime.push(lifetime);
-        self.color.push(color);
-        self.size.push(size);
-        self.alive.push(true);
         self.count += 1;
     }
 
@@ -394,6 +392,7 @@ impl ParticleWorld {
         if self.alive[i] {
             self.alive[i] = false;
             self.count = self.count.saturating_sub(1);
+            self.free_list.push(i);
         }
     }
 }
