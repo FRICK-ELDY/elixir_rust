@@ -6,6 +6,8 @@ defmodule Game.Application do
     children = [
       # Input handler: translates key events to GameLoop casts
       Game.InputHandler,
+      # Step 26: イベントバス — GameLoop より前に起動
+      Game.EventBus,
       # Core game loop: 60 Hz physics tick via Rust NIF
       Game.GameLoop,
       # Independent performance monitor: samples every second.

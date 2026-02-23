@@ -75,6 +75,18 @@ impl WeaponKind {
     pub fn lightning_chain_count(&self, level: u32) -> usize {
         2 + level as usize / 2
     }
+
+    /// イベントバス用の u8 値（EnemyKilled の weapon_kind など）
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            WeaponKind::MagicWand => 0,
+            WeaponKind::Axe => 1,
+            WeaponKind::Cross => 2,
+            WeaponKind::Whip => 3,
+            WeaponKind::Fireball => 4,
+            WeaponKind::Lightning => 5,
+        }
+    }
 }
 
 // ─── WeaponSlot ───────────────────────────────────────────────

@@ -43,6 +43,22 @@ rustler::atoms! {
     alive,
     dead,
     none,
+    // Step 26: イベントバス用アトム
+    enemy_killed,
+    player_damaged,
+    level_up_event,
+    item_pickup,
+    boss_defeated,
+}
+
+/// Step 26: フレーム内で発生したゲームイベント（EventBus 用）
+#[derive(Debug, Clone)]
+pub enum FrameEvent {
+    EnemyKilled  { enemy_kind: u8, weapon_kind: u8 },
+    PlayerDamaged { damage: f32 },
+    LevelUp      { new_level: u32 },
+    ItemPickup   { item_kind: u8 },
+    BossDefeated { boss_kind: u8 },
 }
 
 // ─── 敵タイプ ─────────────────────────────────────────────────
@@ -229,6 +245,8 @@ pub struct BulletWorld {
     pub piercing:     Vec<bool>,
     /// 描画種別（BULLET_KIND_* 定数）
     pub render_kind:  Vec<u8>,
+    /// Step 26: 発射元武器（EnemyKilled イベント用、WeaponKind::as_u8()）
+    pub weapon_kind:  Vec<u8>,
     pub count:        usize,
     /// 空きスロットのインデックススタック — O(1) でスロットを取得・返却
     free_list:        Vec<usize>,
@@ -246,25 +264,26 @@ impl BulletWorld {
             alive:        Vec::new(),
             piercing:     Vec::new(),
             render_kind:  Vec::new(),
+            weapon_kind:  Vec::new(),
             count:        0,
             free_list:    Vec::new(),
         }
     }
 
-    pub fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
-        self.spawn_ex(x, y, vx, vy, damage, lifetime, false, BULLET_KIND_NORMAL);
+    pub fn spawn(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, weapon_kind: u8) {
+        self.spawn_ex(x, y, vx, vy, damage, lifetime, false, BULLET_KIND_NORMAL, weapon_kind);
     }
 
-    pub fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32) {
-        self.spawn_ex(x, y, vx, vy, damage, lifetime, true, BULLET_KIND_FIREBALL);
+    pub fn spawn_piercing(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, weapon_kind: u8) {
+        self.spawn_ex(x, y, vx, vy, damage, lifetime, true, BULLET_KIND_FIREBALL, weapon_kind);
     }
 
     /// ダメージ 0・短命の表示専用エフェクト弾を生成する（Whip / Lightning 用）
     pub fn spawn_effect(&mut self, x: f32, y: f32, lifetime: f32, render_kind: u8) {
-        self.spawn_ex(x, y, 0.0, 0.0, 0, lifetime, false, render_kind);
+        self.spawn_ex(x, y, 0.0, 0.0, 0, lifetime, false, render_kind, 0);
     }
 
-    fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, piercing: bool, render_kind: u8) {
+    fn spawn_ex(&mut self, x: f32, y: f32, vx: f32, vy: f32, damage: i32, lifetime: f32, piercing: bool, render_kind: u8, weapon_kind: u8) {
         if let Some(i) = self.free_list.pop() {
             // O(1): フリーリストから空きスロットを取得
             self.positions_x[i]  = x;
@@ -276,6 +295,7 @@ impl BulletWorld {
             self.alive[i]        = true;
             self.piercing[i]     = piercing;
             self.render_kind[i]  = render_kind;
+            self.weapon_kind[i]  = weapon_kind;
         } else {
             // フリーリストが空なら末尾に追加
             self.positions_x.push(x);
@@ -287,6 +307,7 @@ impl BulletWorld {
             self.alive.push(true);
             self.piercing.push(piercing);
             self.render_kind.push(render_kind);
+            self.weapon_kind.push(weapon_kind);
         }
         self.count += 1;
     }
@@ -644,6 +665,7 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 
 // ─── Step 24: ボス種別 ────────────────────────────────────────
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
 pub enum BossKind {
     SlimeKing,
     BatLord,
@@ -747,6 +769,8 @@ pub struct GameWorldInner {
     pub weapon_slots:       Vec<WeaponSlot>,
     /// ─── Step 24: ボスエネミー ────────────────────────────────
     pub boss:               Option<BossState>,
+    /// Step 26: このフレームで発生したイベント（毎フレーム drain される）
+    pub frame_events:       Vec<FrameEvent>,
 }
 
 impl GameWorldInner {
@@ -810,6 +834,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         level_up_pending:   false,
         weapon_slots:       vec![WeaponSlot::new(WeaponKind::MagicWand)],
         boss:               None,
+        frame_events:       Vec::new(),
     })))
 }
 
@@ -909,8 +934,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
         if dist_sq < hit_radius * hit_radius {
             // 敵→プレイヤーへのダメージ（無敵時間中は無効）
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
-                w.player.hp = (w.player.hp - kind.damage_per_sec() * dt).max(0.0);
+                let dmg = kind.damage_per_sec() * dt;
+                w.player.hp = (w.player.hp - dmg).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
+                w.frame_events.push(FrameEvent::PlayerDamaged { damage: dmg });
                 // 赤いパーティクルをプレイヤー位置に発生
                 let ppx = w.player.x + PLAYER_RADIUS;
                 let ppy = w.player.y + PLAYER_RADIUS;
@@ -963,14 +990,14 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                             let angle = base_angle + (bi as f32 - half) * spread;
                             let vx = angle.cos() * BULLET_SPEED;
                             let vy = angle.sin() * BULLET_SPEED;
-                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME);
+                            w.bullets.spawn(px, py, vx, vy, dmg, BULLET_LIFETIME, kind.as_u8());
                         }
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
                 WeaponKind::Axe => {
                     // 上方向に直進（簡易実装）
-                    w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME);
+                    w.bullets.spawn(px, py, 0.0, -BULLET_SPEED, dmg, BULLET_LIFETIME, kind.as_u8());
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
                 WeaponKind::Cross => {
@@ -985,7 +1012,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     ];
                     let dirs: &[(f32, f32)] = if bcount >= 8 { &dirs_8 } else { &dirs_4 };
                     for &(dx_dir, dy_dir) in dirs {
-                        w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME);
+                        w.bullets.spawn(px, py, dx_dir * BULLET_SPEED, dy_dir * BULLET_SPEED, dmg, BULLET_LIFETIME, kind.as_u8());
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
@@ -1020,13 +1047,21 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                             let hit_y = ey + enemy_r;
                             w.enemies.hp[ei] -= dmg as f32;
                             if w.enemies.hp[ei] <= 0.0 {
-                                w.enemies.kill(ei);
                                 let kind_e = w.enemies.kinds[ei];
+                                w.enemies.kill(ei);
+                                w.frame_events.push(FrameEvent::EnemyKilled {
+                                    enemy_kind:  kind_e as u8,
+                                    weapon_kind: kind.as_u8(),
+                                });
                                 w.score += kind_e.exp_reward() * 2;
                                 w.exp   += kind_e.exp_reward();
                                 if !w.level_up_pending {
                                     let required = exp_required_for_next(w.level);
-                                    if w.exp >= required { w.level_up_pending = true; }
+                                    if w.exp >= required {
+                                        let new_lv = w.level + 1;
+                                        w.level_up_pending = true;
+                                        w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
+                                    }
                                 }
                                 let pc = match kind_e {
                                     EnemyKind::Slime => [1.0, 0.5, 0.1, 1.0],
@@ -1083,7 +1118,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         let base_angle = bdy.atan2(bdx);
                         let vx = base_angle.cos() * BULLET_SPEED;
                         let vy = base_angle.sin() * BULLET_SPEED;
-                        w.bullets.spawn_piercing(px, py, vx, vy, dmg, BULLET_LIFETIME);
+                        w.bullets.spawn_piercing(px, py, vx, vy, dmg, BULLET_LIFETIME, kind.as_u8());
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
@@ -1109,13 +1144,21 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                             w.bullets.spawn_effect(hit_x, hit_y, 0.10, BULLET_KIND_LIGHTNING);
                             w.particles.emit(hit_x, hit_y, 5, [0.3, 0.8, 1.0, 1.0]);
                             if w.enemies.hp[ei] <= 0.0 {
-                                w.enemies.kill(ei);
                                 let kind_e = w.enemies.kinds[ei];
+                                w.enemies.kill(ei);
+                                w.frame_events.push(FrameEvent::EnemyKilled {
+                                    enemy_kind:  kind_e as u8,
+                                    weapon_kind: kind.as_u8(),
+                                });
                                 w.score += kind_e.exp_reward() * 2;
                                 w.exp   += kind_e.exp_reward();
                                 if !w.level_up_pending {
                                     let required = exp_required_for_next(w.level);
-                                    if w.exp >= required { w.level_up_pending = true; }
+                                    if w.exp >= required {
+                                        let new_lv = w.level + 1;
+                                        w.level_up_pending = true;
+                                        w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
+                                    }
                                 }
                                 let roll = w.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
@@ -1207,7 +1250,8 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             let dx = px - w.items.positions_x[i];
             let dy = py - w.items.positions_y[i];
             if dx * dx + dy * dy <= collect_r_sq {
-                match w.items.kinds[i] {
+                let item_k = w.items.kinds[i];
+                match item_k {
                     ItemKind::Gem => {
                         // EXP は既に撃破時に加算済みのため、ここでは収集のみ
                     }
@@ -1225,6 +1269,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                         w.particles.emit(px, py, 8, [1.0, 0.9, 0.2, 1.0]);
                     }
                 }
+                w.frame_events.push(FrameEvent::ItemPickup { item_kind: item_k as u8 });
                 w.items.kill(i);
             }
         }
@@ -1282,7 +1327,12 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             if ddx * ddx + ddy * ddy < hit_r * hit_r {
                 w.enemies.hp[ei] -= dmg as f32;
                 if w.enemies.hp[ei] <= 0.0 {
+                    let weapon_k = w.bullets.weapon_kind[bi];
                     w.enemies.kill(ei);
+                    w.frame_events.push(FrameEvent::EnemyKilled {
+                        enemy_kind:  kind as u8,
+                        weapon_kind: weapon_k,
+                    });
                     // ── Step 13: 敵撃破でスコア加算 ──────────────
                     // Step 18: 敵タイプに応じたスコア（経験値 × 2）
                     w.score += kind.exp_reward() * 2;
@@ -1291,7 +1341,9 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                     if !w.level_up_pending {
                         let required = exp_required_for_next(w.level);
                         if w.exp >= required {
+                            let new_lv = w.level + 1;
                             w.level_up_pending = true;
+                            w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                         }
                     }
                     // ── Step 16/18: 敵タイプ別パーティクル ────────
@@ -1503,8 +1555,10 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
         // プレイヤーダメージ
         if eff.hurt_player {
             if w.player.invincible_timer <= 0.0 && w.player.hp > 0.0 {
-                w.player.hp = (w.player.hp - eff.boss_damage * dt).max(0.0);
+                let dmg = eff.boss_damage * dt;
+                w.player.hp = (w.player.hp - dmg).max(0.0);
                 w.player.invincible_timer = INVINCIBLE_DURATION;
+                w.frame_events.push(FrameEvent::PlayerDamaged { damage: dmg });
                 w.particles.emit(eff.hurt_x, eff.hurt_y, 8, [1.0, 0.15, 0.15, 1.0]);
             }
         }
@@ -1528,7 +1582,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
         }
         if eff.spawn_rocks {
             for (dx_dir, dy_dir) in [(1.0_f32, 0.0_f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
-                w.bullets.spawn_ex(eff.special_x, eff.special_y, dx_dir * 200.0, dy_dir * 200.0, 50, 3.0, false, BULLET_KIND_ROCK);
+                w.bullets.spawn_ex(eff.special_x, eff.special_y, dx_dir * 200.0, dy_dir * 200.0, 50, 3.0, false, BULLET_KIND_ROCK, 0);
             }
             w.particles.emit(eff.special_x, eff.special_y, 10, [0.6, 0.6, 0.6, 1.0]);
         }
@@ -1536,11 +1590,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             w.particles.emit(eff.special_x, eff.special_y, 12, [0.8, 0.2, 1.0, 1.0]);
         }
         if eff.boss_killed {
+            let boss_k = w.boss.as_ref().map(|b| b.kind as u8).unwrap_or(0);
+            w.frame_events.push(FrameEvent::BossDefeated { boss_kind: boss_k });
             w.score += eff.exp_reward * 2;
             w.exp   += eff.exp_reward;
             if !w.level_up_pending {
                 let required = exp_required_for_next(w.level);
-                if w.exp >= required { w.level_up_pending = true; }
+                if w.exp >= required {
+                    let new_lv = w.level + 1;
+                    w.level_up_pending = true;
+                    w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
+                }
             }
             w.particles.emit(eff.kill_x, eff.kill_y, 40, [1.0, 0.5, 0.0, 1.0]);
             for _ in 0..10 {
@@ -1564,6 +1624,30 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
     }
 
     Ok(w.frame_id)
+}
+
+/// Step 26: フレームイベントを取り出してクリアする（毎フレーム GameLoop が呼ぶ）
+/// 戻り値: [{:enemy_killed, enemy_kind, weapon_kind}, {:player_damaged, damage_x1000, 0}, ...]
+/// 引数は u32 で統一（damage は 1000 倍で精度を保つ、その他は 0 パディング）
+#[rustler::nif]
+fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    let events = w.frame_events
+        .drain(..)
+        .map(|e| match e {
+            FrameEvent::EnemyKilled { enemy_kind, weapon_kind } =>
+                (enemy_killed(), enemy_kind as u32, weapon_kind as u32),
+            FrameEvent::PlayerDamaged { damage } =>
+                (player_damaged(), (damage * 1000.0) as u32, 0),
+            FrameEvent::LevelUp { new_level } =>
+                (level_up_event(), new_level as u32, 0),
+            FrameEvent::ItemPickup { item_kind } =>
+                (item_pickup(), item_kind as u32, 0),
+            FrameEvent::BossDefeated { boss_kind } =>
+                (boss_defeated(), boss_kind as u32, 0),
+        })
+        .collect();
+    Ok(events)
 }
 
 /// プレイヤー座標を返す（Step 8）
