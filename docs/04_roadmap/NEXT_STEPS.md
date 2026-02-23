@@ -125,13 +125,14 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 37: エンジン API の安定化
+#### Step 37: エンジン API の安定化 ✅ 実装済み
 
 **目標**: ゲームがエンジンに依存する箇所をインターフェースとして明文化する。
 
 **対応**:
-- `Game.Engine` モジュールで公開 API（`create_world`, `physics_step`, `push_scene` 等）をドキュメント化
-- ゲームは `Game.Engine` 経由でのみエンジンとやり取りする方針を文書化
+- `Engine` モジュールで公開 API（`create_world`, `physics_step`, `push_scene`, `spawn_enemies` 等）を定義・ドキュメント化
+- ゲームは `Engine` 経由でのみエンジンとやり取りする方針を文書化（`docs/06_system_design/ENGINE_API.md`）
+- ヴァンサバを `Engine.*` 経由に移行済み
 
 ---
 

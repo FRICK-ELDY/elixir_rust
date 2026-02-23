@@ -24,7 +24,7 @@ defmodule Game.VampireSurvivor.Scenes.Playing do
 
     spawned_bosses = Map.get(state, :spawned_bosses, [])
 
-    if Game.NifBridge.is_player_dead(world_ref) do
+    if Engine.is_player_dead?(world_ref) do
       Logger.info("[GAME OVER] Player HP reached 0 at #{div(elapsed, 1000)}s")
       return_transition(:replace, Game.VampireSurvivor.Scenes.GameOver, %{}, state)
     else
@@ -43,7 +43,7 @@ defmodule Game.VampireSurvivor.Scenes.Playing do
 
         :no_boss ->
           {exp, level, level_up_pending, exp_to_next} =
-            Game.NifBridge.get_level_up_data(world_ref)
+            Engine.get_level_up_data(world_ref)
 
           if level_up_pending do
             :telemetry.execute([:game, :level_up], %{level: level, count: 1}, %{})
@@ -51,7 +51,7 @@ defmodule Game.VampireSurvivor.Scenes.Playing do
 
             if choices == [] do
               Logger.info("[LEVEL UP] All weapons at max level — skipping weapon selection")
-              Game.NifBridge.skip_level_up(world_ref)
+              Engine.skip_level_up(world_ref)
               {:continue, state}
             else
               choice_labels =

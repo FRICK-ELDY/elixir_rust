@@ -25,7 +25,7 @@ defmodule Game.VampireSurvivor.SpawnSystem do
     {interval_ms, count} = current_wave(elapsed_sec)
 
     if elapsed_ms - last_spawn_ms >= interval_ms do
-      current = Game.NifBridge.get_enemy_count(world_ref)
+      current = Engine.get_enemy_count(world_ref)
 
       if current < @max_enemies do
         to_spawn = min(count, @max_enemies - current)
@@ -34,7 +34,7 @@ defmodule Game.VampireSurvivor.SpawnSystem do
         if elapsed_sec >= @elite_start_sec do
           spawn_with_elites(world_ref, kind, to_spawn)
         else
-          Game.NifBridge.spawn_enemies(world_ref, kind, to_spawn)
+          Engine.spawn_enemies(world_ref, kind, to_spawn)
         end
       end
 
@@ -49,11 +49,11 @@ defmodule Game.VampireSurvivor.SpawnSystem do
     normal_count = count - elite_count
 
     if normal_count > 0 do
-      Game.NifBridge.spawn_enemies(world_ref, kind, normal_count)
+      Engine.spawn_enemies(world_ref, kind, normal_count)
     end
 
     if elite_count > 0 do
-      Game.NifBridge.spawn_elite_enemy(world_ref, kind, elite_count, @elite_hp_multiplier)
+      Engine.spawn_elite_enemy(world_ref, kind, elite_count, @elite_hp_multiplier)
     end
   end
 
