@@ -1,0 +1,43 @@
+//! 共通ユーティリティ（main.rs / lib.rs で共有）
+
+use super::constants::WAVES;
+use super::physics::rng::SimpleRng;
+
+/// 次のレベルに必要な累積経験値を返す。
+/// 現在の `level` から次のレベルに上がるために必要な累積 EXP を返す。
+pub fn exp_required_for_next(level: u32) -> u32 {
+    const EXP_TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
+    let idx = level as usize;
+    if idx < EXP_TABLE.len() {
+        EXP_TABLE[idx]
+    } else {
+        270 + (idx as u32 - 9) * 50
+    }
+}
+
+/// 経過時間に応じた現在のウェーブ設定を返す (interval_secs, count_per_tick)
+#[allow(dead_code)] // main スタンドアロンのみで使用
+pub fn current_wave(elapsed_secs: f32) -> (f32, usize) {
+    WAVES.iter()
+        .filter(|&&(start, _, _)| elapsed_secs >= start)
+        .last()
+        .map(|&(_, interval, count)| (interval, count))
+        .unwrap_or((0.8, 20))
+}
+
+/// エリート敵スポーン判定（10分以降に 20% で出現、main スタンドアロン用）
+#[allow(dead_code)] // main スタンドアロンのみで使用
+pub fn is_elite_spawn(elapsed_secs: f32, rng: &mut SimpleRng) -> bool {
+    elapsed_secs >= 600.0 && rng.next_u32() % 5 == 0
+}
+
+/// 画面外の四辺いずれかにランダムに配置（マップ端からスポーン）
+pub fn spawn_position_outside(rng: &mut SimpleRng, map_width: f32, map_height: f32) -> (f32, f32) {
+    let margin = 80.0;
+    match rng.next_u32() % 4 {
+        0 => (rng.next_f32() * map_width, -margin),
+        1 => (rng.next_f32() * map_width, map_height + margin),
+        2 => (-margin, rng.next_f32() * map_height),
+        _ => (map_width + margin, rng.next_f32() * map_height),
+    }
+}

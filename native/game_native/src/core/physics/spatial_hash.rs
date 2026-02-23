@@ -67,5 +67,4 @@ impl CollisionWorld {
             dynamic: SpatialHash::new(cell_size),
         }
     }
-
 }

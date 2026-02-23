@@ -1,9 +1,10 @@
-mod constants;
-mod item;
-mod physics;
-mod weapon;
+mod core;
 
-use constants::{
+// ベンチマーク等から利用するため re-export
+pub use core::enemy::EnemyKind;
+pub use core::boss::BossKind;
+
+use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_SEPARATION_FORCE,
     WEAPON_SEARCH_RADIUS,
@@ -11,11 +12,12 @@ use constants::{
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
-use item::{ItemKind, ItemWorld};
-use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_SLOTS};
-use physics::rng::SimpleRng;
-use physics::separation::{apply_separation, EnemySeparation};
-use physics::spatial_hash::CollisionWorld;
+use core::item::{ItemKind, ItemWorld};
+use core::weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::rng::SimpleRng;
+use core::physics::separation::{apply_separation, EnemySeparation};
+use core::physics::spatial_hash::CollisionWorld;
+use core::util::{exp_required_for_next, spawn_position_outside};
 use rayon::prelude::*;
 use rustler::{Atom, NifResult, ResourceArc};
 use std::sync::RwLock;
@@ -61,38 +63,10 @@ pub enum FrameEvent {
     BossDefeated { boss_kind: u8 },
 }
 
-// ─── 敵タイプ ─────────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug)]
-#[repr(u8)]
-pub enum EnemyKind {
-    Slime = 0,
-    Bat   = 1,
-    Golem = 2,
-}
-
+// ─── 敵タイプ（core を継承、NIF 用 from_atom を追加）──────────
 impl EnemyKind {
-    pub fn max_hp(&self) -> f32 {
-        match self { Self::Slime => 30.0, Self::Bat => 15.0, Self::Golem => 150.0 }
-    }
-    pub fn speed(&self) -> f32 {
-        match self { Self::Slime => 80.0, Self::Bat => 160.0, Self::Golem => 40.0 }
-    }
-    pub fn radius(&self) -> f32 {
-        match self { Self::Slime => 20.0, Self::Bat => 12.0, Self::Golem => 32.0 }
-    }
-    pub fn exp_reward(&self) -> u32 {
-        match self { Self::Slime => 5, Self::Bat => 3, Self::Golem => 20 }
-    }
-    pub fn damage_per_sec(&self) -> f32 {
-        match self { Self::Slime => 20.0, Self::Bat => 10.0, Self::Golem => 40.0 }
-    }
-    /// レンダラーに渡す kind 値（0=player, 1=slime, 2=bat, 3=golem）
-    pub fn render_kind(&self) -> u8 {
-        match self { Self::Slime => 1, Self::Bat => 2, Self::Golem => 3 }
-    }
+    /// Elixir アトムから敵タイプを変換
     pub fn from_atom(atom: Atom) -> Self {
-        // rustler::atoms! で定義したアトム関数と直接比較する
-        // bat() / golem() は初回呼び出し時に BEAM アトムテーブルに登録される
         if atom == bat() {
             Self::Bat
         } else if atom == golem() {
@@ -212,17 +186,6 @@ impl EnemySeparation for EnemyWorld {
     fn neighbor_buf(&mut self) -> &mut Vec<usize> { &mut self.neighbor_buf }
 }
 
-/// 画面外の四辺いずれかにランダムに配置
-fn spawn_position_outside(rng: &mut SimpleRng, sw: f32, sh: f32) -> (f32, f32) {
-    let margin = 80.0;
-    let side = rng.next_u32() % 4;
-    match side {
-        0 => (rng.next_f32() * sw, -margin),
-        1 => (rng.next_f32() * sw, sh + margin),
-        2 => (-margin,             rng.next_f32() * sh),
-        _ => (sw + margin,         rng.next_f32() * sh),
-    }
-}
 
 /// 弾丸の描画種別（renderer に渡す kind 値）
 pub const BULLET_KIND_NORMAL:    u8 = 4;  // MagicWand / Axe / Cross（黄色い円）
@@ -663,37 +626,9 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 }
 
 
-// ─── Step 24: ボス種別 ────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug)]
-#[repr(u8)]
-pub enum BossKind {
-    SlimeKing,
-    BatLord,
-    StoneGolem,
-}
-
+// ─── Step 24: ボス種別（core を継承、NIF 用 from_atom を追加）──
 impl BossKind {
-    pub fn max_hp(&self) -> f32 {
-        match self { Self::SlimeKing => 1000.0, Self::BatLord => 2000.0, Self::StoneGolem => 5000.0 }
-    }
-    pub fn speed(&self) -> f32 {
-        match self { Self::SlimeKing => 60.0, Self::BatLord => 200.0, Self::StoneGolem => 30.0 }
-    }
-    pub fn radius(&self) -> f32 {
-        match self { Self::SlimeKing => 48.0, Self::BatLord => 48.0, Self::StoneGolem => 64.0 }
-    }
-    pub fn exp_reward(&self) -> u32 {
-        match self { Self::SlimeKing => 200, Self::BatLord => 400, Self::StoneGolem => 800 }
-    }
-    pub fn damage_per_sec(&self) -> f32 {
-        match self { Self::SlimeKing => 30.0, Self::BatLord => 50.0, Self::StoneGolem => 80.0 }
-    }
-    pub fn special_interval(&self) -> f32 {
-        match self { Self::SlimeKing => 5.0, Self::BatLord => 4.0, Self::StoneGolem => 6.0 }
-    }
-    pub fn render_kind(&self) -> u8 {
-        match self { Self::SlimeKing => 11, Self::BatLord => 12, Self::StoneGolem => 13 }
-    }
+    /// Elixir アトムからボス種別を変換
     pub fn from_atom(atom: Atom) -> Option<Self> {
         if atom == slime_king() { Some(Self::SlimeKing) }
         else if atom == bat_lord() { Some(Self::BatLord) }
@@ -1071,11 +1006,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                                 w.particles.emit(hit_x, hit_y, 8, pc);
                                 let roll = w.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
-                                    (item::ItemKind::Magnet, 0)
+                                    (ItemKind::Magnet, 0)
                                 } else if roll < 7 {
-                                    (item::ItemKind::Potion, 20)
+                                    (ItemKind::Potion, 20)
                                 } else {
-                                    (item::ItemKind::Gem, kind_e.exp_reward())
+                                    (ItemKind::Gem, kind_e.exp_reward())
                                 };
                                 w.items.spawn(hit_x, hit_y, item_kind, item_value);
                             } else {
@@ -1162,11 +1097,11 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
                                 }
                                 let roll = w.rng.next_u32() % 100;
                                 let (item_kind, item_value) = if roll < 2 {
-                                    (item::ItemKind::Magnet, 0)
+                                    (ItemKind::Magnet, 0)
                                 } else if roll < 7 {
-                                    (item::ItemKind::Potion, 20)
+                                    (ItemKind::Potion, 20)
                                 } else {
-                                    (item::ItemKind::Gem, kind_e.exp_reward())
+                                    (ItemKind::Gem, kind_e.exp_reward())
                                 };
                                 w.items.spawn(hit_x, hit_y, item_kind, item_value);
                             }
@@ -1757,20 +1692,6 @@ fn get_hud_data(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64, u32, f64)
 
 // ─── Step 14: レベルアップ・武器選択 ──────────────────────────
 
-/// 次のレベルに必要な累積経験値を返す
-/// 現在の `level` から次のレベルに上がるために必要な累積 EXP を返す。
-/// EXP_TABLE[level] = Lv.level → Lv.(level+1) に必要な累積 EXP。
-/// 経験値は累積で管理するため、レベルアップ後も exp はリセットしない。
-fn exp_required_for_next(level: u32) -> u32 {
-    const EXP_TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
-    let idx = level as usize;
-    if idx < EXP_TABLE.len() {
-        EXP_TABLE[idx]
-    } else {
-        270 + (idx as u32 - 9) * 50
-    }
-}
-
 /// レベルアップ関連データを一括取得（Step 14）
 /// 戻り値: (exp, level, level_up_pending, exp_to_next)
 #[rustler::nif]
@@ -1810,7 +1731,7 @@ fn add_weapon(world: ResourceArc<GameWorld>, weapon_name: &str) -> NifResult<Ato
 
     // 同じ武器を選んだ場合はレベルアップ
     if let Some(slot) = w.weapon_slots.iter_mut().find(|s| s.kind == kind) {
-        slot.level = (slot.level + 1).min(weapon::MAX_WEAPON_LEVEL);
+        slot.level = (slot.level + 1).min(MAX_WEAPON_LEVEL);
     } else if w.weapon_slots.len() < MAX_WEAPON_SLOTS {
         w.weapon_slots.push(WeaponSlot::new(kind));
     }

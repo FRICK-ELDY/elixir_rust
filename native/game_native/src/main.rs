@@ -2,11 +2,8 @@
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.
 mod audio;
-mod constants;
-mod item;
+mod core;
 mod renderer;
-mod physics;
-mod weapon;
 
 // ─── Step 22: 音声ファイルをバイナリに埋め込む ──────────────────────
 // assets/audio/ 以下の WAV ファイルが存在しない場合はコンパイルエラーになる。
@@ -24,118 +21,25 @@ use std::time::Instant;
 
 use audio::AudioManager;
 
-use constants::{
+use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CAMERA_LERP_SPEED, CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAP_HEIGHT, MAP_WIDTH,
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
-    SCREEN_HEIGHT, SCREEN_WIDTH, WAVES,
+    SCREEN_HEIGHT, SCREEN_WIDTH,
 };
-use item::{ItemKind, ItemWorld};
+use core::item::{ItemKind, ItemWorld};
+use core::weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::rng::SimpleRng;
+use core::physics::separation::{apply_separation, EnemySeparation};
+use core::physics::spatial_hash::CollisionWorld;
+use core::enemy::EnemyKind;
+use core::boss::BossKind;
+use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_outside};
 use renderer::{BossHudInfo, HudData, Renderer};
-use weapon::{WeaponKind, WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
 
-// ─── 敵タイプ（main.rs ローカル定義） ─────────────────────────
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-enum EnemyKind {
-    #[default]
-    Slime,
-    Bat,
-    Golem,
-}
-
-impl EnemyKind {
-    fn max_hp(self) -> f32 {
-        match self { Self::Slime => 30.0, Self::Bat => 15.0, Self::Golem => 150.0 }
-    }
-    fn speed(self) -> f32 {
-        match self { Self::Slime => 80.0, Self::Bat => 160.0, Self::Golem => 40.0 }
-    }
-    fn radius(self) -> f32 {
-        match self { Self::Slime => 20.0, Self::Bat => 12.0, Self::Golem => 32.0 }
-    }
-    fn exp_reward(self) -> u32 {
-        match self { Self::Slime => 5, Self::Bat => 3, Self::Golem => 20 }
-    }
-    fn damage_per_sec(self) -> f32 {
-        match self { Self::Slime => 20.0, Self::Bat => 10.0, Self::Golem => 40.0 }
-    }
-    fn render_kind(self) -> u8 {
-        match self { Self::Slime => 1, Self::Bat => 2, Self::Golem => 3 }
-    }
-    /// Step 23: アニメーション FPS
-    fn anim_fps(self) -> f32 {
-        match self { Self::Slime => 6.0, Self::Bat => 12.0, Self::Golem => 4.0 }
-    }
-    /// Step 23: アニメーションフレーム数
-    fn frame_count(self) -> u8 {
-        match self { Self::Slime => 4, Self::Bat => 2, Self::Golem => 2 }
-    }
-    // Step 25: 難易度カーブに合わせた敵タイプ選択
-    fn for_elapsed(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> Self {
-        if elapsed_secs < 60.0 {
-            // 0〜60s: スライムのみ（チュートリアル）
-            Self::Slime
-        } else if elapsed_secs < 180.0 {
-            // 60〜180s: スライム70% + コウモリ30%
-            if rng.next_u32() % 10 < 7 { Self::Slime } else { Self::Bat }
-        } else if elapsed_secs < 360.0 {
-            // 180〜360s: スライム50% + コウモリ30% + ゴーレム20%
-            match rng.next_u32() % 10 {
-                0..=4 => Self::Slime,
-                5..=7 => Self::Bat,
-                _     => Self::Golem,
-            }
-        } else {
-            // 360s〜: 全タイプ均等（高密度）
-            match rng.next_u32() % 3 {
-                0 => Self::Slime,
-                1 => Self::Bat,
-                _ => Self::Golem,
-            }
-        }
-    }
-
-}
 // ─── Step 24: ボスエネミー ─────────────────────────────────────
-
-/// ボスの種類
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum BossKind {
-    SlimeKing,   // 3 分: スライムを召喚
-    BatLord,     // 6 分: 高速突進 + 無敵
-    StoneGolem,  // 9 分: 岩を投げる（範囲攻撃）
-}
-
-impl BossKind {
-    fn max_hp(self) -> f32 {
-        match self { Self::SlimeKing => 1000.0, Self::BatLord => 2000.0, Self::StoneGolem => 5000.0 }
-    }
-    fn speed(self) -> f32 {
-        match self { Self::SlimeKing => 60.0, Self::BatLord => 200.0, Self::StoneGolem => 30.0 }
-    }
-    fn radius(self) -> f32 {
-        match self { Self::SlimeKing => 48.0, Self::BatLord => 48.0, Self::StoneGolem => 64.0 }
-    }
-    fn exp_reward(self) -> u32 {
-        match self { Self::SlimeKing => 200, Self::BatLord => 400, Self::StoneGolem => 800 }
-    }
-    fn damage_per_sec(self) -> f32 {
-        match self { Self::SlimeKing => 30.0, Self::BatLord => 50.0, Self::StoneGolem => 80.0 }
-    }
-    fn name(self) -> &'static str {
-        match self { Self::SlimeKing => "Slime King", Self::BatLord => "Bat Lord", Self::StoneGolem => "Stone Golem" }
-    }
-    /// render_kind（renderer の kind 番号）
-    fn render_kind(self) -> u8 {
-        match self { Self::SlimeKing => 11, Self::BatLord => 12, Self::StoneGolem => 13 }
-    }
-    /// 特殊行動のインターバル（秒）
-    fn special_interval(self) -> f32 {
-        match self { Self::SlimeKing => 5.0, Self::BatLord => 4.0, Self::StoneGolem => 6.0 }
-    }
-}
 
 /// ボスの状態
 struct BossState {
@@ -177,11 +81,6 @@ impl BossState {
 }
 
 
-// Step 25: エリート敵フラグ（10分以降に出現、HP3倍）
-fn is_elite_spawn(elapsed_secs: f32, rng: &mut physics::rng::SimpleRng) -> bool {
-    elapsed_secs >= 600.0 && rng.next_u32() % 5 == 0
-}
-
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -189,10 +88,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
-
-use physics::rng::SimpleRng;
-use physics::separation::{apply_separation, EnemySeparation};
-use physics::spatial_hash::CollisionWorld;
 
 struct PlayerState {
     x: f32, y: f32,
@@ -1365,7 +1260,7 @@ impl GameWorld {
             let kind = EnemyKind::for_elapsed(self.elapsed_seconds, &mut self.rng);
             let elite = is_elite_spawn(self.elapsed_seconds, &mut self.rng);
             let positions: Vec<(f32, f32)> = (0..to_spawn)
-                .map(|_| spawn_outside(&mut self.rng))
+                .map(|_| spawn_position_outside(&mut self.rng, MAP_WIDTH, MAP_HEIGHT))
                 .collect();
             self.enemies.spawn(&positions, kind, elite);
             self.last_spawn_secs = self.elapsed_seconds;
@@ -1389,7 +1284,7 @@ impl GameWorld {
 
     fn check_level_up(&mut self) {
         if self.level_up_pending { return; }
-        let required = exp_for_next(self.level);
+        let required = exp_required_for_next(self.level);
         if self.exp >= required {
             self.level_up_pending = true;
             // 選択肢: 未所持優先 → 低レベル順（Lv.8 は除外）
@@ -1523,7 +1418,7 @@ impl GameWorld {
             elapsed_seconds: self.elapsed_seconds,
             level:           self.level,
             exp:             self.exp,
-            exp_to_next:     exp_for_next(self.level).saturating_sub(self.exp),
+            exp_to_next:     exp_required_for_next(self.level).saturating_sub(self.exp),
             enemy_count:     self.enemies.count,
             bullet_count:    self.bullets.count,
             fps,
@@ -1552,31 +1447,6 @@ impl GameWorld {
                 .collect(),
             kill_count:      self.kill_count,
         }
-    }
-}
-
-fn current_wave(elapsed_secs: f32) -> (f32, usize) {
-    WAVES.iter()
-        .filter(|&&(start, _, _)| elapsed_secs >= start)
-        .last()
-        .map(|&(_, interval, count)| (interval, count))
-        .unwrap_or((0.8, 20))
-}
-
-fn exp_for_next(level: u32) -> u32 {
-    const TABLE: [u32; 10] = [0, 10, 25, 45, 70, 100, 135, 175, 220, 270];
-    let idx = level as usize;
-    if idx < TABLE.len() { TABLE[idx] } else { 270 + (idx as u32 - 9) * 50 }
-}
-
-/// Step 20: マップ全体の外周からスポーン（カメラ位置に関係なくマップ端から出現）
-fn spawn_outside(rng: &mut SimpleRng) -> (f32, f32) {
-    let margin = 80.0;
-    match rng.next_u32() % 4 {
-        0 => (rng.next_f32() * MAP_WIDTH, -margin),
-        1 => (rng.next_f32() * MAP_WIDTH, MAP_HEIGHT + margin),
-        2 => (-margin,                     rng.next_f32() * MAP_HEIGHT),
-        _ => (MAP_WIDTH + margin,          rng.next_f32() * MAP_HEIGHT),
     }
 }
 
