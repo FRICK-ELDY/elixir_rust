@@ -61,6 +61,7 @@ impl AssetLoader {
     fn base_path_from_env() -> Option<std::path::PathBuf> {
         std::env::var("GAME_ASSETS_PATH")
             .ok()
+            .filter(|s| !s.is_empty())
             .map(std::path::PathBuf::from)
     }
 
