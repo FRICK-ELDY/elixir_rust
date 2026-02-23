@@ -32,7 +32,8 @@
 
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
-| [ENGINE_ANALYSIS.md](./02_spec_design/ENGINE_ANALYSIS.md) | ゲームエンジンの強み・弱み・メリット・デメリット分析。Elixir + Rust ハイブリッドアーキテクチャの評価、他エンジンとの比較、ユースケース適性 | 設計理解・評価時 |
+| [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) | **ゲームエンジンの再評価版**。STEPS_PERF・PRIORITY_STEPS 導入後の弱みの対応状況、推奨改善方向の更新、総合評価 | 設計理解・評価時 |
+| [ENGINE_ANALYSIS.md](./02_spec_design/ENGINE_ANALYSIS.md) | ゲームエンジンの強み・弱み分析（アーカイブ）。元の評価、他エンジンとの比較、ユースケース適性 | 過去分析の参照 |
 
 ---
 
@@ -41,6 +42,7 @@
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
 | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md) | ゲームロジック層に Elixir（BEAM VM）を採用した理由。BEAM の設計思想、ゲームループ適合性、並行性、耐障害性、Rust との役割分担 | アーキテクチャ理解時 |
+| [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md) | **Elixir/Rust 役割分担方針**。「苦手なものは Rust に投げる」。タイミング精度、将来の拡張、スコープ外・サポートしない項目 | アーキテクチャ理解時 |
 | [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) | Chase AI の並列化に rayon を採用した理由。Work-Stealing、SoA との相乗効果、実測結果、他ライブラリとの比較 | パフォーマンス理解時 |
 
 ---
@@ -50,6 +52,7 @@
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
 | [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) | **「何から手をつけるか」の優先度ロードマップ**。パフォーマンス最優先 → 汎用化 → 品質の順。P1〜P7、G1〜G3、Q1〜Q2 の全体マップ。詳細手順は [STEPS_PERF.md](./05_steps/STEPS_PERF.md) を参照 | 実装計画立案時 |
+| [NEXT_STEPS.md](./04_roadmap/NEXT_STEPS.md) | **次の Step 提案**（Step 32〜40）。ヴァンサバ以外のゲームでも使える汎用エンジン化。Game インターフェース、ゲーム分離、プラグイン化 | 汎用化計画立案時 |
 
 ---
 
@@ -104,12 +107,15 @@ docs/
 │   ├── SETUP_ELIXIR.md
 │   └── SPEC.md
 ├── 02_spec_design/        仕様・設計
-│   └── ENGINE_ANALYSIS.md
+│   ├── ENGINE_ANALYSIS_REVISED.md
+│   └── ENGINE_ANALYSIS.md（アーカイブ）
 ├── 03_tech_decisions/     技術選定の背景
 │   ├── WHY_ELIXIR.md
+│   ├── ELIXIR_RUST_DIVISION.md
 │   └── WHY_RAYON.md
 ├── 04_roadmap/            実装ロードマップ
-│   └── PRIORITY_STEPS.md
+│   ├── PRIORITY_STEPS.md
+│   └── NEXT_STEPS.md
 ├── 05_steps/              ステップガイド
 │   ├── STEPS.md
 │   ├── STEPS_QUALITY.md
@@ -132,8 +138,8 @@ docs/
 05_steps/STEPS.md（Step 1-15）
     ↓
 05_steps/STEPS_QUALITY.md（Step 16-25）
-    ↓
-02_spec_design/ENGINE_ANALYSIS.md（分析）
+     ↓
+02_spec_design/ENGINE_ANALYSIS_REVISED.md（再評価）← ENGINE_ANALYSIS.md（アーカイブ）
     ↓
 04_roadmap/PRIORITY_STEPS.md（優先度マップ）
     ├── 05_steps/STEPS_PERF.md（Step 26-31 詳細手順）
@@ -151,7 +157,8 @@ docs/
 | 仕様を把握したい | [SPEC.md](./01_setup/SPEC.md) |
 | ゼロから実装したい | [STEPS.md](./05_steps/STEPS.md) → [STEPS_QUALITY.md](./05_steps/STEPS_QUALITY.md) |
 | 改善の優先度を知りたい | [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) |
+| 汎用ゲームエンジン化の次の Step を知りたい | [NEXT_STEPS.md](./04_roadmap/NEXT_STEPS.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
-| なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) |
-| エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS.md](./02_spec_design/ENGINE_ANALYSIS.md) |
+| なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) |
+| エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
 | 発表用の資料が欲しい | [PRESENTATION.md](./07_presentation/PRESENTATION.md) |
