@@ -143,8 +143,7 @@ defmodule Engine.GameLoop do
       start_ms:      state.start_ms,
     }
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
-    defaults = if function_exported?(game, :context_defaults, 0), do: game.context_defaults(), else: %{}
-    Map.merge(defaults, base)
+    Map.merge(game.context_defaults(), base)
   end
 
   defp extract_state_and_opts({:continue, scene_state}), do: {scene_state, %{}}

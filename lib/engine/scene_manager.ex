@@ -82,11 +82,10 @@ defmodule Engine.SceneManager do
     {:reply, {:ok, top}, state}
   end
 
-  def handle_call(:render_type, _from, %{stack: [], default_render_type: default} = state) do
+  def handle_call(:render_type, _from, %{stack: [], default_render_type: _default} = state) do
     # スタックが空のときは Game behaviour の render_type をフォールバック
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
-    fallback = if function_exported?(game, :render_type, 0), do: game.render_type(), else: default
-    {:reply, fallback, state}
+    {:reply, game.render_type(), state}
   end
 
   def handle_call(:render_type, _from, %{stack: [%{module: mod} | _]} = state) do
