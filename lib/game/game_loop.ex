@@ -187,7 +187,8 @@ defmodule Game.GameLoop do
   end
 
   defp process_transition({:transition, {:replace, Game.Scenes.GameOver, _}, _}, state, now) do
-    {_hp, _max_hp, score, _} = Game.NifBridge.get_hud_data(state.world_ref)
+    {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
+      Game.NifBridge.get_frame_metadata(state.world_ref)
     :telemetry.execute(
       [:game, :session_end],
       %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
@@ -201,15 +202,15 @@ defmodule Game.GameLoop do
 
   defp maybe_log_and_cache(state, _mod, _elapsed) do
     if rem(state.frame_count, 60) == 0 do
-      enemy_count = Game.NifBridge.get_enemy_count(state.world_ref)
-      bullet_count = Game.NifBridge.get_bullet_count(state.world_ref)
-      physics_ms = Game.NifBridge.get_frame_time_ms(state.world_ref)
-      hud_data = Game.NifBridge.get_hud_data(state.world_ref)
+      # Q2: 1回のNIFで全メタデータ取得（オーバーヘッド対策）
+      {{hp, max_hp, _score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
+       {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
+        Game.NifBridge.get_frame_metadata(state.world_ref)
+
+      hud_data = {hp, max_hp, _score, elapsed_s}
       render_type = Game.SceneManager.render_type()
       Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
 
-      {_hp, _max_hp, _score, elapsed_s} = hud_data
-      {exp, level, _level_up_pending, _exp_to_next} = Game.NifBridge.get_level_up_data(state.world_ref)
       wave = Game.SpawnSystem.wave_label(elapsed_s)
       budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""
 
@@ -218,9 +219,10 @@ defmodule Game.GameLoop do
         |> Enum.map_join(", ", fn {w, lv} -> "#{w}:Lv#{lv}" end)
 
       boss_info =
-        case Game.NifBridge.get_boss_info(state.world_ref) do
-          {:alive, hp, max_hp} -> " | boss=#{Float.round(hp / max_hp * 100, 1)}%HP"
-          _ -> ""
+        if boss_alive and boss_max_hp > 0 do
+          " | boss=#{Float.round(boss_hp / boss_max_hp * 100, 1)}%HP"
+        else
+          ""
         end
 
       Logger.info(

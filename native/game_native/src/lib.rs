@@ -1602,6 +1602,15 @@ fn get_player_hp(world: ResourceArc<GameWorld>) -> NifResult<f64> {
 /// 描画データを返す: [{x, y, kind}] のリスト
 /// kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet,
 ///       11=SlimeKing, 12=BatLord, 13=StoneGolem, 14=rock_bullet
+///
+/// # Q2: 非推奨 — 毎フレーム呼び出さないこと
+/// 大量データを NIF 境界で渡すとオーバーヘッドが発生する。
+/// 描画ループは Rust 内（main.rs スタンドアロン）で完結させ、
+/// Elixir には `get_frame_metadata` でメタデータのみを受け渡す設計とする。
+#[deprecated(
+    since = "0.1.0",
+    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。get_frame_metadata でメタデータのみ取得すること"
+)]
 #[rustler::nif]
 fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
@@ -1637,6 +1646,13 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8
 }
 
 /// パーティクル描画データを返す: [(x, y, r, g, b, alpha, size)]
+///
+/// # Q2: 非推奨 — 毎フレーム呼び出さないこと
+/// 大量データを NIF 境界で渡すとオーバーヘッドが発生する。
+#[deprecated(
+    since = "0.1.0",
+    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。描画は Rust 内で完結させること"
+)]
 #[rustler::nif]
 fn get_particle_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, f32, f32, f32, f32, f32)>> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
@@ -1687,6 +1703,45 @@ fn get_hud_data(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64, u32, f64)
         w.player_max_hp    as f64,
         w.score,
         w.elapsed_seconds  as f64,
+    ))
+}
+
+/// Q2: 軽量フレームメタデータを1回のNIF呼び出しで取得（NIFオーバーヘッド対策）
+/// 描画用の大量データ（render_data/particle_data/item_data）は含まない。
+/// 戻り値: {{hp, max_hp, score, elapsed}, {enemy_count, bullet_count, physics_ms},
+///          {exp, level, level_up_pending, exp_to_next}, {boss_alive, boss_hp, boss_max_hp}}
+#[rustler::nif]
+fn get_frame_metadata(world: ResourceArc<GameWorld>) -> NifResult<(
+    (f64, f64, u32, f64),
+    (usize, usize, f64),
+    (u32, u32, bool, u32),
+    (bool, f64, f64),
+)> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    let exp_to_next = exp_required_for_next(w.level).saturating_sub(w.exp);
+    let (boss_alive, boss_hp, boss_max_hp) = match &w.boss {
+        Some(boss) => (true, boss.hp as f64, boss.max_hp as f64),
+        None       => (false, 0.0, 0.0),
+    };
+    Ok((
+        (
+            w.player.hp        as f64,
+            w.player_max_hp    as f64,
+            w.score,
+            w.elapsed_seconds  as f64,
+        ),
+        (
+            w.enemies.count,
+            w.bullets.count,
+            w.last_frame_time_ms,
+        ),
+        (
+            w.exp,
+            w.level,
+            w.level_up_pending,
+            exp_to_next,
+        ),
+        (boss_alive, boss_hp, boss_max_hp),
     ))
 }
 
@@ -1755,6 +1810,13 @@ fn skip_level_up(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
 // ─── Step 19: アイテム関連 NIF ─────────────────────────────────
 
 /// アイテム描画データを返す: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
+///
+/// # Q2: 非推奨 — 毎フレーム呼び出さないこと
+/// 大量データを NIF 境界で渡すとオーバーヘッドが発生する。
+#[deprecated(
+    since = "0.1.0",
+    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。描画は Rust 内で完結させること"
+)]
 #[rustler::nif]
 fn get_item_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
