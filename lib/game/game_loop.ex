@@ -203,11 +203,11 @@ defmodule Game.GameLoop do
   defp maybe_log_and_cache(state, _mod, _elapsed) do
     if rem(state.frame_count, 60) == 0 do
       # Q2: 1回のNIFで全メタデータ取得（オーバーヘッド対策）
-      {{hp, max_hp, _score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
+      {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
         Game.NifBridge.get_frame_metadata(state.world_ref)
 
-      hud_data = {hp, max_hp, _score, elapsed_s}
+      hud_data = {hp, max_hp, score, elapsed_s}
       render_type = Game.SceneManager.render_type()
       Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
 
