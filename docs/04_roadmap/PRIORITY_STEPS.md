@@ -1,6 +1,6 @@
 # 実装優先度ステップガイド
 
-**根拠**: [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) の分析に基づく  
+**根拠**: [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md)（アーカイブ）/[ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) の分析に基づく  
 **方針**: **パフォーマンス最優先** → **汎用化重視** → 品質・拡張
 
 本ドキュメントは、改善項目を「何から手をつけるか」の優先度で整理したロードマップです。  
@@ -302,7 +302,9 @@
 
 ## 関連ドキュメント
 
-- [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 強み・弱みの分析（本ロードマップの根拠）
+- [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) — 再評価版（本ロードマップの根拠）  
+- [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 元の分析（アーカイブ）
+- [NEXT_STEPS.md](./NEXT_STEPS.md) — 次の Step 提案（Step 32〜40）。汎用ゲームエンジン化
 - [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) — G3 アセット管理システムの設計・実装
 - [STEPS_PERF.md](../05_steps/STEPS_PERF.md) — パフォーマンス改善の詳細実装手順
 - [STEPS.md](../05_steps/STEPS.md) — 初回実装ステップ（Step 1〜25）

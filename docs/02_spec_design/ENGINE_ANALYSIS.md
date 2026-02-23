@@ -1,5 +1,9 @@
 # ゲームエンジン分析: 強み・弱み・メリット・デメリット
 
+> **📦 アーカイブ**  
+> 本ドキュメントは 2026-02-23 時点の分析を保存しています。  
+> **再評価版**（STEPS_PERF.md・PRIORITY_STEPS.md 導入後）は [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) を参照してください。
+
 **対象プロジェクト**: Elixir × Rust Survivor  
 **アーキテクチャ**: Elixir (OTP ゲームロジック) + Rust (物理演算・GPU レンダリング) ハイブリッド  
 **作成日**: 2026-02-23
