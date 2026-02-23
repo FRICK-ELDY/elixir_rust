@@ -21,7 +21,7 @@ defmodule Game.SceneManager do
     GenServer.call(__MODULE__, :current)
   end
 
-  @doc "描画用の現在シーン種別（:playing | :level_up | :boss_alert | :game_over）。スタックが空のときは初期シーンの値を返す。"
+  @doc "描画用の現在シーン種別（任意の atom）。スタックが空のときは初期シーンの値を返す。"
   def render_type do
     GenServer.call(__MODULE__, :render_type)
   end

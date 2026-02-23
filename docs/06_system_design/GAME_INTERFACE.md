@@ -113,7 +113,7 @@ end
 |------|------------|------|
 | 初期シーンの決定 | `init/1` で `Game.Scenes.Playing` を固定 | `initial_scenes/0` でゲームが返す |
 | シーンモジュールが SceneBehaviour を実装 | Playing, LevelUp, BossAlert, GameOver | init/1, update/2, render_type/0 |
-| render_type の取得 | 各シーンの `render_type/0` | 現在は `:playing | :level_up | :boss_alert | :game_over` に制限 |
+| render_type の取得 | 各シーンの `render_type/0` | 任意の atom を返せる（Step 33 で汎用化済み） |
 
 ### 3.3 NIF（NifBridge）が期待するもの
 
@@ -166,7 +166,7 @@ end
 
 ### 5.1 Step 33〜38 で実装予定
 
-- [ ] `render_type` を atom の union から任意の atom に汎用化（Step 33）
+- [x] `render_type` を atom の union から任意の atom に汎用化（Step 33）
 - [ ] `initial_scenes/0` でゲームが起動シーンを指定（Step 34, 36）
 - [ ] `physics_scenes/0` で物理演算対象シーンを抽象化（Step 35 前後）
 - [ ] 遷移時の特別処理の責務分離（シーン内完結 or on_transition コールバック）
