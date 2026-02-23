@@ -1,4 +1,4 @@
-defmodule Game.EventBus do
+defmodule Engine.EventBus do
   @moduledoc """
   Step 26: フレームイベントを受け取り、複数のサブスクライバーに配信する。
 

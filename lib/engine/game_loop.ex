@@ -1,4 +1,4 @@
-defmodule Game.GameLoop do
+defmodule Engine.GameLoop do
   @moduledoc """
   60 Hz game loop implemented as a GenServer.
 
@@ -27,13 +27,12 @@ defmodule Game.GameLoop do
   @impl true
   def init(_opts) do
     world_ref = Game.NifBridge.create_world()
-    Game.FrameCache.init()
+    Engine.FrameCache.init()
     start_ms = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
-    # SceneManager は Application で GameLoop より前に起動
     {:ok, %{
       world_ref: world_ref,
       last_tick: start_ms,
@@ -46,11 +45,14 @@ defmodule Game.GameLoop do
 
   @impl true
   def handle_cast({:select_weapon, :__skip__}, state) do
-    case Game.SceneManager.current() do
-      {:ok, %{module: Game.Scenes.LevelUp}} ->
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    level_up_scene = game.level_up_scene()
+
+    case Engine.SceneManager.current() do
+      {:ok, %{module: ^level_up_scene}} ->
         Game.NifBridge.skip_level_up(state.world_ref)
         Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
-        Game.SceneManager.pop_scene()
+        Engine.SceneManager.pop_scene()
         {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
 
       _ ->
@@ -60,13 +62,16 @@ defmodule Game.GameLoop do
 
   @impl true
   def handle_cast({:select_weapon, weapon}, state) do
-    case Game.SceneManager.current() do
-      {:ok, %{module: Game.Scenes.LevelUp}} ->
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    level_up_scene = game.level_up_scene()
+
+    case Engine.SceneManager.current() do
+      {:ok, %{module: ^level_up_scene}} ->
         Game.NifBridge.add_weapon(state.world_ref, to_string(weapon))
         new_weapon_levels = fetch_weapon_levels(state.world_ref)
         lv = Map.get(new_weapon_levels, weapon, 1)
-        Logger.info("[LEVEL UP] Weapon selected: #{Game.LevelSystem.weapon_label(weapon, lv)} -> resuming")
-        Game.SceneManager.pop_scene()
+        Logger.info("[LEVEL UP] Weapon selected: #{game.weapon_label(weapon, lv)} -> resuming")
+        Engine.SceneManager.pop_scene()
         {:noreply, %{state | weapon_levels: new_weapon_levels}}
 
       _ ->
@@ -82,30 +87,26 @@ defmodule Game.GameLoop do
     delta = now - state.last_tick
     elapsed = now - state.start_ms
 
-    case Game.SceneManager.current() do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    physics_scenes = game.physics_scenes()
+
+    case Engine.SceneManager.current() do
       :empty ->
         Process.send_after(self(), :tick, @tick_ms)
         {:noreply, %{state | last_tick: now}}
 
       {:ok, %{module: mod, state: scene_state}} ->
-        # Playing シーンのみ物理演算・入力・イベント処理
-        state = maybe_run_physics(state, mod, delta)
+        state = maybe_run_physics(state, mod, physics_scenes, delta)
 
         context = build_context(state, now, elapsed)
         result = mod.update(context, scene_state)
 
-        # シーンの state を SceneManager に反映
         {new_scene_state, opts} = extract_state_and_opts(result)
-        Game.SceneManager.update_current(fn _ -> new_scene_state end)
+        Engine.SceneManager.update_current(fn _ -> new_scene_state end)
 
-        # context_updates の適用
         state = apply_context_updates(state, opts)
-
-        # 遷移の処理
-        state = process_transition(result, state, now)
-
-        # 毎秒ログ出力 + ETS キャッシュ
-        state = maybe_log_and_cache(state, mod, elapsed)
+        state = process_transition(result, state, now, game)
+        state = maybe_log_and_cache(state, mod, elapsed, game)
 
         Process.send_after(self(), :tick, @tick_ms)
 
@@ -118,15 +119,17 @@ defmodule Game.GameLoop do
 
   # ── ヘルパー ────────────────────────────────────────────────────
 
-  defp maybe_run_physics(state, Game.Scenes.Playing, delta) do
-    {dx, dy} = Game.InputHandler.get_move_vector()
-    Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-    _ = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
-    events = Game.NifBridge.drain_frame_events(state.world_ref)
-    unless events == [], do: Game.EventBus.broadcast(events)
+  defp maybe_run_physics(state, mod, physics_scenes, delta) do
+    if mod in physics_scenes do
+      {dx, dy} = Engine.InputHandler.get_move_vector()
+      Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+      _ = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
+      events = Game.NifBridge.drain_frame_events(state.world_ref)
+      unless events == [], do: Engine.EventBus.broadcast(events)
+    end
+
     state
   end
-  defp maybe_run_physics(state, _mod, _delta), do: state
 
   defp build_context(state, now, elapsed) do
     %{
@@ -151,67 +154,66 @@ defmodule Game.GameLoop do
   end
   defp apply_context_updates(state, _), do: state
 
-  defp process_transition({:continue, _, _}, state, _now), do: state
+  defp process_transition({:continue, _, _}, state, _now, _game), do: state
 
-  defp process_transition({:transition, :pop, scene_state}, state, _now) do
+  defp process_transition({:transition, :pop, scene_state}, state, _now, game) do
     auto_select = Map.get(scene_state, :auto_select, false)
+
     if auto_select do
-      # ポップ前に武器選択を適用（pop 後は LevelUp でなくなるため）
       state =
         case scene_state do
           %{choices: [first | _]} ->
             Game.NifBridge.add_weapon(state.world_ref, to_string(first))
             new_levels = fetch_weapon_levels(state.world_ref)
-            Logger.info("[LEVEL UP] Auto-selected: #{Game.LevelSystem.weapon_label(first, Map.get(new_levels, first, 1))} -> resuming")
+            Logger.info("[LEVEL UP] Auto-selected: #{game.weapon_label(first, Map.get(new_levels, first, 1))} -> resuming")
             %{state | weapon_levels: new_levels}
           _ ->
             Game.NifBridge.skip_level_up(state.world_ref)
             Logger.info("[LEVEL UP] Auto-skipped (no choices) -> resuming")
             state
         end
-      Game.SceneManager.pop_scene()
+      Engine.SceneManager.pop_scene()
     else
-      Game.SceneManager.pop_scene()
+      Engine.SceneManager.pop_scene()
     end
     state
   end
 
-  defp process_transition({:transition, {:push, Game.Scenes.BossAlert, init_arg}, _}, state, _now) do
-    Game.SceneManager.push_scene(Game.Scenes.BossAlert, init_arg)
+  defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now, _game) do
+    Engine.SceneManager.push_scene(mod, init_arg)
     state
   end
 
-  defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now) do
-    Game.SceneManager.push_scene(mod, init_arg)
+  defp process_transition({:transition, {:replace, mod, _}, _}, state, now, game) do
+    game_over_scene = game.game_over_scene()
+
+    if mod == game_over_scene do
+      {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
+        Game.NifBridge.get_frame_metadata(state.world_ref)
+      :telemetry.execute(
+        [:game, :session_end],
+        %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
+        %{}
+      )
+    end
+
+    Engine.SceneManager.replace_scene(mod, %{})
     state
   end
 
-  defp process_transition({:transition, {:replace, Game.Scenes.GameOver, _}, _}, state, now) do
-    {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
-      Game.NifBridge.get_frame_metadata(state.world_ref)
-    :telemetry.execute(
-      [:game, :session_end],
-      %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
-      %{}
-    )
-    Game.SceneManager.replace_scene(Game.Scenes.GameOver, %{})
-    state
-  end
+  defp process_transition(_, state, _, _), do: state
 
-  defp process_transition(_, state, _), do: state
-
-  defp maybe_log_and_cache(state, _mod, _elapsed) do
+  defp maybe_log_and_cache(state, _mod, elapsed, game) do
     if rem(state.frame_count, 60) == 0 do
-      # Q2: 1回のNIFで全メタデータ取得（オーバーヘッド対策）
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
         Game.NifBridge.get_frame_metadata(state.world_ref)
 
       hud_data = {hp, max_hp, score, elapsed_s}
-      render_type = Game.SceneManager.render_type()
-      Game.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
+      render_type = Engine.SceneManager.render_type()
+      Engine.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
 
-      wave = Game.SpawnSystem.wave_label(elapsed_s)
+      wave = game.wave_label(elapsed_s)
       budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""
 
       weapon_info =

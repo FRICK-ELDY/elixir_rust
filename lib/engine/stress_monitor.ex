@@ -1,4 +1,4 @@
-defmodule Game.StressMonitor do
+defmodule Engine.StressMonitor do
   @moduledoc """
   Independent performance monitoring process.
 
@@ -57,8 +57,7 @@ defmodule Game.StressMonitor do
   # ── Private ─────────────────────────────────────────────────────
 
   defp sample_and_log(state) do
-    # P6: ETS からロックフリーで読み取る（GameLoop への call が不要）
-    case Game.FrameCache.get() do
+    case Engine.FrameCache.get() do
       :empty ->
         state
 
@@ -68,6 +67,9 @@ defmodule Game.StressMonitor do
         physics_ms:   physics_ms,
         hud_data:     {hp, max_hp, score, elapsed_s},
       }} ->
+        game_module = Application.get_env(:game, :current, Game.VampireSurvivor)
+        wave = game_module.wave_label(elapsed_s)
+
         overrun = physics_ms > @frame_budget_ms
 
         new_state = %{state |
@@ -78,7 +80,6 @@ defmodule Game.StressMonitor do
           last_enemy_count: enemy_count,
         }
 
-        wave = Game.SpawnSystem.wave_label(elapsed_s)
         hp_pct = if max_hp > 0, do: Float.round(hp / max_hp * 100, 1), else: 0.0
         physics_bar = perf_bar(physics_ms, @frame_budget_ms, 20)
 
@@ -103,7 +104,6 @@ defmodule Game.StressMonitor do
     end
   end
 
-  # Renders a simple ASCII progress bar
   defp perf_bar(value, max, width) do
     filled = round(min(value / max, 1.0) * width)
     empty  = width - filled
@@ -119,5 +119,4 @@ defmodule Game.StressMonitor do
     str = to_string(n)
     String.pad_leading(str, width)
   end
-
 end

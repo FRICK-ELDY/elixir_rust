@@ -1,4 +1,4 @@
-defmodule Game.SceneManager do
+defmodule Engine.SceneManager do
   @moduledoc """
   シーンスタックを管理する GenServer。
 
@@ -54,7 +54,6 @@ defmodule Game.SceneManager do
 
   @impl true
   def init(_opts) do
-    # Step 34: config で指定されたゲームから初期シーンを取得
     game_module = Application.get_env(:game, :current, Game.VampireSurvivor)
     specs = game_module.initial_scenes()
 
@@ -84,7 +83,6 @@ defmodule Game.SceneManager do
   end
 
   def handle_call(:render_type, _from, %{stack: [], default_render_type: default} = state) do
-    # スタックが空のときは初期シーンの render_type を返す（通常は到達しない）
     {:reply, default, state}
   end
 
@@ -98,7 +96,6 @@ defmodule Game.SceneManager do
   end
 
   def handle_call(:pop, _from, %{stack: [_]} = state) do
-    # ルートのみの場合はポップ不可。GameOver 等からの戻りは replace_scene を使用
     {:reply, {:error, :cannot_pop_root}, state}
   end
 

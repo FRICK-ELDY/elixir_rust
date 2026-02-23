@@ -1,9 +1,9 @@
-defmodule Game.SceneBehaviour do
+defmodule Engine.SceneBehaviour do
   @moduledoc """
   シーンコールバックの動作定義。
 
   各シーンは init/1, update/2, render_type/0 を実装する。
-  Game.SceneManager がスタックで管理し、GameLoop が update を呼び出す。
+  SceneManager がスタックで管理し、GameLoop が update を呼び出す。
   """
 
   @doc """

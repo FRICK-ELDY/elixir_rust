@@ -100,7 +100,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ### フェーズ2: ゲームの分離（Step 35〜37）
 
-#### Step 35: ヴァンサバを Game 実装として分離
+#### Step 35: ヴァンサバを Game 実装として分離 ✅ 実装済み
 
 **目標**: ヴァンサバ固有のコードを `lib/games/vampire_survivor/` に集約する。
 

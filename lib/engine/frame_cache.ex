@@ -1,4 +1,4 @@
-defmodule Game.FrameCache do
+defmodule Engine.FrameCache do
   @moduledoc """
   フレームごとのゲーム状態スナップショットを ETS に書き込む。
 
