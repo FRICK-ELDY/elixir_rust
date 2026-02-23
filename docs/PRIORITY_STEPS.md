@@ -166,7 +166,7 @@
 
 ## フェーズ3: 汎用化基盤
 
-### G1: main.rs と lib.rs の共通ロジック統合
+### G1: main.rs と lib.rs の共通ロジック統合 ✅ 実装済み
 
 **根拠**: ENGINE_ANALYSIS「高優先度」・重複管理コストの解消
 
@@ -174,12 +174,13 @@
 |------|------|
 | **問題** | スタンドアロン (`main.rs`) と NIF (`lib.rs`) でゲームロジックが重複 |
 | **解決** | `game_core` 等の共通クレートに `GameWorld` / 物理 / 武器を集約 |
-| **成果物** | `main.rs` は winit ループ + `game_core` 呼び出しのみ、`lib.rs` は NIF ラッパーのみ |
+| **成果物** | `main.rs` は winit ループ + `core` 呼び出しのみ、`lib.rs` は NIF ラッパーのみ |
 
-**推奨アプローチ**:
-1. `native/game_native/src/core/` に共通モジュールを切り出し
-2. `main.rs` と `lib.rs` の両方から `mod core` を参照
-3. 段階的に移行（まず `constants` / `weapon` / `physics` から）
+**実装内容**:
+- `native/game_native/src/core/` に共通モジュールを集約
+- `constants`, `item`, `weapon`, `physics` を core 配下に移動
+- `enemy`, `boss`, `util` を追加（EnemyKind, BossKind, exp_required_for_next, spawn_position_outside 等）
+- `main.rs` と `lib.rs` の両方から `mod core` を参照
 
 ---
 

@@ -1,4 +1,4 @@
-use crate::constants::{BULLET_DAMAGE, WEAPON_COOLDOWN};
+use super::constants::{BULLET_DAMAGE, WEAPON_COOLDOWN};
 
 pub const MAX_WEAPON_LEVEL: u32 = 8;
 pub const MAX_WEAPON_SLOTS: usize = 6;
