@@ -241,7 +241,7 @@
 
 ---
 
-### Q2: NIF オーバーヘッド対策（将来検討）
+### Q2: NIF オーバーヘッド対策 ✅ 実装済み
 
 **根拠**: `get_render_data()` が毎フレーム大量データを Elixir に返す設計（注: 現状は Elixir から未呼び出し）
 
@@ -255,6 +255,11 @@
 - **描画ループ**: Rust 内で完結。`get_render_data` 相当の処理結果を Elixir に返さず wgpu レンダラへ直接渡す。
 - **Elixir への受け渡し**: HUD 用の数値（HP、スコアなど）や `render_type` など、描画に必要なメタデータのみを NIF で返す。
 - **バイナリ非経由**: 画像や頂点バッファは NIF 境界を跨がない。Elixir は状態管理のみに徹する。
+
+**実装内容**:
+- `get_frame_metadata` NIF: HUD・敵数・弾数・物理時間・レベルアップ・ボス情報を1回の呼び出しで取得
+- `GameLoop` の `maybe_log_and_cache` と `process_transition` を `get_frame_metadata` 使用に変更（複数 NIF → 1 NIF に集約）
+- `get_render_data` / `get_particle_data` / `get_item_data` に非推奨ドキュメントと `#[deprecated]` を付与
 
 ---
 
@@ -273,7 +278,7 @@
 | G2 | — | 新規 |
 | G3 | — | 新規 |
 | Q1 | — | 新規 |
-| Q2 | — | 将来検討 |
+| Q2 | — | 実装済み |
 
 ---
 
