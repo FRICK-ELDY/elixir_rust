@@ -112,10 +112,10 @@ pub struct CollisionWorld {
 fn set_map_obstacles(
     world: ResourceArc<GameWorld>,
     obstacles: Vec<(f32, f32, f32, u8)>,  // (x, y, radius, kind)
-) -> Atom {
-    let mut w = world.0.write().unwrap();
+) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| rustler::Error::Atom("lock_poisoned"))?;
     w.collision.rebuild_static(&obstacles);
-    ok()
+    Ok(ok())
 }
 ```
 
@@ -174,33 +174,56 @@ end
 
 #### 42.1 Rust: スナップショット取得 NIF
 
+`#[derive(NifMap)]` で構造体を Elixir の map と相互変換する。Rustler の標準的な型を使い、そのままコンパイル可能。
+
 ```rust
 // lib.rs
-#[rustler::nif]
-fn get_save_snapshot(world: ResourceArc<GameWorld>) -> Map {
-    let w = world.0.read().unwrap();
-    // プレイヤーHP/座標/レベル/武器/経過時間/スコア などを Map に詰める
-    // rustler::Map または term に変換して返す
+use rustler::NifMap;
+
+#[derive(NifMap)]
+struct SaveSnapshot {
+    player_hp: f32,
+    player_x: f32,
+    player_y: f32,
+    level: u32,
+    score: u32,
+    elapsed_seconds: f32,
+    // 武器情報などネストが必要な場合は別の NifMap 構造体を定義
 }
 
 #[rustler::nif]
-fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: Map) -> Atom {
-    let mut w = world.0.write().unwrap();
-    // snapshot から GameWorldInner を復元
-    ok()
+fn get_save_snapshot(world: ResourceArc<GameWorld>) -> NifResult<SaveSnapshot> {
+    let w = world.0.read().map_err(|_| rustler::Error::Atom("lock_poisoned"))?;
+    Ok(SaveSnapshot {
+        player_hp: w.player.hp,
+        player_x: w.player.x,
+        player_y: w.player.y,
+        level: w.player.level,
+        score: w.score,
+        elapsed_seconds: w.elapsed_seconds,
+    })
+}
+
+#[rustler::nif]
+fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot) -> NifResult<Atom> {
+    let mut w = world.0.write().map_err(|_| rustler::Error::Atom("lock_poisoned"))?;
+    w.player.hp = snapshot.player_hp;
+    w.player.x = snapshot.player_x;
+    // ... その他フィールドを復元
+    Ok(ok())
 }
 ```
 
-- スナップショットは **Elixir の term（map）** として受け渡す
+- スナップショットは **Elixir の map** として受け渡される（NifMap が自動変換）
 - Rust はシリアライズ形式に依存しない。Elixir が JSON や `:erlang.term_to_binary` で永続化
 
-#### 42.2 Elixir: SaveManager GenServer
+#### 42.2 Elixir: SaveManager モジュール
+
+状態を持たないユーティリティとして純粋なモジュールで定義する。
 
 ```elixir
 # lib/engine/save_manager.ex
 defmodule Engine.SaveManager do
-  use GenServer
-
   @save_path "saves/session.dat"
 
   def save(world_ref) do
