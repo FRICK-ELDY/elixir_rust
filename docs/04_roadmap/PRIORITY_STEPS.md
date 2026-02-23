@@ -63,7 +63,7 @@
 | **Lightning** | 連鎖先の探索も同様に空間ハッシュで候補を絞る（最大 6 チェーン × O(n) → O(数十)） |
 | **参照** | STEPS_PERF Step 29.1, 29.2 |
 
-**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.1, 29.2）
+**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接--rwlock)（29.1, 29.2）
 
 **追加タスク**（Lightning チェーン）:
 - `physics_step` 内の Lightning 武器処理で、`find_nearest_enemy_spatial` を連鎖ごとに呼ぶ
@@ -82,7 +82,7 @@
 | **効果** | StressMonitor と GameLoop が同時に NIF を呼んでもデッドロックしない |
 | **参照** | STEPS_PERF Step 29.3 |
 
-**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接-rwlock)（29.3）
+**詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接--rwlock)（29.3）
 
 ---
 
@@ -146,7 +146,7 @@
 | **解決** | ETS にスナップショット・入力状態を書き込み、ロックフリー読み取り |
 | **参照** | STEPS_PERF Step 27 |
 
-**詳細手順**: [STEPS_PERF.md § Step 27](../05_steps/STEPS_PERF.md#step-27-ets-キャッシュ-入力ポーリング化)
+**詳細手順**: [STEPS_PERF.md § Step 27](../05_steps/STEPS_PERF.md#step-27-ets-キャッシュ--入力ポーリング化)
 
 ---
 
