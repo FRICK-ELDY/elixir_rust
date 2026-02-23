@@ -6,7 +6,7 @@ defmodule Game.VampireSurvivor do
   実装し、render_type/0, entity_registry/0 等も提供する（Step 36）。
   """
   @doc """
-  起動時のシーンスタック。先頭がルートシーンとなる。
+  起動時のシーンスタック。リストの先頭の要素がスタックの底（ルート）になります。
 
   ## 戻り値
 
