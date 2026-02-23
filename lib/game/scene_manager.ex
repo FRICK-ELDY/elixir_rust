@@ -54,10 +54,23 @@ defmodule Game.SceneManager do
 
   @impl true
   def init(_opts) do
-    # 初期シーン: Playing（ゲーム開始）。将来タイトル画面にする場合はここを変更
-    {:ok, scene} = init_scene(Game.Scenes.Playing, %{})
-    default_render_type = scene[:module].render_type()
-    state = %{stack: [scene], default_render_type: default_render_type}
+    # Step 34: config で指定されたゲームから初期シーンを取得
+    game_module = Application.get_env(:game, :current, Game.VampireSurvivor)
+    specs = game_module.initial_scenes()
+
+    stack =
+      Enum.reduce(specs, [], fn spec, acc ->
+        {:ok, scene} = init_scene(spec.module, spec.init_arg)
+        [scene | acc]
+      end)
+
+    default_render_type =
+      case stack do
+        [top | _] -> top.module.render_type()
+        [] -> :playing
+      end
+
+    state = %{stack: stack, default_render_type: default_render_type}
     {:ok, state}
   end
 
