@@ -237,6 +237,7 @@
 | **優先** | Elixir 側: `SpawnSystem`, `LevelSystem`, `BossSystem` の純粋関数 |
 | **次点** | Rust 側: `cargo test` で `physics` / `weapon` の単体テスト |
 | **NIF** | 統合テストは IEx から `NifBridge` を呼ぶ E2E で代替可能 |
+| **除外** | `maybe_spawn/3` と `spawn_with_elites/3` は NIF 呼び出しを含むため単体テスト対象外。統合テスト向けとする。 |
 
 ---
 

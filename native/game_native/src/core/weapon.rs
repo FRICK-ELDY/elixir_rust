@@ -96,6 +96,80 @@ pub struct WeaponSlot {
     pub cooldown_timer: f32,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn weapon_kind_cooldown() {
+        assert!((WeaponKind::MagicWand.cooldown() - 1.0).abs() < 0.001);
+        assert!((WeaponKind::Axe.cooldown() - 1.5).abs() < 0.001);
+        assert!((WeaponKind::Cross.cooldown() - 2.0).abs() < 0.001);
+        assert!((WeaponKind::Lightning.cooldown() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn weapon_kind_damage() {
+        assert_eq!(WeaponKind::MagicWand.damage(), 10);
+        assert_eq!(WeaponKind::Axe.damage(), 25);
+        assert_eq!(WeaponKind::Fireball.damage(), 20);
+        assert_eq!(WeaponKind::Lightning.damage(), 15);
+    }
+
+    #[test]
+    fn weapon_kind_name() {
+        assert_eq!(WeaponKind::MagicWand.name(), "magic_wand");
+        assert_eq!(WeaponKind::Lightning.name(), "lightning");
+    }
+
+    #[test]
+    fn weapon_kind_bullet_count_table() {
+        let mw = WeaponKind::MagicWand.bullet_count_table().unwrap();
+        assert_eq!(mw[1], 1);
+        assert_eq!(mw[4], 2);
+        assert_eq!(mw[8], 4);
+        let cross = WeaponKind::Cross.bullet_count_table().unwrap();
+        assert_eq!(cross[1], 4);
+        assert_eq!(cross[4], 8);
+        assert!(WeaponKind::Axe.bullet_count_table().is_none());
+    }
+
+    #[test]
+    fn weapon_kind_whip_range() {
+        assert!((WeaponKind::Whip.whip_range(1) - 120.0).abs() < 0.001);
+        assert!((WeaponKind::Whip.whip_range(2) - 140.0).abs() < 0.001);
+        assert!((WeaponKind::Whip.whip_range(8) - 260.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn weapon_kind_lightning_chain_count() {
+        // 2 + level/2: Lv1=2, Lv2=3, Lv3=3, Lv4=4, ..., Lv8=6
+        assert_eq!(WeaponKind::Lightning.lightning_chain_count(1), 2);
+        assert_eq!(WeaponKind::Lightning.lightning_chain_count(2), 3);
+        assert_eq!(WeaponKind::Lightning.lightning_chain_count(3), 3);
+        assert_eq!(WeaponKind::Lightning.lightning_chain_count(8), 6);
+    }
+
+    #[test]
+    fn weapon_kind_as_u8() {
+        assert_eq!(WeaponKind::MagicWand.as_u8(), 0);
+        assert_eq!(WeaponKind::Lightning.as_u8(), 5);
+    }
+
+    #[test]
+    fn weapon_slot_bullet_count() {
+        let slot = WeaponSlot::new(WeaponKind::MagicWand);
+        assert_eq!(slot.bullet_count(), 1);
+    }
+
+    #[test]
+    fn weapon_slot_effective_damage() {
+        let mut slot = WeaponSlot::new(WeaponKind::MagicWand);
+        slot.level = 2;
+        assert!(slot.effective_damage() >= 10);
+    }
+}
+
 impl WeaponSlot {
     pub fn new(kind: WeaponKind) -> Self {
         Self { kind, level: 1, cooldown_timer: 0.0 }
