@@ -14,7 +14,7 @@ fn setup_enemies(n: usize) -> EnemyWorld {
             (x, y)
         })
         .collect();
-    enemies.spawn(&positions, EnemyKind::Slime);
+    enemies.spawn(&positions, EnemyKind::Slime as u8);
     enemies
 }
 

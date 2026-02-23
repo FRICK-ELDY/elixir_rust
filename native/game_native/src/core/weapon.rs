@@ -1,4 +1,5 @@
 use super::constants::{BULLET_DAMAGE, WEAPON_COOLDOWN};
+use super::entity_params::WeaponParams;
 
 pub const MAX_WEAPON_LEVEL: u32 = 8;
 pub const MAX_WEAPON_SLOTS: usize = 6;
@@ -90,14 +91,16 @@ impl WeaponKind {
 }
 
 // ─── WeaponSlot ───────────────────────────────────────────────
+/// Step 38: kind_id ベース（u8 ID で WeaponParams を参照）
 pub struct WeaponSlot {
-    pub kind:           WeaponKind,
+    pub kind_id:        u8,
     pub level:          u32,   // 1〜8
     pub cooldown_timer: f32,
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::entity_params::WEAPON_ID_MAGIC_WAND;
     use super::*;
 
     #[test]
@@ -162,13 +165,13 @@ mod tests {
 
     #[test]
     fn weapon_slot_bullet_count() {
-        let slot = WeaponSlot::new(WeaponKind::MagicWand);
+        let slot = WeaponSlot::new(WEAPON_ID_MAGIC_WAND);
         assert_eq!(slot.bullet_count(), 1);
     }
 
     #[test]
     fn weapon_slot_effective_damage() {
-        let mut slot = WeaponSlot::new(WeaponKind::MagicWand);
+        let mut slot = WeaponSlot::new(WEAPON_ID_MAGIC_WAND);
         slot.level = 2;
         // 10 + (2 - 1) * (10 / 4).max(1) = 12
         assert_eq!(slot.effective_damage(), 12);
@@ -176,28 +179,27 @@ mod tests {
 }
 
 impl WeaponSlot {
-    pub fn new(kind: WeaponKind) -> Self {
-        Self { kind, level: 1, cooldown_timer: 0.0 }
+    pub fn new(kind_id: u8) -> Self {
+        Self { kind_id, level: 1, cooldown_timer: 0.0 }
     }
 
     /// Level-scaled cooldown (Lv8 = 50% of base)
     pub fn effective_cooldown(&self) -> f32 {
-        let base = self.kind.cooldown();
+        let params = WeaponParams::get(self.kind_id);
+        let base = params.cooldown;
         (base * (1.0 - (self.level as f32 - 1.0) * 0.07)).max(base * 0.5)
     }
 
     /// Level-scaled damage
     pub fn effective_damage(&self) -> i32 {
-        let base = self.kind.damage();
+        let params = WeaponParams::get(self.kind_id);
+        let base = params.damage;
         base + (self.level as i32 - 1) * (base / 4).max(1)
     }
 
     /// Level-scaled bullet count, driven by each weapon's bullet_count_table.
     pub fn bullet_count(&self) -> usize {
-        let lv = self.level.clamp(1, MAX_WEAPON_LEVEL) as usize;
-        self.kind
-            .bullet_count_table()
-            .and_then(|table| table.get(lv).copied())
-            .unwrap_or(1)
+        let params = WeaponParams::get(self.kind_id);
+        params.bullet_count(self.level)
     }
 }

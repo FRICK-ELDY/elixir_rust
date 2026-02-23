@@ -6,6 +6,7 @@
 pub mod boss;
 pub mod constants;
 pub mod enemy;
+pub mod entity_params;
 pub mod item;
 pub mod physics;
 pub mod util;

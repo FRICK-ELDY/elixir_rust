@@ -19,8 +19,17 @@ defmodule Game.VampireSurvivor do
     ]
   end
 
+  # Step 38: 敵・武器・ボスの ID マッピング（Rust の u8 ID に相当）
   @impl Engine.Game
-  def entity_registry, do: %{}
+  def entity_registry do
+    %{
+      enemies: %{slime: 0, bat: 1, golem: 2},
+      weapons: %{
+        magic_wand: 0, axe: 1, cross: 2, whip: 3, fireball: 4, lightning: 5
+      },
+      bosses: %{slime_king: 0, bat_lord: 1, stone_golem: 2}
+    }
+  end
 
   @impl Engine.Game
   def physics_scenes do
