@@ -7,12 +7,10 @@ defmodule Game.Scenes.LevelUp do
   @level_up_auto_select_ms 3_000
 
   @impl Game.SceneBehaviour
-  def init(%{choices: choices, entered_ms: entered_ms, level: level}) do
+  def init(%{choices: choices, entered_ms: entered_ms} = init_arg) do
+    # level はログ表示用。Playing から push 時は常に渡される
+    level = Map.get(init_arg, :level)
     {:ok, %{choices: choices, entered_ms: entered_ms, level: level}}
-  end
-
-  def init(%{choices: choices, entered_ms: entered_ms}) do
-    {:ok, %{choices: choices, entered_ms: entered_ms, level: nil}}
   end
 
   @impl Game.SceneBehaviour

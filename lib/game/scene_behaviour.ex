@@ -33,7 +33,8 @@ defmodule Game.SceneBehaviour do
 
   @doc """
   描画用のシーン種別。Rust 側の GamePhase に渡す値。
+  将来的にタイトルシーンを追加する場合は :title を返す。
   """
   @callback render_type() ::
-              :title | :playing | :level_up | :boss_alert | :game_over
+              :playing | :level_up | :boss_alert | :game_over
 end

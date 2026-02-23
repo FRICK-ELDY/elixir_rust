@@ -7,7 +7,7 @@ defmodule Game.Scenes.Playing do
   require Logger
 
   @impl Game.SceneBehaviour
-  def init(_init_arg), do: {:ok, %{}}
+  def init(_init_arg), do: {:ok, %{spawned_bosses: []}}
 
   @impl Game.SceneBehaviour
   def render_type, do: :playing
@@ -20,8 +20,9 @@ defmodule Game.Scenes.Playing do
       elapsed: elapsed,
       last_spawn_ms: last_spawn_ms,
       weapon_levels: weapon_levels,
-      spawned_bosses: spawned_bosses,
     } = context
+
+    spawned_bosses = Map.get(state, :spawned_bosses, [])
 
     # 1. ゲームオーバー検知
     if Game.NifBridge.is_player_dead(world_ref) do
@@ -34,11 +35,12 @@ defmodule Game.Scenes.Playing do
         {:spawn, boss_kind, boss_name} ->
           :telemetry.execute([:game, :boss_spawn], %{count: 1}, %{boss: boss_name})
           Logger.info("[BOSS] Alert: #{boss_name} incoming!")
+          new_state = %{state | spawned_bosses: [boss_kind | spawned_bosses]}
           return_transition(:push, Game.Scenes.BossAlert, %{
             boss_kind: boss_kind,
             boss_name: boss_name,
             alert_ms: now,
-          }, state)
+          }, new_state)
 
         :no_boss ->
           # 3. レベルアップチェック

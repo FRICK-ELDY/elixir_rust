@@ -21,7 +21,7 @@ defmodule Game.SceneManager do
     GenServer.call(__MODULE__, :current)
   end
 
-  @doc "描画用の現在シーン種別（:title | :playing | :level_up | :boss_alert | :game_over）"
+  @doc "描画用の現在シーン種別（:playing | :level_up | :boss_alert | :game_over）。スタックが空のときは初期シーンの値を返す。"
   def render_type do
     GenServer.call(__MODULE__, :render_type)
   end
@@ -31,12 +31,16 @@ defmodule Game.SceneManager do
     GenServer.call(__MODULE__, {:push, module, init_arg})
   end
 
-  @doc "現在のシーンをポップ"
+  @doc """
+  現在のシーンをポップ。オーバーレイ（LevelUp, BossAlert）の戻り用。
+  ルートシーンのみの場合はポップ不可。GameOver からのリスタートは
+  `replace_scene/2` を使用すること。
+  """
   def pop_scene do
     GenServer.call(__MODULE__, :pop)
   end
 
-  @doc "現在のシーンを別シーンに置換"
+  @doc "現在のシーンを別シーンに置換。GameOver への遷移・リスタート時に使用"
   def replace_scene(module, init_arg \\ %{}) do
     GenServer.call(__MODULE__, {:replace, module, init_arg})
   end
@@ -50,9 +54,10 @@ defmodule Game.SceneManager do
 
   @impl true
   def init(_opts) do
-    # 初期シーン: Playing（ゲーム開始）
+    # 初期シーン: Playing（ゲーム開始）。将来タイトル画面にする場合はここを変更
     {:ok, scene} = init_scene(Game.Scenes.Playing, %{})
-    state = %{stack: [scene]}
+    default_render_type = scene[:module].render_type()
+    state = %{stack: [scene], default_render_type: default_render_type}
     {:ok, state}
   end
 
@@ -65,8 +70,9 @@ defmodule Game.SceneManager do
     {:reply, {:ok, top}, state}
   end
 
-  def handle_call(:render_type, _from, %{stack: []} = state) do
-    {:reply, :playing, state}
+  def handle_call(:render_type, _from, %{stack: [], default_render_type: default} = state) do
+    # スタックが空のときは初期シーンの render_type を返す（通常は到達しない）
+    {:reply, default, state}
   end
 
   def handle_call(:render_type, _from, %{stack: [%{module: mod} | _]} = state) do
@@ -79,7 +85,7 @@ defmodule Game.SceneManager do
   end
 
   def handle_call(:pop, _from, %{stack: [_]} = state) do
-    # ルートシーンだけの場合はポップしない（ゲーム終了防止）
+    # ルートのみの場合はポップ不可。GameOver 等からの戻りは replace_scene を使用
     {:reply, {:error, :cannot_pop_root}, state}
   end
 

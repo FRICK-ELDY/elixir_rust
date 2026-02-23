@@ -41,7 +41,6 @@ defmodule Game.GameLoop do
       start_ms: start_ms,
       last_spawn_ms: start_ms,
       weapon_levels: initial_weapon_levels,
-      spawned_bosses: [],
     }}
   end
 
@@ -93,9 +92,6 @@ defmodule Game.GameLoop do
         state = maybe_run_physics(state, mod, delta)
 
         context = build_context(state, now, elapsed)
-        # BossAlert 用に alert_ms を context に追加（シーン state から取得）
-        context = add_scene_specific_context(context, mod, scene_state)
-
         result = mod.update(context, scene_state)
 
         # シーンの state を SceneManager に反映
@@ -134,21 +130,16 @@ defmodule Game.GameLoop do
 
   defp build_context(state, now, elapsed) do
     %{
-      world_ref: state.world_ref,
-      now: now,
-      elapsed: elapsed,
+      tick_ms:       @tick_ms,
+      world_ref:     state.world_ref,
+      now:           now,
+      elapsed:       elapsed,
       last_spawn_ms: state.last_spawn_ms,
       weapon_levels: state.weapon_levels,
-      spawned_bosses: state.spawned_bosses,
-      frame_count: state.frame_count,
-      start_ms: state.start_ms,
+      frame_count:   state.frame_count,
+      start_ms:      state.start_ms,
     }
   end
-
-  defp add_scene_specific_context(context, Game.Scenes.BossAlert, %{alert_ms: alert_ms}) do
-    Map.put(context, :alert_ms, alert_ms)
-  end
-  defp add_scene_specific_context(context, _mod, _state), do: context
 
   defp extract_state_and_opts({:continue, scene_state}), do: {scene_state, %{}}
   defp extract_state_and_opts({:continue, scene_state, opts}), do: {scene_state, opts || %{}}
@@ -185,9 +176,9 @@ defmodule Game.GameLoop do
     state
   end
 
-  defp process_transition({:transition, {:push, Game.Scenes.BossAlert, %{boss_kind: boss_kind} = init_arg}, _}, state, _now) do
+  defp process_transition({:transition, {:push, Game.Scenes.BossAlert, init_arg}, _}, state, _now) do
     Game.SceneManager.push_scene(Game.Scenes.BossAlert, init_arg)
-    %{state | spawned_bosses: [boss_kind | state.spawned_bosses]}
+    state
   end
 
   defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now) do

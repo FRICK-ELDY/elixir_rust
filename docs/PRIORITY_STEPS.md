@@ -195,11 +195,11 @@
 | **効果** | ステージ選択・設定画面・チュートリアル等を追加しやすくなる |
 
 **実装内容**:
-- `Game.SceneBehaviour` — シーンコールバック（init/update/render_type）の動作定義
-- `Game.SceneManager` GenServer — シーンスタック管理、push/pop/replace、render_type 取得
+- `Game.SceneBehaviour` でシーンコールバック（init/update/render_type）を定義
+- `Game.SceneManager` GenServer でシーンスタック（push/pop/replace）を管理し render_type を取得
 - シーンを `%{module: Module, state: term}` で表現
-- `Game.Scenes.Playing`, `LevelUp`, `BossAlert`, `GameOver` — 各フェーズを独立シーンに分離
-- `GameLoop` を SceneManager ベースにリファクタ、tick を現在シーンの update にディスパッチ
+- `Game.Scenes.Playing`, `LevelUp`, `BossAlert`, `GameOver` で各フェーズを独立シーンに分離
+- `GameLoop` を SceneManager ベースにリファクタし、tick を現在シーンの update にディスパッチ
 - `FrameCache` に render_type を追加（描画用シーン種別の参照）
 
 ---
