@@ -168,12 +168,12 @@ defmodule Game.GameLoop do
 
     # ゲームオーバーになった場合はここで早期リターン
     if state.phase == :game_over do
-      # P7: Telemetry セッション終了イベント
+      # P7: Telemetry セッション終了イベント（measurements: 数値データ, metadata: コンテキスト）
       {_hp, _max_hp, score, _elapsed_s} = Game.NifBridge.get_hud_data(state.world_ref)
       :telemetry.execute(
         [:game, :session_end],
-        %{elapsed_seconds: elapsed / 1000.0},
-        %{score: score}
+        %{elapsed_seconds: elapsed / 1000.0, score: score},
+        %{}
       )
 
       Process.send_after(self(), :tick, @tick_ms)

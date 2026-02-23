@@ -28,12 +28,17 @@ defmodule Game.Telemetry do
 
   def metrics do
     [
+      # physics_ms: summary で min/max/mean/percentiles を集計（パフォーマンス分析用）
       Telemetry.Metrics.summary("game.tick.physics_ms",
         unit: :millisecond,
         description: "Rust physics step duration per frame"
       ),
+      # enemy_count: last_value で現在値、summary で平均・最大値・パーセンタイルを集計
       Telemetry.Metrics.last_value("game.tick.enemy_count",
-        description: "Active enemy count"
+        description: "Active enemy count (current)"
+      ),
+      Telemetry.Metrics.summary("game.tick.enemy_count",
+        description: "Active enemy count (avg/max/percentiles over report period)"
       ),
       Telemetry.Metrics.counter("game.level_up.count",
         description: "Total level-up events"
