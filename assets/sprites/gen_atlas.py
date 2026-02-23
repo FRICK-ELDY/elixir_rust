@@ -36,7 +36,7 @@ import math
 import os
 import sys
 
-OUTPUT_DIR = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
+OUTPUT_DIR = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
 
 W, H = 1600, 64
 
