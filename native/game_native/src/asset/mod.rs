@@ -5,39 +5,41 @@
 
 use std::path::Path;
 
-/// アセットを一意に識別する ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)] // Phase 2 で音声ロードに使用予定
-pub enum AssetId {
-    /// メインスプライトアトラス (assets/sprites/atlas.png)
-    SpriteAtlas,
-    /// BGM
-    Bgm,
-    /// ヒット効果音
-    HitSfx,
-    /// 撃破効果音
-    DeathSfx,
-    /// レベルアップ効果音
-    LevelUpSfx,
-    /// プレイヤーダメージ効果音
-    PlayerHurtSfx,
-    /// アイテム取得効果音
-    ItemPickupSfx,
+/// アセット ID とパスの定義を1箇所に集約（single source of truth）
+macro_rules! define_assets {
+    ($($id:ident => $path:literal),* $(,)?) => {
+        /// アセットを一意に識別する ID
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[allow(dead_code)] // Phase 2 で音声ロードに使用予定
+        pub enum AssetId {
+            $($id,)*
+        }
+
+        impl AssetId {
+            /// デフォルトの相対パス（プロジェクトルート基準）
+            pub fn default_path(&self) -> &'static str {
+                match self {
+                    $(AssetId::$id => $path,)*
+                }
+            }
+        }
+
+        fn load_asset_embedded(id: AssetId) -> Vec<u8> {
+            match id {
+                $(AssetId::$id => include_bytes!(concat!("../../../../", $path)).to_vec(),)*
+            }
+        }
+    };
 }
 
-impl AssetId {
-    /// デフォルトの相対パス（プロジェクトルート基準）
-    pub fn default_path(&self) -> &'static str {
-        match self {
-            AssetId::SpriteAtlas => "assets/sprites/atlas.png",
-            AssetId::Bgm => "assets/audio/bgm.wav",
-            AssetId::HitSfx => "assets/audio/hit.wav",
-            AssetId::DeathSfx => "assets/audio/death.wav",
-            AssetId::LevelUpSfx => "assets/audio/level_up.wav",
-            AssetId::PlayerHurtSfx => "assets/audio/player_hurt.wav",
-            AssetId::ItemPickupSfx => "assets/audio/item_pickup.wav",
-        }
-    }
+define_assets! {
+    SpriteAtlas => "assets/sprites/atlas.png",
+    Bgm => "assets/audio/bgm.wav",
+    HitSfx => "assets/audio/hit.wav",
+    DeathSfx => "assets/audio/death.wav",
+    LevelUpSfx => "assets/audio/level_up.wav",
+    PlayerHurtSfx => "assets/audio/player_hurt.wav",
+    ItemPickupSfx => "assets/audio/item_pickup.wav",
 }
 
 /// アセットのロードを行う。実行時ロード（ファイル存在時）＋埋め込みフォールバック。
@@ -78,19 +80,14 @@ impl AssetLoader {
 
         // 1. ベースパス + 相対パス
         if let Some(ref base) = self.base_path {
-            let full = base.join(path);
-            if full.exists() {
-                if let Ok(bytes) = std::fs::read(&full) {
-                    return bytes;
-                }
+            if let Ok(bytes) = std::fs::read(base.join(path)) {
+                return bytes;
             }
         }
 
         // 2. カレントディレクトリからの相対パス
-        if Path::new(path).exists() {
-            if let Ok(bytes) = std::fs::read(path) {
-                return bytes;
-            }
+        if let Ok(bytes) = std::fs::read(path) {
+            return bytes;
         }
 
         // 3. 埋め込みフォールバック
@@ -105,30 +102,11 @@ impl AssetLoader {
     /// 音声アセットのバイト列をロード（Phase 2 で AudioManager 連携予定）
     #[allow(dead_code)]
     pub fn load_audio(&self, id: AssetId) -> Vec<u8> {
-        match id {
-            AssetId::SpriteAtlas => self.load_bytes(AssetId::SpriteAtlas),
-            _ => self.load_bytes(id),
-        }
+        self.load_bytes(id)
     }
 
     /// コンパイル時埋め込みデータ（ファイルが存在しない場合のフォールバック）
     fn load_embedded(&self, id: AssetId) -> Vec<u8> {
-        match id {
-            AssetId::SpriteAtlas => {
-                include_bytes!("../../../../assets/sprites/atlas.png").to_vec()
-            }
-            AssetId::Bgm => include_bytes!("../../../../assets/audio/bgm.wav").to_vec(),
-            AssetId::HitSfx => include_bytes!("../../../../assets/audio/hit.wav").to_vec(),
-            AssetId::DeathSfx => include_bytes!("../../../../assets/audio/death.wav").to_vec(),
-            AssetId::LevelUpSfx => {
-                include_bytes!("../../../../assets/audio/level_up.wav").to_vec()
-            }
-            AssetId::PlayerHurtSfx => {
-                include_bytes!("../../../../assets/audio/player_hurt.wav").to_vec()
-            }
-            AssetId::ItemPickupSfx => {
-                include_bytes!("../../../../assets/audio/item_pickup.wav").to_vec()
-            }
-        }
+        load_asset_embedded(id)
     }
 }
