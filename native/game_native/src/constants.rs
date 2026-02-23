@@ -53,6 +53,10 @@ pub const BULLET_LIFETIME:      f32 = 3.0;
 // Spatial hash cell size
 pub const CELL_SIZE: f32 = 80.0;
 
+/// 武器の最近接敵探索半径（MagicWand / Fireball / Lightning 用）
+#[allow(dead_code)] // lib で使用、bin (game_window) では未使用（main.rs 空間ハッシュ化で使用予定）
+pub const WEAPON_SEARCH_RADIUS: f32 = SCREEN_WIDTH / 2.0;
+
 // Enemy cap (used by game_window binary; not referenced by the NIF lib)
 #[allow(dead_code)]
 pub const MAX_ENEMIES: usize = 300;
