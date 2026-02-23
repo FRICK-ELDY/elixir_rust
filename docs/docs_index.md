@@ -79,6 +79,12 @@
 | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) | **詳細な実装手順**。イベントバス、ETS キャッシュ、フリーリスト、Spatial Hash 最近接、RwLock、Telemetry、SIMD AI。[PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) 準拠の推奨順序あり | Step 26 〜 Step 31 |
 | [STEPS_PERFORMANCE.md](./05_steps/STEPS_PERFORMANCE.md) | **現状分析と改善提案**。ボトルネックの洗い出し、課題一覧、具体的な改善手法の解説。実装手順よりも「なぜ」「何を」に焦点 | 分析・設計参考 |
 
+### 5.4 機能拡張（Step 41〜44）
+
+| ドキュメント | 内容 | ステップ範囲 |
+|-------------|------|--------------|
+| [STEPS_MAP_SAVE_MULTI_DEBUG.md](./05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) | **マップ・セーブ・マルチプレイ・デバッグ支援**。障害物・壁・タイル、ゲーム状態永続化、マルチプレイ基盤、NIF デバッグ容易化 | Step 41 〜 Step 44 |
+
 ---
 
 ## 6. システム設計・提案 `06_system_design/`
@@ -120,7 +126,8 @@ docs/
 │   ├── STEPS.md
 │   ├── STEPS_QUALITY.md
 │   ├── STEPS_PERF.md
-│   └── STEPS_PERFORMANCE.md
+│   ├── STEPS_PERFORMANCE.md
+│   └── STEPS_MAP_SAVE_MULTI_DEBUG.md
 ├── 06_system_design/      システム設計・提案
 │   ├── ASSET_MANAGEMENT.md
 │   └── REFACTOR_PROPOSAL.md
@@ -158,6 +165,7 @@ docs/
 | ゼロから実装したい | [STEPS.md](./05_steps/STEPS.md) → [STEPS_QUALITY.md](./05_steps/STEPS_QUALITY.md) |
 | 改善の優先度を知りたい | [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) |
 | 汎用ゲームエンジン化の次の Step を知りたい | [NEXT_STEPS.md](./04_roadmap/NEXT_STEPS.md) |
+| マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_MAP_SAVE_MULTI_DEBUG.md](./05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
 | なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) |
 | エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
