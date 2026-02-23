@@ -105,3 +105,52 @@ impl EnemyKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enemy_max_hp() {
+        assert!((EnemyKind::Slime.max_hp() - 30.0).abs() < 0.001);
+        assert!((EnemyKind::Bat.max_hp() - 15.0).abs() < 0.001);
+        assert!((EnemyKind::Golem.max_hp() - 150.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn enemy_speed() {
+        assert!((EnemyKind::Slime.speed() - 80.0).abs() < 0.001);
+        assert!((EnemyKind::Bat.speed() - 160.0).abs() < 0.001);
+        assert!((EnemyKind::Golem.speed() - 40.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn enemy_radius() {
+        assert!((EnemyKind::Slime.radius() - 20.0).abs() < 0.001);
+        assert!((EnemyKind::Bat.radius() - 12.0).abs() < 0.001);
+        assert!((EnemyKind::Golem.radius() - 32.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn enemy_exp_reward() {
+        assert_eq!(EnemyKind::Slime.exp_reward(), 5);
+        assert_eq!(EnemyKind::Bat.exp_reward(), 3);
+        assert_eq!(EnemyKind::Golem.exp_reward(), 20);
+    }
+
+    #[test]
+    fn enemy_render_kind() {
+        assert_eq!(EnemyKind::Slime.render_kind(), 1);
+        assert_eq!(EnemyKind::Bat.render_kind(), 2);
+        assert_eq!(EnemyKind::Golem.render_kind(), 3);
+    }
+
+    #[test]
+    fn for_elapsed_under_60_always_slime() {
+        let mut rng = SimpleRng::new(42);
+        for _ in 0..20 {
+            assert_eq!(EnemyKind::for_elapsed(0.0, &mut rng), EnemyKind::Slime);
+            assert_eq!(EnemyKind::for_elapsed(59.9, &mut rng), EnemyKind::Slime);
+        }
+    }
+}

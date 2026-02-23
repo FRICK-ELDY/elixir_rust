@@ -31,6 +31,36 @@ pub fn is_elite_spawn(elapsed_secs: f32, rng: &mut SimpleRng) -> bool {
     elapsed_secs >= 600.0 && rng.next_u32() % 5 == 0
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exp_required_for_next() {
+        assert_eq!(exp_required_for_next(0), 0);
+        assert_eq!(exp_required_for_next(1), 10);
+        assert_eq!(exp_required_for_next(2), 25);
+        assert_eq!(exp_required_for_next(9), 270);
+        assert_eq!(exp_required_for_next(10), 320);
+    }
+
+    #[test]
+    fn test_current_wave() {
+        let (interval, count) = current_wave(0.0);
+        assert!((interval - 4.0).abs() < 0.001);
+        assert_eq!(count, 2);
+        let (i2, c2) = current_wave(600.0);
+        assert_eq!(c2, 18);
+        assert!((i2 - 0.7).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_is_elite_spawn_before_600() {
+        let mut rng = SimpleRng::new(12345);
+        assert!(!is_elite_spawn(599.0, &mut rng));
+    }
+}
+
 /// 画面外の四辺いずれかにランダムに配置（マップ端からスポーン）
 pub fn spawn_position_outside(rng: &mut SimpleRng, map_width: f32, map_height: f32) -> (f32, f32) {
     let margin = 80.0;
