@@ -238,7 +238,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ## インストール後の確認
 
 ```powershell
-cd D:\Work\FRICK-ELDY\elixir_rust
+cd elixir_rust
 
 # 依存関係取得
 mix deps.get
@@ -251,6 +251,20 @@ mix run --no-halt
 # または
 iex -S mix
 ```
+
+### bin スクリプト（PATH 未設定時でも動作）
+
+`bin/mix_compile.bat` と `bin/mix_run.bat` は、デフォルトで `C:\Program Files\Erlang OTP` と `C:\Program Files\Elixir` を参照します。
+
+**別の場所にインストールしている場合**は、環境変数を設定してください:
+
+```batch
+set ERLANG_HOME=D:\Tools\Erlang OTP
+set ELIXIR_HOME=D:\Tools\Elixir
+.\bin\mix_compile.bat
+```
+
+永続的に設定する場合は、システムの環境変数に `ERLANG_HOME` と `ELIXIR_HOME` を追加してください。
 
 ---
 
