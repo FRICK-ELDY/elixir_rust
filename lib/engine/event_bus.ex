@@ -1,13 +1,13 @@
-defmodule Game.EventBus do
+defmodule Engine.EventBus do
   @moduledoc """
   Step 26: フレームイベントを受け取り、複数のサブスクライバーに配信する。
 
   Elixir/OTP の強みを体現するモジュール:
-  - プロセスへの send はノンブロッキング — GameLoop を止めない
-  - サブスクライバーが重い処理をしても GameLoop に影響しない
+  - プロセスへの send はノンブロッキング — Engine.GameLoop を止めない
+  - サブスクライバーが重い処理をしても Engine.GameLoop に影響しない
   - Process.monitor でサブスクライバーの死活を自動監視
   - EventBus 自体がクラッシュしても Supervisor が即座に再起動し、
-    GameLoop は一切影響を受けない（one_for_one 戦略）
+    Engine.GameLoop は一切影響を受けない（one_for_one 戦略）
   """
 
   use GenServer

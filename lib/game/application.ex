@@ -5,21 +5,19 @@ defmodule Game.Application do
   def start(_type, _args) do
     children = [
       # G2: シーン管理 — GameLoop より前に起動
-      Game.SceneManager,
+      Engine.SceneManager,
       # Input handler: translates key events to GameLoop casts
-      Game.InputHandler,
+      Engine.InputHandler,
       # Step 26: イベントバス — GameLoop より前に起動
-      Game.EventBus,
+      Engine.EventBus,
       # Core game loop: 60 Hz physics tick via Rust NIF
-      Game.GameLoop,
-      # Independent performance monitor: samples every second.
-      # Demonstrates OTP: this process is completely isolated from the game loop.
-      # A crash here never affects gameplay; the supervisor restarts it automatically.
-      Game.StressMonitor,
-      # Step 25: ゲームセッション統計収集（Elixir の強みを活かした独立プロセス）
-      Game.Stats,
-      # P7: Telemetry 計測基盤 — LiveDashboard / Prometheus 連携の基盤
-      Game.Telemetry,
+      Engine.GameLoop,
+      # Independent performance monitor
+      Engine.StressMonitor,
+      # Step 25: ゲームセッション統計収集
+      Engine.Stats,
+      # P7: Telemetry 計測基盤
+      Engine.Telemetry,
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]

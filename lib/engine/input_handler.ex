@@ -1,10 +1,10 @@
-defmodule Game.InputHandler do
+defmodule Engine.InputHandler do
   @moduledoc """
   キー入力状態を ETS に書き込む。
-  GameLoop は tick のたびに ETS から読み取る（ポーリング方式）。
+  Engine.GameLoop は tick のたびに ETS から読み取る（ポーリング方式）。
 
-  変更前: キーイベントごとに GameLoop へ cast → メッセージキューに溜まる
-  変更後: ETS に書き込むだけ → GameLoop は tick 時に 1 回だけ読む
+  変更前: キーイベントごとに Engine.GameLoop へ cast → メッセージキューに溜まる
+  変更後: ETS に書き込むだけ → Engine.GameLoop は tick 時に 1 回だけ読む
 
   同一フレーム内の複数キーイベントは ETS の上書きで自動マージされる。
   """
@@ -15,7 +15,7 @@ defmodule Game.InputHandler do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc "GameLoop が tick のたびに呼ぶ — ロックフリー読み取り"
+  @doc "Engine.GameLoop が tick のたびに呼ぶ — ロックフリー読み取り"
   def get_move_vector do
     case :ets.lookup(@table, :move) do
       [{:move, vec}] -> vec
@@ -64,7 +64,6 @@ defmodule Game.InputHandler do
       (if MapSet.member?(keys_held, :s) or MapSet.member?(keys_held, :arrow_down), do: 1, else: 0) +
       (if MapSet.member?(keys_held, :w) or MapSet.member?(keys_held, :arrow_up),   do: -1, else: 0)
 
-    # GenServer.cast の代わりに ETS 書き込み（ノンブロッキング）
     :ets.insert(@table, {:move, {dx, dy}})
   end
 end

@@ -1,4 +1,4 @@
-defmodule Game.Stats do
+defmodule Engine.Stats do
   @moduledoc """
   Step 25: ゲームセッション統計をリアルタイム収集する GenServer。
 
@@ -49,8 +49,7 @@ defmodule Game.Stats do
 
   @impl true
   def init(_opts) do
-    # Step 26: EventBus にサブスクライブ — 以降はイベントが自動的に届く
-    Game.EventBus.subscribe()
+    Engine.EventBus.subscribe()
     {:ok, initial_state()}
   end
 
