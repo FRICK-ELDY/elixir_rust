@@ -21,7 +21,7 @@ defmodule Game.VampireSurvivor.Scenes.BossAlert do
     elapsed = now - alert_ms
 
     if elapsed >= Game.VampireSurvivor.BossSystem.alert_duration_ms() do
-      Game.NifBridge.spawn_boss(world_ref, boss_kind)
+      Engine.spawn_boss(world_ref, boss_kind)
       Logger.info("[BOSS] Spawned: #{boss_name}")
       {:transition, :pop, state}
     else
