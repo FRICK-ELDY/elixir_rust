@@ -42,7 +42,7 @@
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
 | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md) | ゲームロジック層に Elixir（BEAM VM）を採用した理由。BEAM の設計思想、ゲームループ適合性、並行性、耐障害性、Rust との役割分担 | アーキテクチャ理解時 |
-| [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md) | **Elixir/Rust 役割分担方針**。「苦手なものは Rust に投げる」。タイミング精度、将来の拡張（リズム・ロールバック等）、やらなくていいもの | アーキテクチャ理解時 |
+| [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md) | **Elixir/Rust 役割分担方針**。「苦手なものは Rust に投げる」。タイミング精度、将来の拡張、スコープ外・サポートしない項目 | アーキテクチャ理解時 |
 | [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) | Chase AI の並列化に rayon を採用した理由。Work-Stealing、SoA との相乗効果、実測結果、他ライブラリとの比較 | パフォーマンス理解時 |
 
 ---

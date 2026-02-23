@@ -101,7 +101,7 @@
 | 課題 | 現状 |
 |------|------|
 | **完全な ECS フレームワークではない** | SoA を手動実装。エンティティ間の親子・グループ関係やコンポーネントの動的追加はない |
-| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし |
+| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし（対応方針は [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) §5 参照） |
 | **セーブ・ロード機能がない** | ゲーム状態の永続化なし |
 | **未実装仕様** | Skeleton, Ghost, Garlic 等は仕様書にあれど未実装 |
 | **UI/UX の制限** | egui 即時モード、リッチテキスト・多言語対応は限定的 |
@@ -110,7 +110,7 @@
 
 | 課題 | 現状 |
 |------|------|
-| **シングルプレイヤー前提** | マルチプレイヤー対応には GameWorld の設計変更が必要 |
+| **シングルプレイヤー前提** | マルチプレイヤー対応には GameWorld の設計変更が必要（対応方針は [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) §5 参照） |
 | **ネットワーク機能なし** | オンラインマルチ・ランキング・実績連携は未実装。Elixir のネットワーク機能は未活用 |
 
 ### 3.4 開発体験面
@@ -146,7 +146,7 @@
 | ドキュメント | 用途 |
 |-------------|------|
 | [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) | 元の分析（アーカイブ） |
-| [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担方針、やらなくていいもの |
+| [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担方針、スコープ外・サポートしない項目 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 実装済み項目の参照 |
 | [STEPS_PERF.md](../05_steps/STEPS_PERF.md) | 実装の詳細手順 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計 |
