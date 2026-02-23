@@ -1,4 +1,4 @@
-defmodule Game.Application do
+defmodule App.Application do
   use Application
 
   @impl true
@@ -26,7 +26,7 @@ defmodule Game.Application do
       Engine.Telemetry,
     ]
 
-    opts = [strategy: :one_for_one, name: Game.Supervisor]
+    opts = [strategy: :one_for_one, name: App.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

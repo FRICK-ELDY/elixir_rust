@@ -26,7 +26,7 @@ defmodule Engine.GameLoop do
 
   @impl true
   def init(_opts) do
-    world_ref = Game.NifBridge.create_world()
+    world_ref = App.NifBridge.create_world()
     Engine.FrameCache.init()
     start_ms = now_ms()
     Process.send_after(self(), :tick, @tick_ms)
@@ -122,9 +122,9 @@ defmodule Engine.GameLoop do
   defp maybe_run_physics(state, mod, physics_scenes, delta) do
     if mod in physics_scenes do
       {dx, dy} = Engine.InputHandler.get_move_vector()
-      Game.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-      _ = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
-      events = Game.NifBridge.drain_frame_events(state.world_ref)
+      App.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+      _ = App.NifBridge.physics_step(state.world_ref, delta * 1.0)
+      events = App.NifBridge.drain_frame_events(state.world_ref)
       unless events == [], do: Engine.EventBus.broadcast(events)
     end
 
@@ -191,7 +191,7 @@ defmodule Engine.GameLoop do
 
     if mod == game_over_scene do
       {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
-        Game.NifBridge.get_frame_metadata(state.world_ref)
+        App.NifBridge.get_frame_metadata(state.world_ref)
       :telemetry.execute(
         [:game, :session_end],
         %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
@@ -209,7 +209,7 @@ defmodule Engine.GameLoop do
     if rem(state.frame_count, 60) == 0 do
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
-        Game.NifBridge.get_frame_metadata(state.world_ref)
+        App.NifBridge.get_frame_metadata(state.world_ref)
 
       hud_data = {hp, max_hp, score, elapsed_s}
       render_type = Engine.SceneManager.render_type()
@@ -248,7 +248,7 @@ defmodule Engine.GameLoop do
 
   defp fetch_weapon_levels(world_ref) do
     world_ref
-    |> Game.NifBridge.get_weapon_levels()
+    |> App.NifBridge.get_weapon_levels()
     |> Map.new(fn {name, level} -> {String.to_existing_atom(name), level} end)
   end
 end
