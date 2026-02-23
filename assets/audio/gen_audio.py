@@ -5,7 +5,9 @@ Python 標準ライブラリのみで WAV ファイルを生成する。
 BGM 用の OGG は pydub / ffmpeg が必要なため、ここでは WAV で代替する。
 
 使い方:
-    python assets/audio/gen_audio.py
+    python gen_audio.py [出力ディレクトリ]
+    出力ディレクトリ省略時はスクリプトと同じディレクトリ。例:
+        python assets/_shared/gen_audio.py assets/vampire_survivor/audio
 
 生成されるファイル:
     assets/audio/bgm.wav         ループ BGM（低音サイン波 8 秒）
@@ -20,9 +22,14 @@ import math
 import struct
 import wave
 import os
+import sys
 
 SAMPLE_RATE = 44100
-OUTPUT_DIR  = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR  = (
+    os.path.abspath(sys.argv[1])
+    if len(sys.argv) > 1
+    else os.path.dirname(os.path.abspath(__file__))
+)
 
 
 def write_wav(filename: str, samples: list[float], sample_rate: int = SAMPLE_RATE) -> None:

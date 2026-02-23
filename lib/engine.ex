@@ -3,7 +3,7 @@ defmodule Engine do
   ゲームエンジンの安定化された公開 API（Step 37）。
 
   ゲームは **Engine モジュール経由でのみ** エンジンとやり取りする。
-  `Game.NifBridge` や `Engine.SceneManager` を直接呼び出さず、
+  `App.NifBridge` や `Engine.SceneManager` を直接呼び出さず、
   このモジュールの関数を使用すること。
 
   ## 方針
@@ -48,7 +48,7 @@ defmodule Engine do
   """
   def spawn_enemies(world_ref, kind, count) do
     kind_id = resolve_enemy_id(kind)
-    Game.NifBridge.spawn_enemies(world_ref, kind_id, count)
+    App.NifBridge.spawn_enemies(world_ref, kind_id, count)
   end
 
   @doc """
@@ -59,7 +59,7 @@ defmodule Engine do
   """
   def spawn_elite_enemy(world_ref, kind, count, hp_multiplier) do
     kind_id = resolve_enemy_id(kind)
-    Game.NifBridge.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)
+    App.NifBridge.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)
   end
 
   @doc """
@@ -72,7 +72,7 @@ defmodule Engine do
   """
   def spawn_boss(world_ref, kind) do
     kind_id = resolve_boss_id(kind)
-    Game.NifBridge.spawn_boss(world_ref, kind_id)
+    App.NifBridge.spawn_boss(world_ref, kind_id)
   end
 
   @doc """
@@ -85,7 +85,7 @@ defmodule Engine do
       end
   """
   def get_enemy_count(world_ref) do
-    Game.NifBridge.get_enemy_count(world_ref)
+    App.NifBridge.get_enemy_count(world_ref)
   end
 
   @doc """
@@ -97,7 +97,7 @@ defmodule Engine do
       end
   """
   def is_player_dead?(world_ref) do
-    Game.NifBridge.is_player_dead(world_ref)
+    App.NifBridge.is_player_dead(world_ref)
   end
 
   @doc """
@@ -113,7 +113,7 @@ defmodule Engine do
       end
   """
   def get_level_up_data(world_ref) do
-    Game.NifBridge.get_level_up_data(world_ref)
+    App.NifBridge.get_level_up_data(world_ref)
   end
 
   @doc """
@@ -126,7 +126,7 @@ defmodule Engine do
       end
   """
   def skip_level_up(world_ref) do
-    Game.NifBridge.skip_level_up(world_ref)
+    App.NifBridge.skip_level_up(world_ref)
   end
 
   # ── エンジン内部用（GameLoop が使用。ゲームは通常呼ばない）─────────────
@@ -138,7 +138,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def create_world do
-    Game.NifBridge.create_world()
+    App.NifBridge.create_world()
   end
 
   @doc """
@@ -146,7 +146,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def physics_step(world_ref, delta_ms) do
-    Game.NifBridge.physics_step(world_ref, delta_ms)
+    App.NifBridge.physics_step(world_ref, delta_ms)
   end
 
   @doc """
@@ -154,7 +154,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def set_player_input(world_ref, dx, dy) do
-    Game.NifBridge.set_player_input(world_ref, dx, dy)
+    App.NifBridge.set_player_input(world_ref, dx, dy)
   end
 
   @doc """
@@ -162,7 +162,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def drain_frame_events(world_ref) do
-    Game.NifBridge.drain_frame_events(world_ref)
+    App.NifBridge.drain_frame_events(world_ref)
   end
 
   @doc """
@@ -170,7 +170,7 @@ defmodule Engine do
   GameLoop が使用。ゲームから直接呼ぶことはない。
   """
   def get_frame_metadata(world_ref) do
-    Game.NifBridge.get_frame_metadata(world_ref)
+    App.NifBridge.get_frame_metadata(world_ref)
   end
 
   @doc """
@@ -182,12 +182,12 @@ defmodule Engine do
   """
   def add_weapon(world_ref, weapon_name) when is_binary(weapon_name) do
     weapon_id = resolve_weapon_id(String.to_atom(weapon_name))
-    Game.NifBridge.add_weapon(world_ref, weapon_id)
+    App.NifBridge.add_weapon(world_ref, weapon_id)
   end
 
   def add_weapon(world_ref, weapon) when is_atom(weapon) do
     weapon_id = resolve_weapon_id(weapon)
-    Game.NifBridge.add_weapon(world_ref, weapon_id)
+    App.NifBridge.add_weapon(world_ref, weapon_id)
   end
 
   @doc """
@@ -195,7 +195,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def get_weapon_levels(world_ref) do
-    Game.NifBridge.get_weapon_levels(world_ref)
+    App.NifBridge.get_weapon_levels(world_ref)
   end
 
   # ── シーン操作（GameLoop が transition 処理で使用）───────────────────────

@@ -1,4 +1,4 @@
-defmodule Game.NifBridge do
+defmodule App.NifBridge do
   @moduledoc """
   Rust NIF のラッパーモジュール。
   `use Rustler` により、コンパイル時に `native/game_native` クレートが

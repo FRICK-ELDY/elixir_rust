@@ -1,6 +1,11 @@
 """
 アトラス画像生成スクリプト（Step 24: ボスエネミー対応版）
-1600x64 px の RGBA PNG を生成する:
+1600x64 px の RGBA PNG を生成する。
+
+使い方:
+    python gen_atlas.py [出力ディレクトリ]
+    出力ディレクトリ省略時はカレントディレクトリ。例:
+        python assets/_shared/gen_atlas.py assets/vampire_survivor/sprites
 
   アニメーションキャラクター（各 64x64、複数フレーム）:
   [   0.. 255] プレイヤー歩行 4 フレーム（各 64x64）
@@ -28,6 +33,10 @@
 import struct
 import zlib
 import math
+import os
+import sys
+
+OUTPUT_DIR = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
 
 W, H = 1600, 64
 
@@ -361,10 +370,12 @@ def make_png(width, height, rgba_data):
     png += chunk(b'IEND', b'')
     return png
 
-with open('atlas.png', 'wb') as f:
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+out_path = os.path.join(OUTPUT_DIR, 'atlas.png')
+with open(out_path, 'wb') as f:
     f.write(make_png(W, H, pixels))
 
-print(f"atlas.png generated ({W}x{H} RGBA)")
+print(f"atlas.png を生成: {out_path} ({W}x{H} RGBA)")
 print("  [   0.. 255] Player walk  4 frames (64x64 each)")
 print("  [ 256.. 511] Slime bounce 4 frames (64x64 each)")
 print("  [ 512.. 639] Bat flap     2 frames (64x64 each)")

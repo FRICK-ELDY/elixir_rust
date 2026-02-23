@@ -1888,5 +1888,5 @@ fn load(env: rustler::Env, _: rustler::Term) -> bool {
     true
 }
 
-rustler::init!("Elixir.Game.NifBridge", load = load);
+rustler::init!("Elixir.App.NifBridge", load = load);
 
