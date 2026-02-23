@@ -184,7 +184,7 @@
 
 ---
 
-### G2: シーン管理システムの導入
+### G2: シーン管理システムの導入 ✅ 実装済み
 
 **根拠**: ゲームフェーズのハードコード解消、複数ゲームモード対応
 
@@ -194,10 +194,13 @@
 | **目標** | シーンスタック（push/pop）、各シーンが独立した init/update/draw を持つ |
 | **効果** | ステージ選択・設定画面・チュートリアル等を追加しやすくなる |
 
-**推奨アプローチ**:
-1. Elixir 側に `Game.SceneManager` GenServer を追加
-2. シーンを `%{module: Module, state: term}` で表現
-3. Rust 側の `GamePhase` は描画用の「現在のシーン種別」に縮小
+**実装内容**:
+- `Game.SceneBehaviour` — シーンコールバック（init/update/render_type）の動作定義
+- `Game.SceneManager` GenServer — シーンスタック管理、push/pop/replace、render_type 取得
+- シーンを `%{module: Module, state: term}` で表現
+- `Game.Scenes.Playing`, `LevelUp`, `BossAlert`, `GameOver` — 各フェーズを独立シーンに分離
+- `GameLoop` を SceneManager ベースにリファクタ、tick を現在シーンの update にディスパッチ
+- `FrameCache` に render_type を追加（描画用シーン種別の参照）
 
 ---
 
