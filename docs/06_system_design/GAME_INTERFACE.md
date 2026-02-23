@@ -167,8 +167,8 @@ end
 ### 5.1 Step 33〜38 で実装予定
 
 - [x] `render_type` を atom の union から任意の atom に汎用化（Step 33）
-- [ ] `initial_scenes/0` でゲームが起動シーンを指定（Step 34, 36）
-- [ ] `physics_scenes/0` で物理演算対象シーンを抽象化（Step 35 前後）
+- [x] `initial_scenes/0` でゲームが起動シーンを指定（Step 34, 36）
+- [x] `physics_scenes/0` で物理演算対象シーンを抽象化（Step 35, 36）
 - [ ] 遷移時の特別処理の責務分離（シーン内完結 or on_transition コールバック）
 - [ ] `entity_registry/0` で ID ベースの敵・武器参照（Step 38）
 - [ ] ゲーム登録メカニズム `config :game, current: Game.VampireSurvivor`（Step 34）

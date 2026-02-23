@@ -1,28 +1,42 @@
 defmodule Game.VampireSurvivor do
   @moduledoc """
-  Step 35: ヴァンサバを Game 実装として分離。
+  Step 35–36: ヴァンサバを Game 実装として分離し、Engine.Game behaviour を実装。
 
   起動時の初期シーン構成、物理演算対象シーン、シーン遷移で使用する
-  モジュール参照を提供する。Step 36 で Engine.Game behaviour を実装予定。
+  モジュール参照を提供する。
   """
+  @behaviour Engine.Game
 
-  @doc """
-  起動時のシーンスタック。リストの先頭の要素がスタックの底（ルート）になります。
-  """
-  @spec initial_scenes() :: [%{module: module(), init_arg: term()}]
+  # ── Engine.Game callbacks ───────────────────────────────────────
+
+  @impl Engine.Game
+  def render_type, do: :playing
+
+  @impl Engine.Game
   def initial_scenes do
     [
       %{module: Game.VampireSurvivor.Scenes.Playing, init_arg: %{}}
     ]
   end
 
-  @doc """
-  物理演算を実行するシーンモジュールの一覧。
-  """
-  @spec physics_scenes() :: [module()]
+  @impl Engine.Game
+  def entity_registry, do: %{}
+
+  @impl Engine.Game
   def physics_scenes do
     [Game.VampireSurvivor.Scenes.Playing]
   end
+
+  @impl Engine.Game
+  def title, do: "Vampire Survivor"
+
+  @impl Engine.Game
+  def version, do: "0.1.0"
+
+  @impl Engine.Game
+  def context_defaults, do: %{}
+
+  # ── Vampire Survivor 固有（シーン遷移等で GameLoop が参照）──
 
   @doc "レベルアップ武器選択シーンのモジュール"
   def level_up_scene, do: Game.VampireSurvivor.Scenes.LevelUp

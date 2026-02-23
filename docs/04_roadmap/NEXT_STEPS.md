@@ -114,7 +114,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 36: Game behaviour の実装
+#### Step 36: Game behaviour の実装 ✅ 実装済み
 
 **目標**: Step 32 で設計した Game behaviour をヴァンサバが実装する。
 

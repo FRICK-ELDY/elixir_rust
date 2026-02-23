@@ -132,7 +132,7 @@ defmodule Engine.GameLoop do
   end
 
   defp build_context(state, now, elapsed) do
-    %{
+    base = %{
       tick_ms:       @tick_ms,
       world_ref:     state.world_ref,
       now:           now,
@@ -142,6 +142,8 @@ defmodule Engine.GameLoop do
       frame_count:   state.frame_count,
       start_ms:      state.start_ms,
     }
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    Map.merge(game.context_defaults(), base)
   end
 
   defp extract_state_and_opts({:continue, scene_state}), do: {scene_state, %{}}
