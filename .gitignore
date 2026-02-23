@@ -13,6 +13,7 @@ native/game_native/target/
 # ただし _build ディレクトリ自体は .gitkeep で保持
 platform/windows/_build/debug/*
 platform/windows/_build/release/*
+platform/windows/_build/.rustc_info.json
 !platform/windows/_build/debug/.gitkeep
 !platform/windows/_build/release/.gitkeep
 
