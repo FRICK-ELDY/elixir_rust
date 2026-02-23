@@ -158,6 +158,12 @@ defmodule Game.GameLoop do
     # Physics step runs in Rust (DirtyCpu NIF — won't block the BEAM scheduler)
     _frame_id = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
 
+    # Step 26: フレームイベントを drain して EventBus にブロードキャスト
+    events = Game.NifBridge.drain_frame_events(state.world_ref)
+    unless events == [] do
+      Game.EventBus.broadcast(events)
+    end
+
     # ── 1. ゲームオーバー検知（Elixir が HP 監視の司令塔）─────────
     state =
       if Game.NifBridge.is_player_dead(state.world_ref) do

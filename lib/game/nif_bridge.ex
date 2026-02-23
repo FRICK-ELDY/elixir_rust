@@ -13,6 +13,9 @@ defmodule Game.NifBridge do
   def create_world(), do: :erlang.nif_error(:nif_not_loaded)
   def physics_step(_world, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
 
+  # Step 26: フレームイベントを取り出す（[{event_atom, arg1, arg2}] のリスト）
+  def drain_frame_events(_world), do: :erlang.nif_error(:nif_not_loaded)
+
   # Step 8: プレイヤー入力・座標取得
   def set_player_input(_world, _dx, _dy), do: :erlang.nif_error(:nif_not_loaded)
   def get_player_pos(_world), do: :erlang.nif_error(:nif_not_loaded)

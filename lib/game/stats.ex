@@ -49,7 +49,32 @@ defmodule Game.Stats do
 
   @impl true
   def init(_opts) do
+    # Step 26: EventBus にサブスクライブ — 以降はイベントが自動的に届く
+    Game.EventBus.subscribe()
     {:ok, initial_state()}
+  end
+
+  @impl true
+  def handle_info({:game_events, events}, state) do
+    new_state =
+      Enum.reduce(events, state, fn
+        {:enemy_killed, enemy_kind, weapon_kind}, acc ->
+          acc
+          |> Map.update(:kills_by_enemy, %{enemy_kind => 1}, &Map.update(&1, enemy_kind, 1, fn n -> n + 1 end))
+          |> Map.update(:kills_by_weapon, %{weapon_kind => 1}, &Map.update(&1, weapon_kind, 1, fn n -> n + 1 end))
+          |> Map.update(:total_kills, 1, &(&1 + 1))
+
+        {:level_up_event, new_level, _}, acc ->
+          Map.update(acc, :max_level_reached, new_level, &max(&1, new_level))
+
+        {:item_pickup, item_kind, _}, acc ->
+          Map.update(acc, :items_collected, %{item_kind => 1}, &Map.update(&1, item_kind, 1, fn n -> n + 1 end))
+
+        _, acc ->
+          acc
+      end)
+
+    {:noreply, new_state}
   end
 
   @impl true
