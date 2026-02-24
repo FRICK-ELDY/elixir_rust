@@ -17,16 +17,23 @@ defmodule Engine.FrameCache do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
   end
 
-  @doc "GameLoop が毎秒（60 フレームごと）書き込む。render_type はシーンの render_type/0 の戻り値（任意の atom）。"
-  def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing) do
-    :ets.insert(@table, {:snapshot, %{
+  @doc """
+  GameLoop が毎秒（60 フレームごと）書き込む。
+
+  - render_type: シーンの render_type/0 の戻り値（任意の atom）
+  - high_scores: Step 43: ゲームオーバー時にハイスコア一覧を渡す（任意）
+  """
+  def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing, high_scores \\ nil) do
+    base = %{
       enemy_count:  enemy_count,
       bullet_count: bullet_count,
       physics_ms:   physics_ms,
       hud_data:     hud_data,
       render_type:  render_type,
       updated_at:   System.monotonic_time(:millisecond),
-    }})
+    }
+    data = if high_scores, do: Map.put(base, :high_scores, high_scores), else: base
+    :ets.insert(@table, {:snapshot, data})
   end
 
   @doc "StressMonitor など任意のプロセスがロックフリーで読み取る"

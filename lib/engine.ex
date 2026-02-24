@@ -236,6 +236,46 @@ defmodule Engine do
     App.NifBridge.get_weapon_levels(world_ref)
   end
 
+  # ── Step 43: セーブ・ロード ─────────────────────────────────────────────
+
+  @doc """
+  現在のゲーム状態をセーブする。saves/session.dat に保存。
+
+  ## 例
+      Engine.save_session(world_ref)
+  """
+  def save_session(world_ref), do: Engine.SaveManager.save_session(world_ref)
+
+  @doc """
+  セーブデータをロードして world_ref に復元する。
+
+  ## 戻り値
+  - `:ok` - 復元成功
+  - `:no_save` - セーブファイルなし
+  - `{:error, reason}` - ロード失敗
+  """
+  def load_session(world_ref), do: Engine.SaveManager.load_session(world_ref)
+
+  @doc """
+  セーブファイルが存在するかどうか。
+  """
+  def has_save?, do: Engine.SaveManager.has_save?()
+
+  @doc """
+  ハイスコアを記録する。
+  """
+  def save_high_score(score), do: Engine.SaveManager.save_high_score(score)
+
+  @doc """
+  保存されているハイスコア一覧を取得する。
+  """
+  def load_high_scores, do: Engine.SaveManager.load_high_scores()
+
+  @doc """
+  ベストスコア（1位）を取得する。
+  """
+  def best_score, do: Engine.SaveManager.best_score()
+
   # ── シーン操作（GameLoop が transition 処理で使用）───────────────────────
   # ゲームは {:transition, {:push, mod, arg}, state} 等の戻り値で意図を伝え、
   # 実際の push_scene 等の呼び出しは GameLoop が行う。

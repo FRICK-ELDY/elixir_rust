@@ -23,6 +23,19 @@ defmodule Engine.GameLoop do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
+  @doc """
+  Step 43: 現在のゲーム状態をセーブする。
+  """
+  def save_session, do: GenServer.cast(__MODULE__, :save_session)
+
+  @doc """
+  Step 43: セーブデータをロードしてプレイ画面に戻る。
+  - `:ok` - ロード成功
+  - `:no_save` - セーブファイルなし
+  - `{:error, reason}` - ロード失敗
+  """
+  def load_session, do: GenServer.call(__MODULE__, :load_session, 5_000)
+
   # ── GenServer callbacks ─────────────────────────────────────────
 
   @impl true
@@ -69,6 +82,30 @@ defmodule Engine.GameLoop do
 
       _ ->
         {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_cast(:save_session, state) do
+    case Engine.save_session(state.world_ref) do
+      :ok -> Logger.info("[SAVE] Session saved")
+      {:error, reason} -> Logger.warning("[SAVE] Failed: #{inspect(reason)}")
+    end
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(:load_session, _from, state) do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    result = Engine.load_session(state.world_ref)
+
+    case result do
+      :ok ->
+        Engine.SceneManager.replace_scene(game.physics_scenes() |> List.first(), %{})
+        {:reply, :ok, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
+
+      other ->
+        {:reply, other, state}
     end
   end
 
@@ -201,20 +238,29 @@ defmodule Engine.GameLoop do
     state
   end
 
-  defp process_transition({:transition, {:replace, mod, _}, _}, state, now, game) do
+  defp process_transition({:transition, {:replace, mod, init_arg}, _}, state, now, game) do
     game_over_scene = game.game_over_scene()
 
-    if mod == game_over_scene do
-      {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
-        App.NifBridge.get_frame_metadata(state.world_ref)
-      :telemetry.execute(
-        [:game, :session_end],
-        %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
-        %{}
-      )
-    end
+    init_arg =
+      if mod == game_over_scene do
+        {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
+          App.NifBridge.get_frame_metadata(state.world_ref)
 
-    Engine.SceneManager.replace_scene(mod, %{})
+        :telemetry.execute(
+          [:game, :session_end],
+          %{elapsed_seconds: (now - state.start_ms) / 1000.0, score: score},
+          %{}
+        )
+
+        # Step 43: ハイスコアを保存
+        Engine.save_high_score(score)
+
+        Map.merge(init_arg || %{}, %{high_scores: Engine.load_high_scores()})
+      else
+        init_arg || %{}
+      end
+
+    Engine.SceneManager.replace_scene(mod, init_arg)
     state
   end
 
@@ -228,7 +274,8 @@ defmodule Engine.GameLoop do
 
       hud_data = {hp, max_hp, score, elapsed_s}
       render_type = Engine.SceneManager.render_type()
-      Engine.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
+      high_scores = if render_type == :game_over, do: Engine.load_high_scores(), else: nil
+      Engine.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type, high_scores)
 
       wave = game.wave_label(elapsed_s)
       budget_warn = if physics_ms > @tick_ms, do: " [OVER BUDGET]", else: ""

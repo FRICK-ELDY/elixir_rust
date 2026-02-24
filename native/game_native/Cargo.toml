@@ -24,6 +24,8 @@ egui = "0.31"
 egui-wgpu = "0.31"
 egui-winit = "0.31"
 rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "vorbis"] }
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化

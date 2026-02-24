@@ -89,4 +89,8 @@ defmodule App.NifBridge do
   def start_rust_game_loop(_world, _control, _pid), do: :erlang.nif_error(:nif_not_loaded)
   def pause_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
   def resume_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 43: セーブ・ロード
+  def get_save_snapshot(_world), do: :erlang.nif_error(:nif_not_loaded)
+  def load_save_snapshot(_world, _snapshot), do: :erlang.nif_error(:nif_not_loaded)
 end
