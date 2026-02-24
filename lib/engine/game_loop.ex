@@ -6,6 +6,10 @@ defmodule Engine.GameLoop do
   tick の主導権を Rust に移し、Process.send_after の ±数 ms ジッターを解消。
   Elixir は {:frame_events, events} を受信してイベント駆動でシーン制御を行う。
 
+  Step 44: ルーム単位で複数インスタンスが起動可能。
+  :main ルームのみが SceneManager・FrameCache を駆動する（表示・入力対象）。
+  その他のルームは headless で physics のみ実行（Phoenix マルチプレイの土台）。
+
   Phase transitions (SceneManager + 各シーンが管理):
     :playing    → :boss_alert  (ボス出現タイミングに達したとき)
     :boss_alert → :playing     (警告演出が終わったとき → Rust に spawn_boss を指示)
@@ -21,7 +25,14 @@ defmodule Engine.GameLoop do
 
   # ── Public API ──────────────────────────────────────────────────
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts \\ []) do
+    room_id = Keyword.get(opts, :room_id, :main)
+    name = process_name(room_id)
+    GenServer.start_link(__MODULE__, opts, name: name)
+  end
+
+  defp process_name(:main), do: __MODULE__
+  defp process_name(room_id), do: {:via, Registry, {Engine.RoomRegistry, room_id}}
 
   @doc """
   Step 43: 現在のゲーム状態をセーブする。
@@ -39,7 +50,14 @@ defmodule Engine.GameLoop do
   # ── GenServer callbacks ─────────────────────────────────────────
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
+    room_id = Keyword.get(opts, :room_id, :main)
+
+    # Step 44: :main は Registry に明示登録（list_rooms で列挙するため）
+    if room_id == :main do
+      Engine.RoomRegistry.register(:main)
+    end
+
     world_ref = Engine.create_world()
 
     # Step 42: マップ障害物をロード
@@ -48,7 +66,7 @@ defmodule Engine.GameLoop do
     Engine.set_map_obstacles(world_ref, obstacles)
 
     control_ref = Engine.create_game_loop_control()
-    Engine.FrameCache.init()
+    if room_id == :main, do: Engine.FrameCache.init()
     start_ms = now_ms()
 
     # Step 41: Rust 駆動ゲームループを起動（高精度 60Hz）
@@ -57,6 +75,7 @@ defmodule Engine.GameLoop do
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
     {:ok, %{
+      room_id: room_id,
       world_ref: world_ref,
       control_ref: control_ref,
       last_tick: start_ms,
@@ -133,6 +152,15 @@ defmodule Engine.GameLoop do
 
   @impl true
   def handle_info({:frame_events, events}, state) do
+    # Step 44: 非 main ルームは headless（physics のみ、SceneManager 非使用）
+    if state.room_id != :main do
+      {:noreply, %{state | last_tick: now_ms(), frame_count: state.frame_count + 1}}
+    else
+      handle_frame_events_main(events, state)
+    end
+  end
+
+  defp handle_frame_events_main(events, state) do
     now = now_ms()
     elapsed = now - state.start_ms
 
@@ -267,7 +295,8 @@ defmodule Engine.GameLoop do
   defp process_transition(_, state, _, _), do: state
 
   defp maybe_log_and_cache(state, _mod, _elapsed, game) do
-    if rem(state.frame_count, 60) == 0 do
+    # Step 44: FrameCache は main ルームのみ更新
+    if state.room_id == :main and rem(state.frame_count, 60) == 0 do
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
         App.NifBridge.get_frame_metadata(state.world_ref)

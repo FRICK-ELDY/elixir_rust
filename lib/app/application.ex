@@ -10,14 +10,16 @@ defmodule App.Application do
     System.put_env("GAME_ASSETS_ID", assets_path)
 
     children = [
+      # Step 44: ルーム ID → GameLoop pid の Registry
+      {Registry, [keys: :unique, name: Engine.RoomRegistry]},
       # G2: シーン管理 — GameLoop より前に起動
       Engine.SceneManager,
       # Input handler: translates key events to GameLoop casts
       Engine.InputHandler,
       # Step 26: イベントバス — GameLoop より前に起動
       Engine.EventBus,
-      # Core game loop: 60 Hz physics tick via Rust NIF
-      Engine.GameLoop,
+      # Step 44: ルーム管理（内部で GameLoop を起動）
+      Engine.RoomSupervisor,
       # Independent performance monitor
       Engine.StressMonitor,
       # Step 25: ゲームセッション統計収集
@@ -27,6 +29,17 @@ defmodule App.Application do
     ]
 
     opts = [strategy: :one_for_one, name: App.Supervisor]
-    Supervisor.start_link(children, opts)
+    result = Supervisor.start_link(children, opts)
+
+    # Step 44: デフォルトルーム（:main）を起動
+    if elem(result, 0) == :ok do
+      case Engine.RoomSupervisor.start_room(:main) do
+        {:ok, _} -> :ok
+        {:error, :already_started} -> :ok
+        _ -> :ok
+      end
+    end
+
+    result
   end
 end
