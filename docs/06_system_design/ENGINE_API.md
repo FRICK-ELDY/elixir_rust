@@ -160,3 +160,4 @@ end
 | [GAME_INTERFACE.md](./GAME_INTERFACE.md) | ゲームがエンジンに提供する behaviour |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44 Phoenix Channels 連携 |
+| [SERVER_DESIGN.md](./SERVER_DESIGN.md) | サーバー設計（認証・フレンド・メッセージ・Phoenix Channels） |

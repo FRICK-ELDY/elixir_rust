@@ -109,6 +109,7 @@
 | [ASSET_MANAGEMENT.md](./06_system_design/ASSET_MANAGEMENT.md) | G3: アセット管理システム設計。AssetId、パスマッピング、Elixir/Rust の責務分離、実行時ロード | PRIORITY_STEPS G3 関連 |
 | [ENGINE_API.md](./06_system_design/ENGINE_API.md) | 安定化されたエンジン API リファレンス。ゲームから利用する関数、ルーム管理（Step 44） | API 参照時 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44: Phoenix Channels 連携の設計指針。RoomChannel 実装例、入力配信、状態同期 | マルチプレイ検討時 |
+| [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) | **サーバー設計**（Phoenix Channels 導入を視野に）。認証・プレゼンス・フレンド・メッセージ・通知と Channel 構成、実装優先順位 | サーバー設計・友達連携検討時 |
 | [REFACTOR_PROPOSAL.md](./06_system_design/REFACTOR_PROPOSAL.md) | `lib.rs` / `main.rs` の責務整理。`renderer` を lib 側に移動する提案。実施タイミング: Step 15 完了後 | 提案中 |
 
 ---
@@ -170,6 +171,7 @@ docs/
 │   ├── ASSET_MANAGEMENT.md
 │   ├── ENGINE_API.md
 │   ├── MULTIPLAYER_PHOENIX_CHANNELS.md
+│   ├── SERVER_DESIGN.md
 │   └── REFACTOR_PROPOSAL.md
 └── 07_presentation/       プレゼンテーション
     └── PRESENTATION.md
@@ -207,6 +209,7 @@ docs/
 | 汎用ゲームエンジン化の次の Step を知りたい | [STEPS_GENERALIZATION.md](./05_steps/STEPS_GENERALIZATION.md) |
 | マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_EXTENSION.md](./05_steps/STEPS_EXTENSION.md) |
 | Phoenix Channels でマルチプレイ連携したい | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) |
+| サーバー設計（認証・フレンド・メッセージ）を検討したい | [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
 | なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md), [WHY_RUST.md](./03_tech_decisions/WHY_RUST/WHY_RUST.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RUST/WHY_RAYON.md) |
 | エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
