@@ -1,7 +1,7 @@
 # プロジェクト全体評価
 
 **評価対象**: Elixir × Rust ゲームエンジン  
-**評価時点**: STEPS_MAP_SAVE_MULTI_DEBUG.md のステップ（Step 40〜45）完了後  
+**評価時点**: STEPS_EXTENSION.md のステップ（Step 40〜45）完了後  
 **作成日**: 2026-02-24
 
 > 忌憚なき評価をまとめた。強みも弱みも率直に記載している。
@@ -22,7 +22,7 @@
 
 ## 1. 達成度サマリー
 
-### 1.1 STEPS_MAP_SAVE_MULTI_DEBUG 完了状況
+### 1.1 STEPS_EXTENSION 完了状況
 
 | Step | 内容 | 状態 | 備考 |
 |------|------|------|------|
@@ -87,7 +87,7 @@
 ### 3.1 デバッグ支援の不足（Step 45 未完了）
 
 - **NIF パニック時のトレース** — Rust 側で panic が発生すると BEAM VM ごとクラッシュ。スタックトレースが Elixir 側に出ない
-- **panic_hook 未設定** — STEPS_MAP_SAVE_MULTI_DEBUG に記載の `init_panic_hook` が lib.rs に実装されていない
+- **panic_hook 未設定** — STEPS_EXTENSION に記載の `init_panic_hook` が lib.rs に実装されていない
 - **debug_dump_world 未実装** — 開発時にワールド状態を文字列で確認する NIF がない
 - **RUST_LOG 統合** — Rust の log クレートと Elixir Logger の連携が未整備
 
@@ -145,7 +145,7 @@
 ### 5.1 ロードマップの実行力
 
 - **Step 1〜45 の大半を完了** — 計画された機能が順次実装されている
-- **優先順位が明確** — PRIORITY_STEPS、NEXT_STEPS で何をすべきかが文書化されている
+- **優先順位が明確** — PRIORITY_STEPS、STEPS_GENERALIZATION で何をすべきかが文書化されている
 - **スコープ管理** — ELIXIR_RUST_DIVISION で「サポートしない」と判断した項目を明示。過剰な範囲拡大を防いでいる
 
 ### 5.2 改善提案
@@ -215,4 +215,4 @@
 |-------------|------|
 | [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) | コードベース準拠の再評価（本評価のベース） |
 | [ENGINE_STRENGTHS_WEAKNESSES.md](./ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱みの詳細比較 |
-| [STEPS_MAP_SAVE_MULTI_DEBUG.md](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) | 完了したステップの元ドキュメント |
+| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | 完了したステップの元ドキュメント |

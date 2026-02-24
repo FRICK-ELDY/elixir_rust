@@ -1,6 +1,6 @@
 # マルチプレイ・Phoenix Channels 連携
 
-**根拠**: [STEPS_MAP_SAVE_MULTI_DEBUG.md § Step 44](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#6-step-44-マルチプレイ)
+**根拠**: [STEPS_EXTENSION.md § Step 44](../05_steps/STEPS_EXTENSION.md#6-step-44-マルチプレイ)
 
 Step 44 で用意したルーム管理基盤と Phoenix Channels を連携する際の設計指針。
 
@@ -78,5 +78,5 @@ end
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_MAP_SAVE_MULTI_DEBUG.md § Step 44](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md#6-step-44-マルチプレイ) | Step 44 の目標・実装内容 |
+| [STEPS_EXTENSION.md § Step 44](../05_steps/STEPS_EXTENSION.md#6-step-44-マルチプレイ) | Step 44 の目標・実装内容 |
 | [ELIXIR_RUST_DIVISION.md § 4.2](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 競技マルチプレイ（ロールバック等）の determinism について |

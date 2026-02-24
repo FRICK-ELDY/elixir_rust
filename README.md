@@ -176,7 +176,7 @@ elixir_rust/
 - **Step 41 完了**: GameLoop の Rust 移行 — 高精度 60Hz タイマー、イベント駆動の Elixir 連携
 - **今後**: エンジン層とゲーム層の分離を進め、**誰もが Elixir × Rust 環境でゲームを作れる**形を目指す
 
-詳細は [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) と [docs/05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md](docs/05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) を参照してください。
+詳細は [docs/05_steps/STEPS_GENERALIZATION.md](docs/05_steps/STEPS_GENERALIZATION.md) と [docs/05_steps/STEPS_EXTENSION.md](docs/05_steps/STEPS_EXTENSION.md) を参照してください。
 
 ---
 
@@ -188,8 +188,8 @@ elixir_rust/
 | 環境構築 | [docs/01_setup/SETUP_ELIXIR.md](docs/01_setup/SETUP_ELIXIR.md) |
 | ゲーム仕様 | [docs/01_setup/SPEC.md](docs/01_setup/SPEC.md) |
 | Elixir/Rust 役割分担 | [docs/03_tech_decisions/ELIXIR_RUST_DIVISION.md](docs/03_tech_decisions/ELIXIR_RUST_DIVISION.md) |
-| 汎用化ロードマップ | [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) |
-| 実装ステップ | [docs/05_steps/STEPS.md](docs/05_steps/STEPS.md) |
+| 汎用化ロードマップ | [docs/05_steps/STEPS_GENERALIZATION.md](docs/05_steps/STEPS_GENERALIZATION.md) |
+| 実装ステップ | [docs/05_steps/STEPS_BASE.md](docs/05_steps/STEPS_BASE.md) |
 
 ---
 

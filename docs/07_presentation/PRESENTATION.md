@@ -445,10 +445,10 @@ Step 41〜44: 拡張（マップ・障害物、セーブ・ロード、マルチ
 
 | ドキュメント | 内容 |
 |---|---|
-| [STEPS.md](../05_steps/STEPS.md) | Step 1〜15 の実装ガイド |
+| [STEPS_BASE.md](../05_steps/STEPS_BASE.md) | Step 1〜15 の実装ガイド |
 | [STEPS_QUALITY.md](../05_steps/STEPS_QUALITY.md) | Step 16〜25 クオリティアップ |
 | [STEPS_PERF.md](../05_steps/STEPS_PERF.md) | Step 26〜31 パフォーマンス改善 |
-| [STEPS_MAP_SAVE_MULTI_DEBUG.md](../05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) | Step 41〜44 マップ・セーブ・マルチ・デバッグ |
+| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 41〜44 マップ・セーブ・マルチ・デバッグ |
 | [ENGINE_API.md](../06_system_design/ENGINE_API.md) | エンジン API 設計（安定化） |
 | [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱み総合サマリー |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |
