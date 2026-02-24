@@ -13,6 +13,7 @@ use core::entity_params::{
 use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_SEPARATION_FORCE,
+    MAP_HEIGHT, MAP_WIDTH,
     WEAPON_SEARCH_RADIUS,
     ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS,
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
@@ -20,13 +21,15 @@ use core::constants::{
 };
 use core::item::{ItemKind, ItemWorld};
 use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::obstacle_resolve;
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
-use core::util::{exp_required_for_next, spawn_position_outside};
+use core::util::{exp_required_for_next, spawn_position_around_player};
 use rayon::prelude::*;
 use rustler::env::OwnedEnv;
-use rustler::{Atom, Encoder, LocalPid, NifResult, ResourceArc};
+use rustler::types::list::ListIterator;
+use rustler::{Atom, Encoder, LocalPid, NifResult, ResourceArc, Term};
 use std::sync::RwLock;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -697,6 +700,8 @@ pub struct GameWorldInner {
     pub magnet_timer:       f32,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
+    /// Step 42: 障害物クエリ用バッファ（毎フレーム再利用）
+    pub obstacle_query_buf: Vec<usize>,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
     pub last_frame_time_ms: f64,
     /// ─── Step 13: HUD ─────────────────────────────────────────
@@ -773,6 +778,7 @@ fn create_world() -> ResourceArc<GameWorld> {
         magnet_timer:       0.0,
         rng:                SimpleRng::new(12345),
         collision:          CollisionWorld::new(CELL_SIZE),
+        obstacle_query_buf: Vec::new(),
         last_frame_time_ms: 0.0,
         score:              0,
         elapsed_seconds:    0.0,
@@ -801,15 +807,69 @@ fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> NifResul
     Ok(ok())
 }
 
-/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem）
+/// プレイヤー周囲 800〜1200px の円周上にスポーン位置を生成（spawn_enemies / spawn_elite_enemy 共通）
+fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Vec<(f32, f32)> {
+    let px = w.player.x + PLAYER_RADIUS;
+    let py = w.player.y + PLAYER_RADIUS;
+    (0..count)
+        .map(|_| spawn_position_around_player(&mut w.rng, px, py, 800.0, 1200.0))
+        .collect()
+}
+
+/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Ghost）
+/// SPEC: プレイヤーから 800〜1200px の円周上にスポーン（見つけやすい距離）
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
-    let positions: Vec<(f32, f32)> = (0..count)
-        .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
-        .collect();
+    let positions = get_spawn_positions_around_player(&mut w, count);
     w.enemies.spawn(&positions, kind_id);
     Ok(ok())
+}
+
+/// Step 42: マップ障害物を設定。obstacles: [{x, y, radius, kind}, ...]（kind: 0=木, 1=岩）
+#[rustler::nif]
+fn set_map_obstacles(world: ResourceArc<GameWorld>, obstacles_term: Term) -> NifResult<Atom> {
+    let list: ListIterator = obstacles_term.decode()?;
+    let mut obstacles: Vec<(f32, f32, f32, u8)> = Vec::new();
+    for item in list {
+        let tuple: (f64, f64, f64, u32) = item.decode()?;
+        obstacles.push((
+            tuple.0 as f32,
+            tuple.1 as f32,
+            tuple.2 as f32,
+            tuple.3 as u8,
+        ));
+    }
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    w.collision.rebuild_static(&obstacles);
+    Ok(ok())
+}
+
+/// Step 42: 敵が障害物と重なっている場合に押し出す（Ghost はスキップ）
+fn resolve_obstacles_enemy(w: &mut GameWorldInner) {
+    let collision = &w.collision;
+    let buf = &mut w.obstacle_query_buf;
+    for i in 0..w.enemies.len() {
+        if !w.enemies.alive[i] || EnemyParams::passes_through_obstacles(w.enemies.kind_ids[i]) {
+            continue;
+        }
+        let r = EnemyParams::get(w.enemies.kind_ids[i]).radius;
+        let cx = w.enemies.positions_x[i] + r;
+        let cy = w.enemies.positions_y[i] + r;
+        collision.query_static_nearby_into(cx, cy, r, buf);
+        for &idx in buf.iter() {
+            if let Some(o) = collision.obstacles.get(idx) {
+                let dx = cx - o.x;
+                let dy = cy - o.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(0.001);
+                let overlap = (r + o.radius) - dist;
+                if overlap > 0.0 {
+                    w.enemies.positions_x[i] += (dx / dist) * overlap;
+                    w.enemies.positions_y[i] += (dy / dist) * overlap;
+                }
+            }
+        }
+    }
 }
 
 /// Step 41: 物理ステップの内部実装（NIF と Rust ゲームループスレッドの両方から呼ぶ）
@@ -832,8 +892,16 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         w.player.y += (dy / len) * PLAYER_SPEED * dt;
     }
 
-    w.player.x = w.player.x.clamp(0.0, SCREEN_WIDTH  - PLAYER_SIZE);
-    w.player.y = w.player.y.clamp(0.0, SCREEN_HEIGHT - PLAYER_SIZE);
+    // Step 42: プレイヤー vs 障害物（重なったら押し出し）
+    obstacle_resolve::resolve_obstacles_player(
+        &w.collision,
+        &mut w.player.x,
+        &mut w.player.y,
+        &mut w.obstacle_query_buf,
+    );
+
+    w.player.x = w.player.x.clamp(0.0, MAP_WIDTH  - PLAYER_SIZE);
+    w.player.y = w.player.y.clamp(0.0, MAP_HEIGHT - PLAYER_SIZE);
 
     // Chase AI（x86_64 では SIMD 版、それ以外は rayon 版）
     let px = w.player.x + PLAYER_RADIUS;
@@ -845,6 +913,9 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
 
     // 敵同士の重なりを解消する分離パス
     apply_separation(&mut w.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
+
+    // Step 42: 敵 vs 障害物（Ghost 以外は押し出し）
+    resolve_obstacles_enemy(w);
 
     // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築
@@ -1230,10 +1301,16 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
             w.bullets.kill(i);
             continue;
         }
-        // 画面外に出た弾丸も消す
+        // Step 42: 障害物に当たったら弾を消す
         let bx = w.bullets.positions_x[i];
         let by = w.bullets.positions_y[i];
-        if bx < -100.0 || bx > SCREEN_WIDTH + 100.0 || by < -100.0 || by > SCREEN_HEIGHT + 100.0 {
+        w.collision.query_static_nearby_into(bx, by, BULLET_RADIUS, &mut w.obstacle_query_buf);
+        if !w.obstacle_query_buf.is_empty() {
+            w.bullets.kill(i);
+            continue;
+        }
+        // 画面外に出た弾丸も消す
+        if bx < -100.0 || bx > MAP_WIDTH + 100.0 || by < -100.0 || by > MAP_HEIGHT + 100.0 {
             w.bullets.kill(i);
         }
     }
@@ -1886,9 +1963,7 @@ fn is_player_dead(world: ResourceArc<GameWorld>) -> NifResult<bool> {
 fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     let ep = EnemyParams::get(kind_id);
-    let positions: Vec<(f32, f32)> = (0..count)
-        .map(|_| spawn_position_outside(&mut w.rng, SCREEN_WIDTH, SCREEN_HEIGHT))
-        .collect();
+    let positions = get_spawn_positions_around_player(&mut w, count);
     // 通常スポーン後に HP を倍率で上書き
     let before_len = w.enemies.positions_x.len();
     w.enemies.spawn(&positions, kind_id);

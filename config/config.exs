@@ -11,6 +11,9 @@ import Config
 config :game, current: Game.MiniShooter
 # config :game, current: Game.VampireSurvivor
 
+# Step 42: マップ障害物。:plain | :forest | :minimal
+config :game, map: :plain
+
 # Step 39: ゲーム別アセットパス
 # ゲームの assets_path/0 で上書き可能。未指定時は current ゲームの assets_path を使用。
 # GAME_ASSETS_ID 環境変数として game_window 等に渡され、assets/{id}/ を参照する。

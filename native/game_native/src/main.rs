@@ -33,13 +33,21 @@ use core::constants::{
 use core::item::{ItemKind, ItemWorld};
 use core::entity_params::{WeaponParams, lightning_chain_count, whip_range};
 use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::obstacle_resolve;
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
 use core::enemy::EnemyKind;
 use core::boss::BossKind;
-use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_outside};
+use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_around_player};
 use renderer::{BossHudInfo, HudData, Renderer};
+
+// Step 42: game_window 用のデフォルト障害物（マップ中央付近に配置・起動時に見える）
+const DEFAULT_OBSTACLES: &[(f32, f32, f32, u8)] = &[
+    (2400.0, 2016.0, 40.0, 0),
+    (1650.0, 2300.0, 30.0, 1),
+    (2300.0, 1700.0, 35.0, 0),
+];
 
 // ─── Step 24: ボスエネミー ─────────────────────────────────────
 
@@ -387,6 +395,8 @@ struct GameWorld {
     items:            ItemWorld,
     magnet_timer:     f32,
     collision:        CollisionWorld,
+    /// Step 42: 障害物クエリ用バッファ
+    obstacle_query_buf: Vec<usize>,
     rng:              SimpleRng,
     score:            u32,
     elapsed_seconds:  f32,
@@ -468,7 +478,12 @@ impl GameWorld {
             particles:        ParticleWorld::new(67890),
             items:            ItemWorld::new(),
             magnet_timer:     0.0,
-            collision:        CollisionWorld::new(CELL_SIZE),
+            collision:        {
+                let mut c = CollisionWorld::new(CELL_SIZE);
+                c.rebuild_static(DEFAULT_OBSTACLES);
+                c
+            },
+            obstacle_query_buf: Vec::new(),
             rng:              SimpleRng::new(42),
             score:            0,
             elapsed_seconds:  0.0,
@@ -541,6 +556,9 @@ impl GameWorld {
             self.player.x += (dx / len) * PLAYER_SPEED * dt;
             self.player.y += (dy / len) * PLAYER_SPEED * dt;
         }
+        // Step 42: プレイヤー vs 障害物（重なったら押し出し）
+        self.resolve_obstacles_player();
+
         // Step 20: マップ境界内に制限
         self.player.x = self.player.x.clamp(0.0, MAP_WIDTH  - PLAYER_SIZE);
         self.player.y = self.player.y.clamp(0.0, MAP_HEIGHT - PLAYER_SIZE);
@@ -578,6 +596,9 @@ impl GameWorld {
 
         // 敵同士の重なりを解消する分離パス
         apply_separation(&mut self.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
+
+        // Step 42: 敵 vs 障害物（main には Ghost なし、全員押し出し）
+        self.resolve_obstacles_enemy();
 
         // 衝突: Spatial Hash 再構築
         self.collision.dynamic.clear();
@@ -921,6 +942,12 @@ impl GameWorld {
             }
             let bx = self.bullets.positions_x[i];
             let by = self.bullets.positions_y[i];
+            // Step 42: 障害物に当たったら弾を消す
+            self.collision.query_static_nearby_into(bx, by, BULLET_RADIUS, &mut self.obstacle_query_buf);
+            if !self.obstacle_query_buf.is_empty() {
+                self.bullets.kill(i);
+                continue;
+            }
             // Step 20: 画面外判定をマップサイズ基準に変更（ワールド座標で判定）
             if bx < -100.0 || bx > MAP_WIDTH + 100.0 || by < -100.0 || by > MAP_HEIGHT + 100.0 {
                 self.bullets.kill(i);
@@ -1263,7 +1290,7 @@ impl GameWorld {
             let kind = EnemyKind::for_elapsed(self.elapsed_seconds, &mut self.rng);
             let elite = is_elite_spawn(self.elapsed_seconds, &mut self.rng);
             let positions: Vec<(f32, f32)> = (0..to_spawn)
-                .map(|_| spawn_position_outside(&mut self.rng, MAP_WIDTH, MAP_HEIGHT))
+                .map(|_| spawn_position_around_player(&mut self.rng, px, py, 800.0, 1200.0))
                 .collect();
             self.enemies.spawn(&positions, kind, elite);
             self.last_spawn_secs = self.elapsed_seconds;
@@ -1333,6 +1360,46 @@ impl GameWorld {
     /// Step 20: カメラオフセットを返す
     fn camera_offset(&self) -> (f32, f32) {
         (self.camera_x, self.camera_y)
+    }
+
+    /// Step 42: プレイヤーが障害物と重なっている場合に押し出す（core::physics::obstacle_resolve と共通）
+    fn resolve_obstacles_player(&mut self) {
+        obstacle_resolve::resolve_obstacles_player(
+            &self.collision,
+            &mut self.player.x,
+            &mut self.player.y,
+            &mut self.obstacle_query_buf,
+        );
+    }
+
+    /// Step 42: 敵が障害物と重なっている場合に押し出す（main には Ghost なし）
+    fn resolve_obstacles_enemy(&mut self) {
+        for i in 0..self.enemies.len() {
+            if !self.enemies.alive[i] { continue; }
+            let r = self.enemies.kinds[i].radius();
+            let cx = self.enemies.positions_x[i] + r;
+            let cy = self.enemies.positions_y[i] + r;
+            self.collision.query_static_nearby_into(cx, cy, r, &mut self.obstacle_query_buf);
+            for &idx in &self.obstacle_query_buf {
+                if let Some(o) = self.collision.obstacles.get(idx) {
+                    let dx = cx - o.x;
+                    let dy = cy - o.y;
+                    let dist = (dx * dx + dy * dy).sqrt().max(0.001);
+                    let overlap = (r + o.radius) - dist;
+                    if overlap > 0.0 {
+                        self.enemies.positions_x[i] += (dx / dist) * overlap;
+                        self.enemies.positions_y[i] += (dy / dist) * overlap;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Step 42: 障害物の描画データを返す [(x, y, radius, kind)]
+    fn get_obstacle_data(&self) -> Vec<(f32, f32, f32, u8)> {
+        self.collision.obstacles.iter()
+            .map(|o| (o.x, o.y, o.radius, o.kind))
+            .collect()
     }
 
     /// Step 23/24/25: (x, y, kind, anim_frame) を返す
@@ -1597,8 +1664,9 @@ impl ApplicationHandler for App {
                     let render_data    = self.game.get_render_data();
                     let particle_data  = self.game.get_particle_data();
                     let item_data      = self.game.get_item_data();
+                    let obstacle_data  = self.game.get_obstacle_data();
                     let camera_offset  = self.game.camera_offset();
-                    renderer.update_instances(&render_data, &particle_data, &item_data, camera_offset);
+                    renderer.update_instances(&render_data, &particle_data, &item_data, &obstacle_data, camera_offset);
                     let hud = self.game.hud_data(renderer.current_fps);
                     if let Some(chosen) = renderer.render(window, &hud) {
                         match chosen.as_str() {

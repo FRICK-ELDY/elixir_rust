@@ -11,6 +11,9 @@ defmodule App.NifBridge do
 
   def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
   def create_world(), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 42: マップ障害物を設定。obstacles: [{x, y, radius, kind}, ...]
+  def set_map_obstacles(_world, _obstacles), do: :erlang.nif_error(:nif_not_loaded)
   def physics_step(_world, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
 
   # Step 26: フレームイベントを取り出す（[{event_atom, arg1, arg2}] のリスト）

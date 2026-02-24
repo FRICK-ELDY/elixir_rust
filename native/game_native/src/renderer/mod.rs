@@ -569,12 +569,14 @@ impl Renderer {
     /// render_data: [(x, y, kind, anim_frame)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
     /// item_data: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
+    /// obstacle_data: [(x, y, radius, kind)] kind: 0=木, 1=岩（Step 42）
     /// camera_offset: (cam_x, cam_y) カメラのワールド座標オフセット（Step 20）
     pub fn update_instances(
         &mut self,
         render_data: &[(f32, f32, u8, u8)],
         particle_data: &[(f32, f32, f32, f32, f32, f32, f32)],
         item_data: &[(f32, f32, u8)],
+        obstacle_data: &[(f32, f32, f32, u8)],
         camera_offset: (f32, f32),
     ) {
         // Step 20: カメラ Uniform を更新
@@ -591,7 +593,7 @@ impl Renderer {
         let (rock_uv_off, rock_uv_sz)               = rock_bullet_uv();
 
         let mut instances: Vec<SpriteInstance> =
-            Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len());
+            Vec::with_capacity(render_data.len() + particle_data.len() + item_data.len() + obstacle_data.len());
 
         for &(x, y, kind, anim_frame) in render_data {
             let inst = match kind {
@@ -700,6 +702,24 @@ impl Renderer {
                 uv_offset:  particle_uv_off,
                 uv_size:    particle_uv_sz,
                 color_tint: [r, g, b, alpha],
+            });
+        }
+
+        // Step 42: 障害物を描画（木=緑褐色、岩=灰色の円）
+        for &(x, y, radius, kind) in obstacle_data {
+            if instances.len() >= MAX_INSTANCES { break; }
+            let (r, g, b) = if kind == 0 {
+                (0.35, 0.55, 0.2)  // 木
+            } else {
+                (0.45, 0.45, 0.5)  // 岩
+            };
+            let sz = radius * 2.0;
+            instances.push(SpriteInstance {
+                position:   [x - radius, y - radius],
+                size:       [sz, sz],
+                uv_offset:  particle_uv_off,
+                uv_size:    particle_uv_sz,
+                color_tint: [r, g, b, 1.0],
             });
         }
 
