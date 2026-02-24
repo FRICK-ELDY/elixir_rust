@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 fn init_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         eprintln!("[Rust NIF Panic] {}", info);
-        eprintln!("Backtrace:\n{:?}", std::backtrace::Backtrace::capture());
+        eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::force_capture());
     }));
 }
 
