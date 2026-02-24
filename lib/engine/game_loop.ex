@@ -87,6 +87,13 @@ defmodule Engine.GameLoop do
   end
 
   @impl true
+  def terminate(_reason, %{room_id: :main}) do
+    Engine.RoomRegistry.unregister(:main)
+    :ok
+  end
+  def terminate(_reason, _state), do: :ok
+
+  @impl true
   def handle_cast({:select_weapon, :__skip__}, state) do
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
     level_up_scene = game.level_up_scene()

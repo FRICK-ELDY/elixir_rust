@@ -37,7 +37,6 @@ defmodule Engine.RoomRegistry do
   def list_rooms do
     @registry
     |> Registry.select([{{:"$1", :_, :_}, [], [:"$1"]}])
-    |> Enum.uniq()
   end
 
   @doc """
