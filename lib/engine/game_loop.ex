@@ -2,8 +2,9 @@ defmodule Engine.GameLoop do
   @moduledoc """
   60 Hz game loop implemented as a GenServer.
 
-  G2: シーン管理システム — SceneManager がスタックでシーンを管理。
-  各シーンが独立した init/update を持ち、GameLoop は tick をディスパッチする。
+  Step 41: Rust 駆動の高精度タイマーを使用。
+  tick の主導権を Rust に移し、Process.send_after の ±数 ms ジッターを解消。
+  Elixir は {:frame_events, events} を受信してイベント駆動でシーン制御を行う。
 
   Phase transitions (SceneManager + 各シーンが管理):
     :playing    → :boss_alert  (ボス出現タイミングに達したとき)
@@ -26,15 +27,19 @@ defmodule Engine.GameLoop do
 
   @impl true
   def init(_opts) do
-    world_ref = App.NifBridge.create_world()
+    world_ref = Engine.create_world()
+    control_ref = Engine.create_game_loop_control()
     Engine.FrameCache.init()
     start_ms = now_ms()
-    Process.send_after(self(), :tick, @tick_ms)
+
+    # Step 41: Rust 駆動ゲームループを起動（高精度 60Hz）
+    Engine.start_rust_game_loop(world_ref, control_ref, self())
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
     {:ok, %{
       world_ref: world_ref,
+      control_ref: control_ref,
       last_tick: start_ms,
       frame_count: 0,
       start_ms: start_ms,
@@ -52,6 +57,7 @@ defmodule Engine.GameLoop do
       {:ok, %{module: ^level_up_scene}} ->
         Engine.skip_level_up(state.world_ref)
         Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
+        Engine.resume_physics(state.control_ref)
         Engine.SceneManager.pop_scene()
         {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
 
@@ -71,6 +77,7 @@ defmodule Engine.GameLoop do
         new_weapon_levels = fetch_weapon_levels(state.world_ref)
         lv = Map.get(new_weapon_levels, weapon, 1)
         Logger.info("[LEVEL UP] Weapon selected: #{game.weapon_label(weapon, lv)} -> resuming")
+        Engine.resume_physics(state.control_ref)
         Engine.SceneManager.pop_scene()
         {:noreply, %{state | weapon_levels: new_weapon_levels}}
 
@@ -79,12 +86,11 @@ defmodule Engine.GameLoop do
     end
   end
 
-  # ── Tick: 全シーン共通ディスパッチ ───────────────────────────────
+  # ── Step 41: Rust からの frame_events を受信してシーン更新 ─────────
 
   @impl true
-  def handle_info(:tick, state) do
+  def handle_info({:frame_events, events}, state) do
     now = now_ms()
-    delta = now - state.last_tick
     elapsed = now - state.start_ms
 
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
@@ -92,11 +98,10 @@ defmodule Engine.GameLoop do
 
     case Engine.SceneManager.current() do
       :empty ->
-        Process.send_after(self(), :tick, @tick_ms)
         {:noreply, %{state | last_tick: now}}
 
       {:ok, %{module: mod, state: scene_state}} ->
-        state = maybe_run_physics(state, mod, physics_scenes, delta)
+        state = maybe_set_input_and_broadcast(state, mod, physics_scenes, events)
 
         context = build_context(state, now, elapsed)
         result = mod.update(context, scene_state)
@@ -108,8 +113,6 @@ defmodule Engine.GameLoop do
         state = process_transition(result, state, now, game)
         state = maybe_log_and_cache(state, mod, elapsed, game)
 
-        Process.send_after(self(), :tick, @tick_ms)
-
         {:noreply, %{state |
           last_tick: now,
           frame_count: state.frame_count + 1,
@@ -119,12 +122,11 @@ defmodule Engine.GameLoop do
 
   # ── ヘルパー ────────────────────────────────────────────────────
 
-  defp maybe_run_physics(state, mod, physics_scenes, delta) do
+  # Step 41: Rust が physics を実行済み。入力設定とイベント配信のみ
+  defp maybe_set_input_and_broadcast(state, mod, physics_scenes, events) do
     if mod in physics_scenes do
       {dx, dy} = Engine.InputHandler.get_move_vector()
-      App.NifBridge.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-      _ = App.NifBridge.physics_step(state.world_ref, delta * 1.0)
-      events = App.NifBridge.drain_frame_events(state.world_ref)
+      Engine.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
       unless events == [], do: Engine.EventBus.broadcast(events)
     end
 
@@ -174,14 +176,21 @@ defmodule Engine.GameLoop do
             Logger.info("[LEVEL UP] Auto-skipped (no choices) -> resuming")
             state
         end
+      Engine.resume_physics(state.control_ref)
       Engine.SceneManager.pop_scene()
     else
+      Engine.resume_physics(state.control_ref)
       Engine.SceneManager.pop_scene()
     end
     state
   end
 
-  defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now, _game) do
+  defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now, game) do
+    # LevelUp・BossAlert 中は physics を停止
+    if mod == game.level_up_scene() or mod == game.boss_alert_scene() do
+      Engine.pause_physics(state.control_ref)
+    end
+
     Engine.SceneManager.push_scene(mod, init_arg)
     state
   end
@@ -205,7 +214,7 @@ defmodule Engine.GameLoop do
 
   defp process_transition(_, state, _, _), do: state
 
-  defp maybe_log_and_cache(state, _mod, elapsed, game) do
+  defp maybe_log_and_cache(state, _mod, _elapsed, game) do
     if rem(state.frame_count, 60) == 0 do
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =

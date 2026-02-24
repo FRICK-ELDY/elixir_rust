@@ -142,6 +142,36 @@ defmodule Engine do
   end
 
   @doc """
+  Step 41: ゲームループ制御用リソースを作成する。
+  pause_physics / resume_physics で使用。
+  """
+  def create_game_loop_control do
+    App.NifBridge.create_game_loop_control()
+  end
+
+  @doc """
+  Step 41: Rust 駆動の高精度ゲームループを起動する。
+  pid には GameLoop の self() を渡す。
+  """
+  def start_rust_game_loop(world_ref, control_ref, pid) do
+    App.NifBridge.start_rust_game_loop(world_ref, control_ref, pid)
+  end
+
+  @doc """
+  Step 41: LevelUp・BossAlert 中に physics を一時停止する。
+  """
+  def pause_physics(control_ref) do
+    App.NifBridge.pause_physics(control_ref)
+  end
+
+  @doc """
+  Step 41: physics を再開する。
+  """
+  def resume_physics(control_ref) do
+    App.NifBridge.resume_physics(control_ref)
+  end
+
+  @doc """
   物理演算を1ステップ実行する。GameLoop の tick から呼ばれる。
   ゲームから直接呼ぶことはない。
   """

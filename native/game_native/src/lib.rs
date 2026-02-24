@@ -25,8 +25,33 @@ use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
 use core::util::{exp_required_for_next, spawn_position_outside};
 use rayon::prelude::*;
-use rustler::{Atom, NifResult, ResourceArc};
+use rustler::env::OwnedEnv;
+use rustler::{Atom, Encoder, LocalPid, NifResult, ResourceArc};
 use std::sync::RwLock;
+use std::thread;
+use std::time::{Duration, Instant};
+
+// Step 41: GameLoop 制御用（pause/resume）
+pub struct GameLoopControl {
+    paused: std::sync::atomic::AtomicBool,
+}
+
+impl GameLoopControl {
+    pub fn new() -> Self {
+        Self {
+            paused: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+    pub fn pause(&self) {
+        self.paused.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn resume(&self) {
+        self.paused.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
 
 rustler::atoms! {
     ok,
@@ -57,6 +82,8 @@ rustler::atoms! {
     level_up_event,
     item_pickup,
     boss_defeated,
+    // Step 41: Rust ゲームループ → Elixir 送信用
+    frame_events,
 }
 
 /// Step 26: フレーム内で発生したゲームイベント（EventBus 用）
@@ -785,12 +812,10 @@ fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> Ni
     Ok(ok())
 }
 
-/// 物理ステップ: プレイヤー移動 + Chase AI + 衝突判定（Step 8/9/10/12）
-#[rustler::nif(schedule = "DirtyCpu")]
-fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
+/// Step 41: 物理ステップの内部実装（NIF と Rust ゲームループスレッドの両方から呼ぶ）
+pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     let t_start = std::time::Instant::now();
 
-    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     w.frame_id += 1;
 
     let dt = delta_ms as f32 / 1000.0;
@@ -1538,17 +1563,19 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
             w.enemies.count
         );
     }
+}
 
+/// 物理ステップ NIF（Step 41 で Rust ループ使用時は NIF 経由では呼ばない）
+#[rustler::nif(schedule = "DirtyCpu")]
+fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    physics_step_inner(&mut w, delta_ms);
     Ok(w.frame_id)
 }
 
-/// Step 26: フレームイベントを取り出してクリアする（毎フレーム GameLoop が呼ぶ）
-/// 戻り値: [{:enemy_killed, enemy_kind, weapon_kind}, {:player_damaged, damage_x1000, 0}, ...]
-/// 引数は u32 で統一（damage は 1000 倍で精度を保つ、その他は 0 パディング）
-#[rustler::nif]
-fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
-    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
-    let events = w.frame_events
+/// Step 41: フレームイベントを取り出す内部実装（Rust ゲームループスレッドから呼ぶ）
+pub(crate) fn drain_frame_events_inner(w: &mut GameWorldInner) -> Vec<(Atom, u32, u32)> {
+    w.frame_events
         .drain(..)
         .map(|e| match e {
             FrameEvent::EnemyKilled { enemy_kind, weapon_kind } =>
@@ -1562,8 +1589,14 @@ fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32
             FrameEvent::BossDefeated { boss_kind } =>
                 (boss_defeated(), boss_kind as u32, 0),
         })
-        .collect();
-    Ok(events)
+        .collect()
+}
+
+/// Step 26: フレームイベントを取り出してクリアする（Elixir tick 駆動時のみ使用）
+#[rustler::nif]
+fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
+    let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    Ok(drain_frame_events_inner(&mut w))
 }
 
 /// プレイヤー座標を返す（Step 8）
@@ -1875,16 +1908,97 @@ fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, h
     Ok(ok())
 }
 
+// ─── Step 41: Rust ゲームループ NIF ─────────────────────────────
+
+/// ゲームループ制御用リソースを作成（pause/resume 用）
+#[rustler::nif]
+fn create_game_loop_control() -> ResourceArc<GameLoopControl> {
+    ResourceArc::new(GameLoopControl::new())
+}
+
+/// Step 41: Rust 駆動の高精度ゲームループを起動。
+/// 別スレッドで固定 16.67ms (60Hz) の physics_step を実行し、
+/// フレームイベントを Elixir の pid に {:frame_events, events} で送信する。
+#[rustler::nif]
+fn start_rust_game_loop(
+    world: ResourceArc<GameWorld>,
+    control: ResourceArc<GameLoopControl>,
+    pid: LocalPid,
+) -> NifResult<Atom> {
+    let world_clone = world.clone();
+    let control_clone = control.clone();
+
+    thread::spawn(move || {
+        run_rust_game_loop(world_clone, control_clone, pid);
+    });
+
+    Ok(ok())
+}
+
+/// ゲームループスレッドの本体
+fn run_rust_game_loop(
+    world: ResourceArc<GameWorld>,
+    control: ResourceArc<GameLoopControl>,
+    pid: LocalPid,
+) {
+    const TICK_MS: f64 = 1000.0 / 60.0; // 16.67ms @ 60Hz
+    let mut next_tick = Instant::now();
+
+    loop {
+        next_tick += Duration::from_secs_f64(TICK_MS / 1000.0);
+        let now = Instant::now();
+        if next_tick > now {
+            thread::sleep(next_tick - now);
+        }
+        if next_tick <= now {
+            next_tick = Instant::now();
+        }
+
+        let events: Vec<(Atom, u32, u32)> = if control.is_paused() {
+            Vec::new()
+        } else {
+            let mut w = match world.0.write() {
+                Ok(guard) => guard,
+                Err(_) => break,
+            };
+            physics_step_inner(&mut w, TICK_MS);
+            drain_frame_events_inner(&mut w)
+        };
+
+        // 毎フレーム送信（pause 中は空リスト）。LevelUp/BossAlert も update を回すため。
+        let mut env = OwnedEnv::new();
+        let _ = env.send_and_clear(&pid, |env| {
+            (frame_events(), events.clone()).encode(env)
+        });
+    }
+}
+
+/// LevelUp・BossAlert 中に physics を一時停止する
+#[rustler::nif]
+fn pause_physics(control: ResourceArc<GameLoopControl>) -> NifResult<Atom> {
+    control.pause();
+    Ok(ok())
+}
+
+/// physics を再開する
+#[rustler::nif]
+fn resume_physics(control: ResourceArc<GameLoopControl>) -> NifResult<Atom> {
+    control.resume();
+    Ok(ok())
+}
+
 // ─── ローダー ─────────────────────────────────────────────────
 
 #[allow(non_local_definitions)]
 fn load(env: rustler::Env, _: rustler::Term) -> bool {
     let _ = rustler::resource!(GameWorld, env);
+    let _ = rustler::resource!(GameLoopControl, env);
     // アトムを NIF ロード時に事前登録して、比較が確実に動作するようにする
     let _ = ok();
     let _ = slime();
     let _ = bat();
     let _ = golem();
+    let _ = frame_events();
     true
 }
 

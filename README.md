@@ -57,52 +57,56 @@ cd native/game_native && cargo test
 
 ## アーキテクチャ
 
-### 現状（Elixir 主導）
+### 現状（Step 41: Rust 駆動ゲームループ）
 
 ```mermaid
 flowchart TB
     subgraph Elixir [Elixir / BEAM VM]
-        GL[GameLoop\n60Hz tick]
+        GL[GameLoop\nイベント駆動]
         SM[SceneManager]
         EB[EventBus / FrameCache]
         IH[InputHandler / ETS]
         SS[SpawnSystem / BossSystem\nLevelSystem / Stats]
 
-        GL -->|"send_after 16ms"| GL
+        GL -->|"frame_events 受信"| GL
         GL -->|current scene| SM
         GL -->|broadcast| EB
         IH -->|input| GL
         SM --> SS
     end
 
-    subgraph Rust [Rust / NIF]
-        PS[physics_step]
+    subgraph Rust [Rust / NIF + スレッド]
+        RGL[Rust ゲームループ\n60Hz 固定 dt]
+        PS[physics_step_inner]
         GWM[get_frame_metadata]
         GW[GameWorld\nRwLock]
 
+        RGL -->|"毎フレーム"| PS
         PS --> GW
         GWM --> GW
+        RGL -->|":frame_events"| GL
     end
 
     subgraph Render [Rust 描画]
         WG[wgpu レンダラ]
     end
 
-    GL -->|"physics_step world_ref delta_ms"| PS
+    GL -->|set_player_input| GW
     GL -->|get_frame_metadata| GWM
     PS -->|描画データ| WG
 ```
+
+**Step 41**: tick の主導権を Rust に移行。`std::time::Instant` で固定 16.67ms (60Hz) の physics step。Elixir は `{:frame_events, events}` を受信してイベント駆動でシーン制御。
 
 **Rust レイヤーの構成**: SoA ECS | 空間ハッシュ | フリーリスト | SIMD Chase AI | RwLock
 
 ### 1 フレームの流れ
 
-1. GameLoop が `:tick` を受信（16 ms 間隔）
-2. NIF `physics_step(world_ref, delta)` を呼び出し  
-   → Rust: 移動・衝突・AI・武器処理 → 描画データを wgpu へ渡す
-3. NIF `get_frame_metadata` で HUD 用メタデータ（HP、敵数、弾数など）を取得
-4. EventBus でイベントを配信、FrameCache にキャッシュ
-5. 次の `:tick` をスケジュール
+1. Rust ゲームループスレッドが 16.67ms 間隔で `physics_step` を実行
+2. フレームイベントを Elixir の GameLoop に `{:frame_events, events}` で送信
+3. GameLoop が受信 → 入力設定・EventBus 配信・シーン update
+4. NIF `get_frame_metadata` で HUD 用メタデータ（HP、敵数、弾数など）を取得
+5. LevelUp・BossAlert 中は `pause_physics` で physics を停止
 
 ---
 
@@ -169,9 +173,10 @@ elixir_rust/
 ## ビジョン・ロードマップ
 
 - **現在**: ヴァンパイアサバイバーをデモとして含むエンジン基盤
+- **Step 41 完了**: GameLoop の Rust 移行 — 高精度 60Hz タイマー、イベント駆動の Elixir 連携
 - **今後**: エンジン層とゲーム層の分離を進め、**誰もが Elixir × Rust 環境でゲームを作れる**形を目指す
 
-詳細は [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) を参照してください。
+詳細は [docs/04_roadmap/NEXT_STEPS.md](docs/04_roadmap/NEXT_STEPS.md) と [docs/05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md](docs/05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) を参照してください。
 
 ---
 

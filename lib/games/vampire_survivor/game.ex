@@ -54,6 +54,9 @@ defmodule Game.VampireSurvivor do
   @doc "レベルアップ武器選択シーンのモジュール"
   def level_up_scene, do: Game.VampireSurvivor.Scenes.LevelUp
 
+  @doc "ボス出現警告シーンのモジュール（Step 41: pause_physics 用）"
+  def boss_alert_scene, do: Game.VampireSurvivor.Scenes.BossAlert
+
   @doc "ゲームオーバーシーンのモジュール"
   def game_over_scene, do: Game.VampireSurvivor.Scenes.GameOver
 

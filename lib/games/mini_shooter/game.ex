@@ -48,6 +48,7 @@ defmodule Game.MiniShooter do
   # ヴァンサバと同様のインターフェース。レベルアップなしのためスタブを返す。
 
   def level_up_scene, do: __MODULE__
+  def boss_alert_scene, do: __MODULE__
   def game_over_scene, do: Game.MiniShooter.Scenes.GameOver
   def wave_label(_elapsed_sec), do: "Mini"
   def weapon_label(_weapon, _level), do: "n/a"
