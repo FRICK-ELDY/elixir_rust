@@ -34,6 +34,17 @@ use std::sync::RwLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
+// ─── Step 45: デバッグ支援（NIF）────────────────────────────────
+/// デバッグビルド時のみ: NIF パニック時に Rust のバックトレースを stderr に出力する。
+/// RUST_BACKTRACE=1 でより詳細なバックトレースが得られる。
+#[cfg(debug_assertions)]
+fn init_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("[Rust NIF Panic] {}", info);
+        eprintln!("Backtrace:\n{:?}", std::backtrace::Backtrace::capture());
+    }));
+}
+
 // Step 41: GameLoop 制御用（pause/resume）
 pub struct GameLoopControl {
     paused: std::sync::atomic::AtomicBool,
@@ -874,6 +885,8 @@ fn resolve_obstacles_enemy(w: &mut GameWorldInner) {
 
 /// Step 41: 物理ステップの内部実装（NIF と Rust ゲームループスレッドの両方から呼ぶ）
 pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
+    // trace にしておき、RUST_LOG=trace のときだけ毎フレーム出力（debug だと 60fps でコンソールが埋まる）
+    log::trace!("physics_step: delta={}ms frame_id={}", delta_ms, w.frame_id);
     let t_start = std::time::Instant::now();
 
     w.frame_id += 1;
@@ -1775,6 +1788,33 @@ fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> NifResult<f64> {
     Ok(w.last_frame_time_ms)
 }
 
+/// Step 45: デバッグ用 — ワールド状態を文字列で取得（開発時のみ。リリースでは :debug_build_only を返す）
+#[cfg(debug_assertions)]
+#[rustler::nif]
+fn debug_dump_world(world: ResourceArc<GameWorld>) -> NifResult<String> {
+    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
+    let boss_str = match &w.boss {
+        Some(b) => format!("boss hp={:.0}/{:.0}", b.hp, b.max_hp),
+        None => "boss=none".to_string(),
+    };
+    Ok(format!(
+        "enemies={} bullets={} player=({:.1},{:.1}) hp={:.0}/{:.0} {}",
+        w.enemies.count,
+        w.bullets.count,
+        w.player.x,
+        w.player.y,
+        w.player.hp,
+        w.player_max_hp,
+        boss_str
+    ))
+}
+
+#[cfg(not(debug_assertions))]
+#[rustler::nif]
+fn debug_dump_world(_world: ResourceArc<GameWorld>) -> NifResult<String> {
+    Err(rustler::Error::Atom("debug_build_only"))
+}
+
 /// 現在生存している敵の数を返す（Step 12）
 #[rustler::nif]
 fn get_enemy_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
@@ -2154,6 +2194,12 @@ fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot) -> 
 
 #[allow(non_local_definitions)]
 fn load(env: rustler::Env, _: rustler::Term) -> bool {
+    // Step 45: デバッグビルド時のみパニックフックを設定（NIF クラッシュ時にバックトレース表示）
+    #[cfg(debug_assertions)]
+    init_panic_hook();
+    // Step 45: RUST_LOG で Rust 側ログを有効化（例: RUST_LOG=debug）
+    let _ = env_logger::Builder::from_default_env().try_init();
+
     let _ = rustler::resource!(GameWorld, env);
     let _ = rustler::resource!(GameLoopControl, env);
     // アトムを NIF ロード時に事前登録して、比較が確実に動作するようにする

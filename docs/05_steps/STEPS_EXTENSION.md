@@ -431,10 +431,10 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 ### 6.5 確認ポイント
 
-- [ ] `RUST_BACKTRACE=1 mix run` で NIF パニック時にバックトレースが表示される
-- [ ] デバッグビルドで `debug_dump_world` が呼び出せる
-- [ ] `RUST_LOG=debug` で Rust 側のログが出力される
-- [ ] NifResult でエラーを返した場合、Elixir 側で `{:error, _}` を受け取れる
+- [x] `RUST_BACKTRACE=1 mix run` で NIF パニック時にバックトレースが表示される
+- [x] デバッグビルドで `debug_dump_world` が呼び出せる
+- [x] `RUST_LOG=debug` で Rust 側のログが出力される
+- [x] NifResult でエラーを返した場合、Elixir 側で `{:error, _}` を受け取れる
 
 ---
 
