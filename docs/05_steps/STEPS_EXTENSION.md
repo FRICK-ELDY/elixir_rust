@@ -15,8 +15,9 @@
 4. [Step 43: セーブ・ロード](#4-step-43-セーブロード)
 5. [Step 44: マルチプレイ](#5-step-44-マルチプレイ)
 6. [Step 45: デバッグ支援](#6-step-45-デバッグ支援)
-7. [推奨実施順序と依存関係](#7-推奨実施順序と依存関係)
-8. [関連ドキュメント](#8-関連ドキュメント)
+7. [Step 46: GameLoop を GameEvent(s) にリネーム](#7-step-46-gameloop-を-gameevents-にリネーム)
+8. [推奨実施順序と依存関係](#8-推奨実施順序と依存関係)
+9. [関連ドキュメント](#9-関連ドキュメント)
 
 ---
 
@@ -40,6 +41,9 @@ Step 44: マルチプレイ基盤（ルーム管理）
 
 Step 45: デバッグ支援（NIF）
   └ パニックトレース・NifResult 統一
+
+Step 46: GameLoop を GameEvent(s) にリネーム
+  └ Elixir 側の役割（frame_events 受信・フェーズ管理）に合わせたモジュール名へ変更
 ```
 
 **実施順序の推奨**:
@@ -438,7 +442,76 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 ---
 
-## 7. 推奨実施順序と依存関係
+## 7. Step 46: GameLoop を GameEvent(s) にリネーム
+
+### 7.1 目標
+
+- **Elixir 側の GenServer 名を役割に合わせて変更する**: Step 41 以降、tick 駆動は Rust に移り、Elixir の当該プロセスは「Rust からの `{:frame_events, events}` を受信し、フェーズ管理・NIF 呼び出しを行う」役割になっている。そのため **GameLoop** という名前は誤解を招くので、**GameEvent** または **GameEvents** にリネームする。
+
+### 7.2 なぜ重要か
+
+- **一貫性**: [ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md) や [PRESENTATION.md](../07_presentation/PRESENTATION.md) では「frame_events 受信・フェーズ管理」と説明しており、ループを回しているのは Rust 側である。
+- **可読性**: 新規参加者やドキュメント読者が「GameLoop = 60Hz を回しているプロセス」と勘違いしにくくなる。
+
+### 7.3 名前の候補
+
+| 名前 | 備考 |
+|------|------|
+| **GameEvents** | 複数形。`frame_events` を扱うモジュールとして自然。推奨。 |
+| **GameEvent** | 単数形。イベント駆動の「1 イベント処理」のイメージ。 |
+
+いずれも `Engine.GameEvents` / `Engine.GameEvent` として `Engine` の下に置く。
+
+### 7.4 実装内容
+
+#### 46.1 リネーム対象
+
+- **モジュール**: `Engine.GameLoop` → `Engine.GameEvents`（または `Engine.GameEvent`）
+- **ファイル**: `lib/engine/game_loop.ex` → `lib/engine/game_events.ex`（または `game_event.ex`）
+
+#### 46.2 参照の更新
+
+以下で `GameLoop` / `game_loop` を新しい名前に置き換える。
+
+- **Application**: `Engine.GameLoop` を子に起動している箇所 → `Engine.GameEvents`
+- **RoomSupervisor**: 子 spec で `Engine.GameLoop` を起動している箇所 → `Engine.GameEvents`
+- **RoomRegistry**: 「GameLoop pid」などのコメント・ドキュメント
+- **Engine モジュール**: `start_room` 内で `Engine.GameLoop.start_link(...)` を呼んでいる箇所 → `Engine.GameEvents.start_link(...)`
+- **Engine.Game / 各ゲーム**: `Engine.GameLoop.save_session` 等の API 呼び出し → `Engine.GameEvents.save_session`
+- **NIF ブリッジ・Rust**: `start_rust_game_loop` に渡している `pid` は「GameEvents の pid」である（名前のみの変更のため引数はそのままでよい）
+- **その他**: `Engine.FrameCache`、`Engine.InputHandler`、`Engine.EventBus`、`Engine.StressMonitor`、`Engine.SceneBehaviour` 等のドキュメント・参照
+
+#### 46.3 後方互換（オプション）
+
+移行期間中のみ、`Engine.GameLoop` をエイリアスとして残すこともできる。
+
+```elixir
+# lib/engine/game_loop.ex（旧ファイルを残す場合）
+defmodule Engine.GameLoop do
+  @moduledoc "Deprecated: use Engine.GameEvents. This module will be removed in a future release."
+  defdelegate start_link(opts \\ []), to: Engine.GameEvents
+  defdelegate save_session(), to: Engine.GameEvents
+  defdelegate load_session(), to: Engine.GameEvents
+end
+```
+
+通常は一括リネームでよい。
+
+#### 46.4 ドキュメント・コメントの更新
+
+- `@moduledoc` の「60 Hz game loop」などの表現を「Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer」に合わせて修正
+- [ENGINE_API.md](../06_system_design/ENGINE_API.md)、[ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md)、[MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) 等で「GameLoop」と書いている箇所を「GameEvents」に統一（文脈に応じて「ルームごとの GameEvents」等に変更）
+
+### 7.5 確認ポイント
+
+- [ ] `Engine.GameEvents`（または `Engine.GameEvent`）が存在し、従来の `GameLoop` と同一の API（`start_link/1`、`save_session/0`、`load_session/0` 等）を提供する
+- [ ] `mix compile` が通り、既存テスト・手動プレイが動作する
+- [ ] RoomSupervisor 経由で起動するルームも `Engine.GameEvents` を参照している
+- [ ] 関連ドキュメント内の「GameLoop」が役割に合わせて「GameEvents」等に更新されている（必要範囲で）
+
+---
+
+## 8. 推奨実施順序と依存関係
 
 ```mermaid
 flowchart TB
@@ -448,6 +521,7 @@ flowchart TB
     S43[Step 43\nセーブ・ロード]
     S44[Step 44\nマルチプレイ]
     S45[Step 45\nデバッグ支援]
+    S46[Step 46\nGameEvents リネーム]
 
     S40 --> S41
     S41 --> S45
@@ -457,6 +531,7 @@ flowchart TB
     S45 --> S44
     S42 --> S43
     S43 --> S44
+    S44 --> S46
 ```
 
 **推奨順序**:
@@ -466,12 +541,13 @@ flowchart TB
 4. **Step 42（マップ）** — ゲーム性に直結
 5. **Step 43（セーブ）** — 独立。マップ完了後でも可
 6. **Step 44（マルチプレイ）** — 設計変更が大きいため最後
+7. **Step 46（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
 
-**並行可能**: Step 42 と Step 43 は互いに依存しないため並行実施可能。
+**並行可能**: Step 42 と Step 43 は互いに依存しないため並行実施可能。Step 46 は 41 完了後であればいつでも実施可能（44 のドキュメント更新とまとめてもよい）。
 
 ---
 
-## 8. 関連ドキュメント
+## 9. 関連ドキュメント
 
 | ドキュメント | 用途 |
 |-------------|------|
