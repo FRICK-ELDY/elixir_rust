@@ -32,6 +32,7 @@
 
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
+| [PROJECT_EVALUATION.md](./02_spec_design/PROJECT_EVALUATION.md) | **プロジェクト全体評価**。STEPS_MAP_SAVE_MULTI_DEBUG 完了後の忌憚なき評価。達成度、強み、弱み、総合所見 | 全体評価・振り返り時 |
 | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) | **ゲームエンジンの再評価版**。STEPS_PERF・PRIORITY_STEPS 導入後の弱みの対応状況、推奨改善方向の更新、総合評価 | 設計理解・評価時 |
 | [ENGINE_ANALYSIS.md](./02_spec_design/ENGINE_ANALYSIS.md) | ゲームエンジンの強み・弱み分析（アーカイブ）。元の評価、他エンジンとの比較、ユースケース適性 | 過去分析の参照 |
 
@@ -174,4 +175,5 @@ docs/
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
 | なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) |
 | エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
+| プロジェクト全体の評価・振り返りをしたい | [PROJECT_EVALUATION.md](./02_spec_design/PROJECT_EVALUATION.md) |
 | 発表用の資料が欲しい | [PRESENTATION.md](./07_presentation/PRESENTATION.md) |
