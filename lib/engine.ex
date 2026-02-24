@@ -276,6 +276,43 @@ defmodule Engine do
   """
   def best_score, do: Engine.SaveManager.best_score()
 
+  # ── Step 44: マルチプレイ・ルーム管理 ────────────────────────────────────
+
+  @doc """
+  新規ルームを起動する。各ルームは独立した GameLoop + GameWorld を持つ。
+
+  ## 戻り値
+  - `{:ok, pid}` - 起動成功
+  - `{:error, :already_started}` - 同じ room_id のルームが既に存在
+
+  ## 例
+      Engine.start_room("room_123")
+  """
+  def start_room(room_id), do: Engine.RoomSupervisor.start_room(room_id)
+
+  @doc """
+  ルームを終了する。GameWorld が解放される。
+
+  ## 戻り値
+  - `:ok` - 終了成功
+  - `{:error, :not_found}` - ルームが存在しない
+  """
+  def stop_room(room_id), do: Engine.RoomSupervisor.stop_room(room_id)
+
+  @doc """
+  アクティブなルーム ID のリストを返す。
+  """
+  def list_rooms, do: Engine.RoomSupervisor.list_rooms()
+
+  @doc """
+  ルーム ID に対応する GameLoop の pid を返す。
+  メインルームは `:main`、Phoenix Channel 連携時はルーム文字列を使用。
+
+  ## 例
+      {:ok, pid} = Engine.get_loop_for_room(:main)
+  """
+  def get_loop_for_room(room_id), do: Engine.RoomRegistry.get_loop(room_id)
+
   # ── シーン操作（GameLoop が transition 処理で使用）───────────────────────
   # ゲームは {:transition, {:push, mod, arg}, state} 等の戻り値で意図を伝え、
   # 実際の push_scene 等の呼び出しは GameLoop が行う。

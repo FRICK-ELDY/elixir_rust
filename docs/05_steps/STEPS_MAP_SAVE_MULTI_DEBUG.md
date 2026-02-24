@@ -319,7 +319,7 @@ Engine.best_score()
 
 [ELIXIR_RUST_DIVISION.md § 5.2](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) ではマルチプレイは「現在のスコープ外」とある。本ステップは**将来的な拡張のための設計検討と最小実装**とする。
 
-### 4.4 実装内容
+### 6.4 実装内容
 
 #### 44.1 設計オプションの整理
 
@@ -331,35 +331,22 @@ Engine.best_score()
 
 **推奨**: まず **A（複数 GameWorld）** で「並列ゲームセッション」を実現し、必要に応じて B/C へ移行。
 
-#### 44.2 Step 44a: 複数 GameWorld の並列管理（最小実装）
+#### 44.2 Step 44a: 複数 GameWorld の並列管理（最小実装）✅
 
-**Elixir**: ルーム ID ごとに `world_ref` を保持する GenServer
+**実装済み**:
 
-```elixir
-# lib/engine/room_supervisor.ex
-defmodule Engine.RoomSupervisor do
-  use DynamicSupervisor
-
-  def start_room(room_id) do
-    world_ref = App.NifBridge.create_world()
-    child_spec = {Engine.GameLoop, {room_id, world_ref}}
-    DynamicSupervisor.start_child(__MODULE__, child_spec)
-  end
-
-  def get_world_ref(room_id) do
-    # Registry または ETS で room_id → world_ref を管理
-  end
-end
-```
-
-- 各ルームは独立した GameLoop + GameWorld を持つ
-- 入力は `room_id` と紐づけて `set_player_input(room_id, world_ref, dx, dy)` のように渡す
+- **Engine.RoomRegistry**: Registry で room_id → GameLoop pid を管理
+- **Engine.RoomSupervisor**: DynamicSupervisor。`start_room(room_id)` / `stop_room(room_id)` / `list_rooms()`
+- **Engine.GameLoop**: `room_id` オプションに対応。`:main` は従来どおり `Engine.GameLoop` の名前で起動し、SceneManager・FrameCache を駆動。それ以外は headless（physics のみ）
+- **Engine**: `start_room/1`, `stop_room/1`, `list_rooms/0`, `get_loop_for_room/1` を公開
 
 #### 44.3 Step 44b: Phoenix Channels 連携（将来）
 
-- `RoomChannel` で `join("room:123")` 時に `RoomSupervisor.start_room("123")` を呼ぶ
+- `RoomChannel` で `join("room:123")` 時に `Engine.start_room("123")` を呼ぶ
 - 入力イベントを Channel でブロードキャストし、各クライアントの GameLoop が受信
 - 状態同期は「入力のブロードキャスト」または「定期的なスナップショット配信」で行う
+
+詳細: [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md)
 
 #### 44.4 競技マルチプレイ（ロールバック等）について
 
@@ -367,8 +354,8 @@ end
 
 ### 6.5 確認ポイント
 
-- [ ] 2 つのルームが同時に動作し、互いに影響しない
-- [ ] ルーム終了時に GameWorld が適切に解放される
+- [x] 2 つのルームが同時に動作し、互いに影響しない（`start_room("room_2")` で追加ルーム起動、`:main` は表示・入力、他は headless）
+- [x] ルーム終了時に GameWorld が適切に解放される（`stop_room/1` で DynamicSupervisor が子を終了）
 - [ ] （将来）Phoenix Channel でルーム参加・入力送信ができる
 
 ---
@@ -507,6 +494,7 @@ flowchart TB
 |-------------|------|
 | [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 本ステップの根拠（残存課題の一覧） |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 責務分離・スコープ外の判断 |
+| [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44 Phoenix Channels 連携の設計指針 |
 | [SPEC.md](../01_setup/SPEC.md) | 障害物・マップの仕様 |
 | [STEPS_QUALITY.md](./STEPS_QUALITY.md) | 背景タイル・マップサイズの既存記載 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | マップアセットのロード方針 |

@@ -46,7 +46,16 @@ context の `world_ref` を受け取り、ワールドに対する操作を行�
 | `Engine.get_level_up_data(world_ref)` | `{exp, level, level_up_pending, exp_to_next}` を返す |
 | `Engine.skip_level_up(world_ref)` | 武器選択をスキップしてレベルアップ待機を解除 |
 
-### 3.2 エンジン内部用（ゲームは通常呼ばない）
+### 3.2 Step 44: ルーム管理（マルチプレイ基盤）
+
+| 関数 | 説明 |
+|------|------|
+| `Engine.start_room(room_id)` | 新規ルームを起動。`{:ok, pid}` / `{:error, :already_started}` |
+| `Engine.stop_room(room_id)` | ルームを終了。`{:error, :not_found}` はルーム不在時 |
+| `Engine.list_rooms()` | アクティブなルーム ID のリスト |
+| `Engine.get_loop_for_room(room_id)` | ルームの GameLoop pid。`{:ok, pid}` / `:error` |
+
+### 3.3 エンジン内部用（ゲームは通常呼ばない）
 
 GameLoop が利用。将来の拡張やカスタムループ実装のため文書化する。
 
@@ -60,7 +69,7 @@ GameLoop が利用。将来の拡張やカスタムループ実装のため文�
 | `Engine.add_weapon(world_ref, weapon_name)` | 武器を追加（atom または string） |
 | `Engine.get_weapon_levels(world_ref)` | 装備中の武器スロット情報を取得 |
 
-### 3.3 シーン操作（GameLoop が transition で使用）
+### 3.4 シーン操作（GameLoop が transition で使用）
 
 ゲームは **直接呼ばない**。update の戻り値で遷移意図を伝える。
 
@@ -150,3 +159,4 @@ end
 | [NEXT_STEPS.md](../04_roadmap/NEXT_STEPS.md) | Step 37 の位置づけ |
 | [GAME_INTERFACE.md](./GAME_INTERFACE.md) | ゲームがエンジンに提供する behaviour |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担 |
+| [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44 Phoenix Channels 連携 |
