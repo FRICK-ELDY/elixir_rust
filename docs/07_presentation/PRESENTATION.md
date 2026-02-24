@@ -452,8 +452,8 @@ Step 41〜44: 拡張（マップ・障害物、セーブ・ロード、マルチ
 | [ENGINE_API.md](../06_system_design/ENGINE_API.md) | エンジン API 設計（安定化） |
 | [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱み総合サマリー |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |
-| [WHY_ELIXIR.md](../03_tech_decisions/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
-| [WHY_RAYON.md](../03_tech_decisions/WHY_RAYON.md) | rayon 並列化の詳細 |
+| [WHY_ELIXIR.md](../03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
+| [WHY_RAYON.md](../03_tech_decisions/WHY_RUST/WHY_RAYON.md) | rayon 並列化の詳細 |
 
 ---
 

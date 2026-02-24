@@ -172,5 +172,5 @@
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [WHY_ELIXIR.md](./WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
+| [WHY_ELIXIR/WHY_ELIXIR.md](./WHY_ELIXIR/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
 | [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) | エンジン現状の評価 |

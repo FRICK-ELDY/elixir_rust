@@ -2,6 +2,15 @@
 
 このドキュメントでは、ヴァンパイアサバイバーライクゲームのゲームロジック層に Elixir（BEAM VM）を採用した技術的根拠を説明します。
 
+### 依存関係の詳細と一覧
+
+| パッケージ | バージョン | 用途 | 詳細 |
+|------------|------------|------|------|
+| rustler | ~> 0.34 | Rust NIF 連携（Elixir-Rust ブリッジ） | [WHY_Rustler.md](../WHY_Rustler.md) |
+| telemetry | ~> 1.3 | メトリクス・イベント計測基盤 | [WHY_Telemetry.md](./WHY_Telemetry.md) |
+| telemetry_metrics | ~> 1.0 | メトリクス集計・可視化 | [WHY_Telemetry.md](./WHY_Telemetry.md) |
+| BEAM 組み込み | 標準 | GenServer、Supervisor、ETS、Process、Logger | [WHY_BEAM.md](./WHY_BEAM.md) |
+
 ---
 
 ## 目次
@@ -37,42 +46,39 @@ BEAM は「壊れることを前提に設計する（Let it crash）」という
 
 ### GenServer による宣言的なゲームループ
 
-Elixir の `GenServer` は、ゲームループを**状態機械**として自然に表現できます。
+Elixir の `GenServer` は、ゲームループを**状態機械**として自然に表現できます。本プロジェクトでは **Rust が tick を主導**し、物理演算後に Elixir に `{:frame_events, events}` を送信します。
 
 ```elixir
-defmodule Game.GameLoop do
+defmodule Engine.GameLoop do
   use GenServer
 
-  # 状態遷移が明示的で追跡しやすい
-  def handle_info(:tick, %{phase: :playing} = state) do
-    # ゲーム中の処理
-    {:noreply, update_game(state)}
-  end
-
-  def handle_info(:tick, %{phase: :paused} = state) do
-    # ポーズ中は何もしない
-    {:noreply, state}
-  end
-
-  def handle_info(:tick, %{phase: :game_over} = state) do
-    # ゲームオーバー処理
-    {:noreply, handle_game_over(state)}
+  # Rust が物理演算を実行後に送るイベントを受信
+  def handle_info({:frame_events, events}, state) do
+    # 1. 入力取得（ETS）→ set_player_input NIF
+    # 2. EventBus.broadcast(events)
+    # 3. 現在シーンの update(context, scene_state) を呼び出し
+    # 4. {:continue, ...} / {:transition, :push|:pop|:replace, ...} で遷移を宣言
+    {:noreply, new_state}
   end
 end
 ```
 
-従来の命令型言語では `if/switch` の連鎖になりがちなゲームフェーズ管理が、パターンマッチングにより**読みやすく、バグが混入しにくい**コードになります。
+フェーズ（`:playing` / `:boss_alert` / `:level_up` / `:game_over`）は `SceneManager` と各シーンで管理され、パターンマッチングにより**読みやすく、バグが混入しにくい**コードになっています。
 
 ### メッセージパッシングによる疎結合
 
-各ゲームシステムが独立したプロセスとして動作し、メッセージで通信します。
+各ゲームシステムが独立したプロセスとして動作し、メッセージまたは ETS で通信します。
 
 ```
-InputHandler ──cast──▶ GameLoop ──call──▶ NIF (Rust)
-                           │
-                           └──cast──▶ SpawnSystem
-                           └──cast──▶ ScoreSystem
-                           └──cast──▶ AudioSystem
+Rust (physics) ──{:frame_events}──▶ Engine.GameLoop
+                                         │
+InputHandler (ETS) ◀──get_move_vector──  │  set_player_input(world_ref) ──▶ NIF
+                                         │
+                                         └──EventBus.broadcast(events)──▶ サブスクライバー
+                                         │
+SceneManager (current scene) ◀──update(context)──│
+     │
+     └── Playing ──SpawnSystem.maybe_spawn(world_ref)──▶ Engine.spawn_enemies (NIF)
 ```
 
 システム間の依存関係が明確になり、**テストが容易**で**システムの追加・削除が安全**です。
@@ -106,7 +112,7 @@ BEAM VM のスケジューリング:
 [tick1][重い処理の一部][他プロセス][重い処理の続き][tick2]  ← tick2 は定時
 ```
 
-ただし、Rust NIF の呼び出しは `dirty_cpu` スケジューラを使用することで、BEAM スケジューラをブロックしない設計にしています（詳細は [SPEC.md](../01_setup/SPEC.md) 参照）。
+ただし、Rust NIF の呼び出しは `dirty_cpu` スケジューラを使用することで、BEAM スケジューラをブロックしない設計にしています（詳細は [SPEC.md](../../01_setup/SPEC.md) 参照）。
 
 ---
 
@@ -115,24 +121,26 @@ BEAM VM のスケジューリング:
 ### Supervisor ツリーによる自動回復
 
 ```elixir
-defmodule Game.Application do
+defmodule App.Application do
   use Application
 
   def start(_type, _args) do
     children = [
-      # 各システムが独立して監視される
-      {Game.ComponentStore,  restart: :permanent},
-      {Game.InputHandler,    restart: :permanent},
-      {Game.SpawnSystem,     restart: :transient},  # 異常終了時のみ再起動
-      {Game.ScoreSystem,     restart: :permanent},
-      {Game.GameLoop,        restart: :permanent},
+      {Registry, [keys: :unique, name: Engine.RoomRegistry]},
+      Engine.SceneManager,
+      Engine.InputHandler,
+      Engine.EventBus,
+      Engine.RoomSupervisor,   # GameLoop をルーム単位で起動
+      Engine.StressMonitor,
+      Engine.Stats,
+      Engine.Telemetry,
     ]
-    Supervisor.start_link(children, strategy: :one_for_one)
+    Supervisor.start_link(children, strategy: :one_for_one, name: App.Supervisor)
   end
 end
 ```
 
-`ScoreSystem` がバグでクラッシュしても、`GameLoop` は継続して動作します。Supervisor が `ScoreSystem` を自動再起動し、ゲームは中断なく続きます。
+`EventBus` や `InputHandler` がバグでクラッシュしても、`GameLoop` は継続して動作します。Supervisor が該当プロセスを自動再起動し、ゲームは中断なく続きます。`GameLoop` 自体は `RoomSupervisor` 配下でルームごとに起動されます。
 
 ### 「Let it crash」哲学の実践
 
@@ -166,7 +174,7 @@ end
 
 ### ETS（Erlang Term Storage）とは
 
-ETS は BEAM VM に組み込まれたインメモリ Key-Value ストアです。ゲームの ECS コンポーネントストアとして最適な特性を持ちます。
+ETS は BEAM VM に組み込まれたインメモリ Key-Value ストアです。ゲームの高頻度データ共有に最適な特性を持ちます。
 
 | 特性 | 詳細 |
 |---|---|
@@ -176,36 +184,47 @@ ETS は BEAM VM に組み込まれたインメモリ Key-Value ストアです�
 | 永続性 | なし（プロセス終了で消滅）→ ゲームに最適 |
 | GC 影響 | なし（BEAM GC の対象外） |
 
-### ゲームコンポーネントストアとしての活用
+### 本プロジェクトでの ETS 活用
+
+**ゲーム状態（位置・体力など）は Rust の `world_ref` 内に保持**し、Elixir は NIF 経由で参照します。ETS は以下の用途で使用しています。
+
+**InputHandler（入力状態）**
 
 ```elixir
-defmodule Game.ComponentStore do
-  def setup do
-    # コンポーネント種別ごとにテーブルを作成
-    :ets.new(:positions,  [:named_table, :public, :set, read_concurrency: true])
-    :ets.new(:health,     [:named_table, :public, :set, read_concurrency: true])
-    :ets.new(:sprites,    [:named_table, :public, :set, read_concurrency: true])
+defmodule Engine.InputHandler do
+  @table :input_state
+
+  # GameLoop が tick ごとにロックフリーで読み取る
+  def get_move_vector do
+    case :ets.lookup(@table, :move) do
+      [{:move, vec}] -> vec
+      []             -> {0, 0}
+    end
   end
 
-  # Rust から受け取った一括更新結果を書き込む
-  def bulk_update_positions(entities) do
-    :ets.insert(:positions, entities)  # リスト一括挿入
-  end
-
-  # UI システムが非同期で読み取る
-  def get_player_position do
-    :ets.lookup(:positions, :player)
+  def init(_opts) do
+    :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    :ets.insert(@table, {:move, {0, 0}})
+    # ...
   end
 end
+```
+
+**FrameCache（HUD スナップショット）**
+
+```elixir
+# GameLoop が NIF から get_frame_metadata で取得した値を書き込み
+# Rust 側の描画や StressMonitor がロックフリーで読み取る
+Engine.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
 ```
 
 ### ETS vs 代替手段
 
 | 手段 | 読み取り速度 | 並行性 | 適用場面 |
 |---|---|---|---|
-| ETS | 最高速 | 並行読み取り可 | 頻繁に更新・参照されるゲームステート |
-| GenServer state | 遅い（メッセージ経由） | 直列 | ゲームフェーズ等の重要な状態 |
-| Agent | 遅い（メッセージ経由） | 直列 | 単純な設定値 |
+| ETS | 最高速 | 並行読み取り可 | 入力状態、HUD スナップショット等の高頻度参照 |
+| GenServer state | 遅い（メッセージ経由） | 直列 | SceneManager、シーンスタック等 |
+| Rust world_ref | NIF 経由 | 単一 | 位置・体力・スコア等のゲームロジック本体 |
 | Redis | ネットワーク遅延あり | 並行可 | 分散環境のみ |
 
 ---
@@ -237,14 +256,16 @@ Rust が得意なこと:
 
 ### Rustler NIF による透過的な統合
 
-Rustler を使うと、Rust の関数が Elixir から**通常の関数呼び出しと同じ構文**で呼べます。
+Rustler を使うと、Rust の関数が Elixir から**通常の関数呼び出しと同じ構文**で呼べます。ゲームは `Engine` モジュール経由で NIF を利用します。
 
 ```elixir
-# Elixir から見ると普通の関数呼び出し
-render_data = Game.NifBridge.physics_step(world_ref, 16.0)
+# Engine が App.NifBridge をラップ。ゲームからは Engine 経由で利用
+Engine.spawn_enemies(world_ref, :slime, 5)
+Engine.get_level_up_data(world_ref)
+Engine.set_player_input(world_ref, dx, dy)  # GameLoop が InputHandler の結果を渡す
 
-# 実際には Rust のネイティブコードが実行される
-# → 物理演算・衝突判定・AI 更新が全て Rust で処理
+# 物理演算は Rust がループ内で実行し、{:frame_events, events} を GameLoop に送信
+# Elixir は physics_step を直接呼ばない（Rust 駆動）
 ```
 
 ### ResourceArc によるゼロコピー連携
@@ -364,10 +385,10 @@ Unity・Unreal・Godot のような統合ゲームエンジンのエコシステ
 ```
 決定的な理由:
   1. Supervisor による耐障害性 → ゲームバグからの自動回復
-  2. GenServer による宣言的なゲームループ → 複雑なゲームロジックの管理
+  2. GenServer + SceneManager による宣言的なゲームループ → シーン遷移の管理
   3. Rustler NIF による Rust との透過的な統合 → 性能と生産性の両立
-  4. 将来的な分散処理（マルチプレイ）への自然な拡張
-  5. ETS による高速なコンポーネントストア
+  4. 将来的な分散処理（ルーム単位の GameLoop、マルチプレイ）への自然な拡張
+  5. ETS による高速なデータ共有（入力状態、HUD スナップショット）
 ```
 
 ---
@@ -381,3 +402,15 @@ Elixir は「ゲームエンジン」ではありませんが、「**ゲーム�
 - **Rustler NIF** がこの 2 つを透過的に結合する
 
 この組み合わせは「Elixir の生産性と Rust の性能」を同時に実現する、現時点での最良のアーキテクチャの一つです。
+
+---
+
+## 関連ドキュメント
+
+| ドキュメント | 用途 |
+|-------------|------|
+| [WHY_Rustler.md](../WHY_Rustler.md) | Rustler（NIF 連携）の選定理由 |
+| [WHY_Telemetry.md](./WHY_Telemetry.md) | Telemetry の選定理由 |
+| [WHY_BEAM.md](./WHY_BEAM.md) | BEAM 組み込み機能の活用 |
+| [WHY_RUST/WHY_RUST.md](../WHY_RUST/WHY_RUST.md) | Rust 採用の技術的根拠 |
+| [ELIXIR_RUST_DIVISION.md](../ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担方針 |
