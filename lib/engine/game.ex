@@ -26,7 +26,7 @@ defmodule Engine.Game do
 
   @doc """
   物理演算を実行するシーンモジュールの一覧。
-  GameLoop の maybe_run_physics がこの一覧に含まれるシーンのときのみ physics_step を実行する。
+  GameEvents の maybe_run_physics がこの一覧に含まれるシーンのときのみ physics_step を実行する。
   """
   @callback physics_scenes() :: [module()]
 

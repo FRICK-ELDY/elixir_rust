@@ -380,7 +380,7 @@ impl CollisionWorld {
 
 ### 6.1 Supervisor ツリー
 
-ゲームループは **Rust 側で 60 Hz 駆動** するため、Elixir に「GameLoop GenServer」は存在しない。Elixir は入力送信・スポーン指示・Stats 等の役割のみ持つ。
+ゲームループは **Rust 側で 60 Hz 駆動** する。Elixir には **GameEvents** GenServer があり、Rust からの `{:frame_events, events}` を受信してフェーズ管理・NIF 呼び出しを行う。このほか Elixir は入力送信・スポーン指示・Stats 等の役割を持つ。
 
 ```elixir
 # lib/game/application.ex

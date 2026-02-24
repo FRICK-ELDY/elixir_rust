@@ -27,13 +27,13 @@ BEAM VM に組み込まれた機能は、依存関係を追加せずに利用で
 | **ETS** | 入力状態・HUD スナップショット等の高速共有 |
 | **Process** | メッセージパッシング・スケジューリング |
 | **Logger** | ログ出力 |
-| **Registry** | ルーム ID → GameLoop pid の名前解決 |
+| **Registry** | ルーム ID → GameEvents pid の名前解決 |
 
 ---
 
 ## 2. GenServer
 
-ゲームループ（`Engine.GameLoop`）、シーン管理（`Engine.SceneManager`）、入力（`Engine.InputHandler`）、イベント配信（`Engine.EventBus`）など、状態を持つプロセスは GenServer で実装しています。
+ゲームループ（`Engine.GameEvents`）、シーン管理（`Engine.SceneManager`）、入力（`Engine.InputHandler`）、イベント配信（`Engine.EventBus`）など、状態を持つプロセスは GenServer で実装しています。
 
 状態機械としてのゲームフェーズ管理、メッセージによる疎結合な通信が自然に表現できます。詳細は [WHY_ELIXIR.md](./WHY_ELIXIR.md) §2 を参照してください。
 
@@ -53,8 +53,8 @@ BEAM VM に組み込まれた機能は、依存関係を追加せずに利用で
 
 | テーブル | 用途 | ライター | リーダー |
 |----------|------|----------|----------|
-| `:input_state` | キー入力状態（move vector） | InputHandler | GameLoop |
-| `:frame_cache` | HUD スナップショット（敵数、physics_ms 等） | GameLoop | StressMonitor、Rust 描画 |
+| `:input_state` | キー入力状態（move vector） | InputHandler | GameEvents |
+| `:frame_cache` | HUD スナップショット（敵数、physics_ms 等） | GameEvents | StressMonitor、Rust 描画 |
 
 `read_concurrency: true` により並列読み取りを最適化しています。ゲーム状態（位置・体力・スコア）は Rust の `world_ref` 内に保持し、Elixir は NIF 経由で参照します。詳細は [WHY_ELIXIR.md](./WHY_ELIXIR.md) §5 を参照してください。
 

@@ -168,7 +168,7 @@ rustler::atoms! {
     boss_defeated,
 }
 
-/// フレームイベントを取り出してクリアする（毎フレーム GameLoop が呼ぶ）
+/// フレームイベントを取り出してクリアする（毎フレーム GameEvents が呼ぶ）
 /// 戻り値: [{:enemy_killed, enemy_kind, weapon_kind}, {:player_damaged, damage_x100}, ...]
 #[rustler::nif]
 fn drain_frame_events(world: ResourceArc<GameWorld>) -> Vec<(Atom, u8, u8)> {
@@ -210,11 +210,11 @@ defmodule Game.EventBus do
   フレームイベントを受け取り、複数のサブスクライバーに配信する。
 
   Elixir/OTP の強みを体現するモジュール:
-  - プロセスへの send はノンブロッキング — GameLoop を止めない
-  - サブスクライバーが重い処理をしても GameLoop に影響しない
+  - プロセスへの send はノンブロッキング — GameEvents を止めない
+  - サブスクライバーが重い処理をしても GameEvents に影響しない
   - Process.monitor でサブスクライバーの死活を自動監視
   - EventBus 自体がクラッシュしても Supervisor が即座に再起動し、
-    GameLoop は一切影響を受けない（one_for_one 戦略）
+    GameEvents は一切影響を受けない（one_for_one 戦略）
   """
 
   use GenServer
@@ -264,7 +264,7 @@ defmodule Game.EventBus do
 end
 ```
 
-#### 26.6 Elixir 側: `GameLoop` でイベントを drain して broadcast
+#### 26.6 Elixir 側: `GameEvents` でイベントを drain して broadcast
 
 ```elixir
 # lib/game/game_loop.ex — physics_step の直後に追加（handle_info :tick の playing フェーズ）
@@ -323,8 +323,8 @@ end
 
 children = [
   Game.InputHandler,
-  Game.EventBus,      # ← 追加（GameLoop より前に起動）
-  Game.GameLoop,
+  Game.EventBus,      # ← 追加（GameEvents より前に起動）
+  Game.GameEvents,
   Game.StressMonitor,
   Game.Stats,
 ]
@@ -334,7 +334,7 @@ children = [
 
 - [ ] `iex> Game.Stats.session_summary()` で `total_kills` が増えている
 - [ ] `kills_by_enemy` / `kills_by_weapon` にデータが入っている
-- [ ] `EventBus` がクラッシュしても GameLoop が止まらない（`kill(pid, :kill)` でテスト）
+- [ ] `EventBus` がクラッシュしても GameEvents が止まらない（`kill(pid, :kill)` でテスト）
 - [ ] ゲームオーバー後に `session_summary` でセッション統計が確認できる
 
 ---
@@ -347,17 +347,17 @@ children = [
 
 プロセス間通信のボトルネックを 2 つ同時に解消する。
 
-1. `StressMonitor` → `GameLoop` への `GenServer.call`（毎秒 1 回、GameLoop をブロック）
-2. `InputHandler` → `GameLoop` への `GenServer.cast`（キーイベントごと、メッセージキューを圧迫）
+1. `StressMonitor` → `GameEvents` への `GenServer.call`（毎秒 1 回、GameEvents をブロック）
+2. `InputHandler` → `GameEvents` への `GenServer.cast`（キーイベントごと、メッセージキューを圧迫）
 
 ### なぜ重要か
 
 ```
 現状の問題:
-  StressMonitor ──call──→ GameLoop（world_ref 取得のためにブロック）
+  StressMonitor ──call──→ GameEvents（world_ref 取得のためにブロック）
                 ──call──→ NIF × 4（同じデータを再取得）
 
-  InputHandler ──cast──→ GameLoop（キーイベントごとにメッセージ送信）
+  InputHandler ──cast──→ GameEvents（キーイベントごとにメッセージ送信）
 ```
 
 ETS（Erlang Term Storage）はプロセス間でロックフリーに共有できるインメモリストア。  
@@ -374,21 +374,21 @@ defmodule Game.FrameCache do
   フレームごとのゲーム状態スナップショットを ETS に書き込む。
 
   ETS の特性:
-  - 書き込みは GameLoop（単一ライター）のみ — 競合なし
+  - 書き込みは GameEvents（単一ライター）のみ — 競合なし
   - 読み取りは任意のプロセスからロックフリーで可能
   - read_concurrency: true で並列読み取りを最適化
-  - GameLoop がクラッシュして ETS テーブルが消えても、
-    Supervisor 再起動後に GameLoop.init/1 で再作成される
+  - GameEvents がクラッシュして ETS テーブルが消えても、
+    Supervisor 再起動後に GameEvents.init/1 で再作成される
   """
 
   @table :frame_cache
 
-  @doc "GameLoop.init/1 から呼ぶ — ETS テーブルを作成する"
+  @doc "GameEvents.init/1 から呼ぶ — ETS テーブルを作成する"
   def init do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
   end
 
-  @doc "GameLoop が毎秒（60 フレームごと）書き込む"
+  @doc "GameEvents が毎秒（60 フレームごと）書き込む"
   def put(enemy_count, bullet_count, physics_ms, hud_data) do
     :ets.insert(@table, {:snapshot, %{
       enemy_count:  enemy_count,
@@ -409,7 +409,7 @@ defmodule Game.FrameCache do
 end
 ```
 
-#### 27.2 `GameLoop` を修正: ETS に書き込む
+#### 27.2 `GameEvents` を修正: ETS に書き込む
 
 ```elixir
 # lib/game/game_loop.ex
@@ -444,7 +444,7 @@ end
 # get_world_ref/0 プライベート関数を削除
 
 defp sample_and_log(state) do
-  # GameLoop への call が不要になる
+  # GameEvents への call が不要になる
   case Game.FrameCache.get() do
     :empty ->
       state
@@ -481,10 +481,10 @@ end
 defmodule Game.InputHandler do
   @moduledoc """
   キー入力状態を ETS に書き込む。
-  GameLoop は tick のたびに ETS から読み取る（ポーリング方式）。
+  GameEvents は tick のたびに ETS から読み取る（ポーリング方式）。
 
-  変更前: キーイベントごとに GameLoop へ cast → メッセージキューに溜まる
-  変更後: ETS に書き込むだけ → GameLoop は tick 時に 1 回だけ読む
+  変更前: キーイベントごとに GameEvents へ cast → メッセージキューに溜まる
+  変更後: ETS に書き込むだけ → GameEvents は tick 時に 1 回だけ読む
 
   同一フレーム内の複数キーイベントは ETS の上書きで自動マージされる。
   """
@@ -495,7 +495,7 @@ defmodule Game.InputHandler do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc "GameLoop が tick のたびに呼ぶ — ロックフリー読み取り"
+  @doc "GameEvents が tick のたびに呼ぶ — ロックフリー読み取り"
   def get_move_vector do
     case :ets.lookup(@table, :move) do
       [{:move, vec}] -> vec
@@ -550,7 +550,7 @@ defmodule Game.InputHandler do
 end
 ```
 
-#### 27.5 `GameLoop` を修正: 入力を ETS から読む
+#### 27.5 `GameEvents` を修正: 入力を ETS から読む
 
 ```elixir
 # lib/game/game_loop.ex
@@ -578,7 +578,7 @@ end
 - [ ] `StressMonitor` のログが引き続き毎秒出力される
 - [ ] `iex> :ets.lookup(:frame_cache, :snapshot)` でスナップショットが確認できる
 - [ ] `iex> :ets.lookup(:input_state, :move)` で現在の入力ベクトルが確認できる
-- [ ] `StressMonitor` を `kill` しても GameLoop が止まらない
+- [ ] `StressMonitor` を `kill` しても GameEvents が止まらない
 
 ---
 
@@ -896,7 +896,7 @@ let w = world.0.read().unwrap();
 
 - [ ] MagicWand / Fireball / Lightning が正常に動作する
 - [ ] 10,000 体時の `physics_ms` が改善前より低下している
-- [ ] `StressMonitor` と `GameLoop` が同時に NIF を呼んでもデッドロックしない
+- [ ] `StressMonitor` と `GameEvents` が同時に NIF を呼んでもデッドロックしない
 
 ---
 
@@ -986,7 +986,7 @@ defmodule Game.Telemetry do
 end
 ```
 
-#### 30.3 `GameLoop` に計測ポイントを追加
+#### 30.3 `GameEvents` に計測ポイントを追加
 
 ```elixir
 # lib/game/game_loop.ex
@@ -1035,7 +1035,7 @@ end
 children = [
   Game.InputHandler,
   Game.EventBus,
-  Game.GameLoop,
+  Game.GameEvents,
   Game.StressMonitor,
   Game.Stats,
   Game.Telemetry,     # ← 追加
@@ -1249,7 +1249,7 @@ cargo bench --bench ai_bench
 ┌─────────────────────────────────────────────────────────┐
 │  BEAM VM (Elixir / OTP)                                 │
 │                                                         │
-│  Game.GameLoop ─── 60Hz tick ──→ NIF (Rust)             │
+│  Game.GameEvents ─── 60Hz tick ──→ NIF (Rust)             │
 │       │ ETS 書き込み（毎秒）                              │
 │       │ EventBus.broadcast（毎フレーム）                  │
 │       │ Telemetry.execute（毎秒）                         │

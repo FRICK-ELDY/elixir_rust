@@ -30,12 +30,12 @@
 │   "lobby" / "presence:global" … プレゼンス（オンライン一覧）                  │
 └───────────────────────────────┬─────────────────────────────────────────────┘
                                 │ RoomChannel join → Engine.start_room
-                                │ handle_in("input", ...) → GameLoop
+                                │ handle_in("input", ...) → GameEvents
 ┌───────────────────────────────▼─────────────────────────────────────────────┐
 │ 同一 Phoenix アプリ内: Engine（Elixir + Rust NIF）                           │
 │                                                                             │
-│ RoomSupervisor / RoomRegistry  … ルーム ID ごとに GameLoop + GameWorld       │
-│ GameLoop GenServer             … frame_events 受信・フェーズ管理・NIF 呼び出し │
+│ RoomSupervisor / RoomRegistry  … ルーム ID ごとに GameEvents + GameWorld       │
+│ GameEvents GenServer             … frame_events 受信・フェーズ管理・NIF 呼び出し │
 │ Rust NIF (Rustler)             … ResourceArc<RwLock<GameWorld>>             │
 │ Rust Native                    … ECS(SoA), Physics, wgpu Renderer           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -73,7 +73,7 @@
 | **メッセージ** | テキスト送受信、既読、履歴 | SERVER_DESIGN §6 |
 | **通知** | フレンド申請・ルーム招待・メッセージ着信の push | SERVER_DESIGN §7 |
 | **マッチング・ルーム** | ルーム作成/参加/退出、RoomChannel、Engine 連携 | MULTIPLAYER_PHOENIX_CHANNELS |
-| **エンジン** | ルームごとの GameLoop / GameWorld、物理・描画 | ENGINE_API, SPEC_ENGINE |
+| **エンジン** | ルームごとの GameEvents / GameWorld、物理・描画 | ENGINE_API, SPEC_ENGINE |
 
 ---
 

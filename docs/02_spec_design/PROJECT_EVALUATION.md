@@ -27,7 +27,7 @@
 | Step | 内容 | 状態 | 備考 |
 |------|------|------|------|
 | 40 | 2つ目のゲーム（ミニマル実装） | ✅ 完了 | Game.MiniShooter 実装。汎用化検証済み |
-| 41 | GameLoop Rust 移行 | ✅ 完了 | 高精度 60Hz、イベント駆動連携 |
+| 41 | ゲームループの Rust 移行 | ✅ 完了 | 高精度 60Hz、GameEvents によるイベント駆動連携 |
 | 42 | マップ・障害物システム | ✅ 完了 | MapLoader、obstacle_resolve、Spatial Hash 静的障害物 |
 | 43 | セーブ・ロード | ✅ 完了 | SaveManager、get_save_snapshot、load_save_snapshot、ハイスコア |
 | 44a | マルチプレイ基盤（複数 GameWorld） | ✅ 完了 | RoomSupervisor、RoomRegistry、headless ルーム対応 |
@@ -65,7 +65,7 @@
 
 ### 2.3 信頼性・拡張性
 
-- **OTP Supervisor** — SceneManager、InputHandler、EventBus、GameLoop 等を監視。障害時はプロセス単位で再起動
+- **OTP Supervisor** — SceneManager、InputHandler、EventBus、GameEvents 等を監視。障害時はプロセス単位で再起動
 - **RoomSupervisor** — 複数ルームを並列管理。Phoenix Channels 連携の土台が整っている
 - **EventBus + FrameCache** — フレームイベントのノンブロッキング配信、ETS によるプロセス間共有
 

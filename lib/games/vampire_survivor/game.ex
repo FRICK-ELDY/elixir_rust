@@ -49,7 +49,7 @@ defmodule Game.VampireSurvivor do
   @impl Engine.Game
   def assets_path, do: "vampire_survivor"
 
-  # ── Vampire Survivor 固有（シーン遷移等で GameLoop が参照）──
+  # ── Vampire Survivor 固有（シーン遷移等で GameEvents が参照）──
 
   @doc "レベルアップ武器選択シーンのモジュール"
   def level_up_scene, do: Game.VampireSurvivor.Scenes.LevelUp
@@ -60,7 +60,7 @@ defmodule Game.VampireSurvivor do
   @doc "ゲームオーバーシーンのモジュール"
   def game_over_scene, do: Game.VampireSurvivor.Scenes.GameOver
 
-  @doc "StressMonitor / GameLoop のログ用ウェーブラベル"
+  @doc "StressMonitor / GameEvents のログ用ウェーブラベル"
   def wave_label(elapsed_sec), do: Game.VampireSurvivor.SpawnSystem.wave_label(elapsed_sec)
 
   @doc "武器の表示用ラベル（ログ用）"

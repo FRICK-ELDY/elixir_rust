@@ -62,7 +62,7 @@ cd native/game_native && cargo test
 ```mermaid
 flowchart TB
     subgraph Elixir [Elixir / BEAM VM]
-        GL[GameLoop\nイベント駆動]
+        GL[GameEvents\nイベント駆動]
         SM[SceneManager]
         EB[EventBus / FrameCache]
         IH[InputHandler / ETS]
@@ -103,8 +103,8 @@ flowchart TB
 ### 1 フレームの流れ
 
 1. Rust ゲームループスレッドが 16.67ms 間隔で `physics_step` を実行
-2. フレームイベントを Elixir の GameLoop に `{:frame_events, events}` で送信
-3. GameLoop が受信 → 入力設定・EventBus 配信・シーン update
+2. フレームイベントを Elixir の GameEvents に `{:frame_events, events}` で送信
+3. GameEvents が受信 → 入力設定・EventBus 配信・シーン update
 4. NIF `get_frame_metadata` で HUD 用メタデータ（HP、敵数、弾数など）を取得
 5. LevelUp・BossAlert 中は `pause_physics` で physics を停止
 
@@ -120,7 +120,7 @@ elixir_rust/
 │   ├── game.ex
 │   └── game/
 │       ├── application.ex         # Supervisor ツリー
-│       ├── game_loop.ex           # 60Hz ゲームループ
+│       ├── game_events.ex         # frame_events 受信・フェーズ管理
 │       ├── scene_manager.ex       # シーン管理
 │       ├── scene_behaviour.ex     # シーン共通インターフェース
 │       ├── event_bus.ex           # フレームイベント配信
@@ -173,7 +173,7 @@ elixir_rust/
 ## ビジョン・ロードマップ
 
 - **現在**: ヴァンパイアサバイバーをデモとして含むエンジン基盤
-- **Step 41 完了**: GameLoop の Rust 移行 — 高精度 60Hz タイマー、イベント駆動の Elixir 連携
+- **Step 41 完了**: ゲームループの Rust 移行 — 高精度 60Hz タイマー、GameEvents によるイベント駆動の Elixir 連携
 - **今後**: エンジン層とゲーム層の分離を進め、**誰もが Elixir × Rust 環境でゲームを作れる**形を目指す
 
 詳細は [docs/05_steps/STEPS_GENERALIZATION.md](docs/05_steps/STEPS_GENERALIZATION.md) と [docs/05_steps/STEPS_EXTENSION.md](docs/05_steps/STEPS_EXTENSION.md) を参照してください。

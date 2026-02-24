@@ -27,7 +27,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Elixir BEAM VM（司令塔）                       │
 │                                                                 │
-│   GameLoop GenServer     SceneManager      SpawnSystem          │
+│   GameEvents GenServer     SceneManager      SpawnSystem          │
 │   ├─ 60Hz tick           ├─ シーンスタック ├─ ウェーブ制御       │
 │   ├─ ゲームフェーズ管理  ├─ Playing/       ├─ BossSystem        │
 │   └─ OTP Supervisor       LevelUp/BossAlert/GameOver            │
@@ -58,13 +58,13 @@
 
 ### 1.1 マルチプレイ・友達連携時の拡張（Phoenix サーバー）
 
-友達とつなぐ・マルチプレイを有効にする場合、**Phoenix サーバー**がクライアントとエンジンの間に立つ。認証・プレゼンス・フレンド・メッセージ・通知はサーバー側、ゲームルームは同一 Phoenix アプリ内の Engine（RoomSupervisor / GameLoop）と連携する。
+友達とつなぐ・マルチプレイを有効にする場合、**Phoenix サーバー**がクライアントとエンジンの間に立つ。認証・プレゼンス・フレンド・メッセージ・通知はサーバー側、ゲームルームは同一 Phoenix アプリ内の Engine（RoomSupervisor / GameEvents）と連携する。
 
 ```
   クライアント  ──WebSocket──►  Phoenix（認証・user: / room: Channel）
                                       │
                                       ▼
-                               Engine（RoomSupervisor, GameLoop）  ◄──NIF──►  Rust
+                               Engine（RoomSupervisor, GameEvents）  ◄──NIF──►  Rust
 ```
 
 - **Channel 構成**: `user:<id>`（メッセージ・通知・フレンド）、`room:<id>`（ゲーム）、`lobby`（プレゼンス）
@@ -101,10 +101,10 @@ def handle_info(:tick, %{phase: :game_over} = state), do: {:noreply, handle_game
 
 ### OTP Supervisor — ゲームが「自己修復」する
 
-`StressMonitor` プロセスがクラッシュしても、`GameLoop` は止まりません。Supervisor が自動的に再起動します。これは「防御的プログラミング」ではなく、**クラッシュを前提とした設計（Let it crash）** です。
+`StressMonitor` プロセスがクラッシュしても、`GameEvents` は止まりません。Supervisor が自動的に再起動します。これは「防御的プログラミング」ではなく、**クラッシュを前提とした設計（Let it crash）** です。
 
 ```
-GameLoop がクラッシュ → Supervisor が 1ms 以内に再起動 → ゲーム継続
+GameEvents がクラッシュ → Supervisor が 1ms 以内に再起動 → ゲーム継続
 SpawnSystem がクラッシュ → Supervisor が再起動 → ゲーム継続
 StressMonitor がクラッシュ → Supervisor が再起動 → ゲーム継続
 ```
@@ -234,17 +234,17 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> rustler::Atom {
 
 ```
 dirty_cpu なし:
-  [GameLoop tick][物理演算 8ms ブロック][他の Elixir プロセスが待機]
+  [GameEvents tick][物理演算 8ms ブロック][他の Elixir プロセスが待機]
 
 dirty_cpu あり:
-  [GameLoop tick] → dirty_cpu スレッドで物理演算
+  [GameEvents tick] → dirty_cpu スレッドで物理演算
   [他の Elixir プロセスは通常通り動作]
 ```
 
 ### 1 フレームのデータフロー
 
 ```
-1. GameLoop GenServer が :tick を受信（16ms 間隔）
+1. GameEvents GenServer が :tick を受信（16ms 間隔）
 2. Engine.physics_step(world_ref, delta_ms) → Rust で物理演算
    ├─ 移動計算（SoA + rayon、x86_64 では SIMD）
    ├─ 衝突判定・最近接探索（Spatial Hash）
@@ -305,7 +305,7 @@ config :game, current: Game.VampireSurvivor
 ```elixir
 # Elixir の分散処理は言語に組み込まれている
 Node.connect(:"game_server@192.168.1.1")
-GenServer.call({Engine.GameLoop, :"game_server@192.168.1.1"}, :get_state)
+GenServer.call({Engine.GameEvents, :"game_server@192.168.1.1"}, :get_state)
 ```
 
 BEAM VM の分散処理機能を使えば、**マルチプレイサーバーへの拡張が自然に行えます**。

@@ -79,7 +79,7 @@
 |------|------|
 | **問題** | `GameWorld(Mutex<...)` により、`get_hud_data` 等の読み取りも排他される |
 | **解決** | `RwLock` に変更。書き込み NIF は `.write()`、読み取り NIF は `.read()` |
-| **効果** | StressMonitor と GameLoop が同時に NIF を呼んでもデッドロックしない |
+| **効果** | StressMonitor と GameEvents が同時に NIF を呼んでもデッドロックしない |
 | **参照** | STEPS_PERF Step 29.3 |
 
 **詳細手順**: [STEPS_PERF.md § Step 29](../05_steps/STEPS_PERF.md#step-29-spatial-hash-最近接--rwlock)（29.3）
@@ -142,7 +142,7 @@
 
 | 項目 | 内容 |
 |------|------|
-| **問題** | StressMonitor の `call` で GameLoop ブロック、InputHandler の `cast` でメッセージキュー圧迫 |
+| **問題** | StressMonitor の `call` で GameEvents ブロック、InputHandler の `cast` でメッセージキュー圧迫 |
 | **解決** | ETS にスナップショット・入力状態を書き込み、ロックフリー読み取り |
 | **参照** | STEPS_PERF Step 27 |
 
@@ -199,7 +199,7 @@
 - `Game.SceneManager` GenServer でシーンスタック（push/pop/replace）を管理し render_type を取得
 - シーンを `%{module: Module, state: term}` で表現
 - `Game.Scenes.Playing`, `LevelUp`, `BossAlert`, `GameOver` で各フェーズを独立シーンに分離
-- `GameLoop` を SceneManager ベースにリファクタし、tick を現在シーンの update にディスパッチ
+- `GameEvents` を SceneManager ベースにリファクタし、tick を現在シーンの update にディスパッチ
 - `FrameCache` に render_type を追加（描画用シーン種別の参照）
 
 ---
@@ -258,7 +258,7 @@
 
 **実装内容**:
 - `get_frame_metadata` NIF: HUD・敵数・弾数・物理時間・レベルアップ・ボス情報を1回の呼び出しで取得
-- `GameLoop` の `maybe_log_and_cache` と `process_transition` を `get_frame_metadata` 使用に変更（複数 NIF → 1 NIF に集約）
+- `GameEvents` の `maybe_log_and_cache` と `process_transition` を `get_frame_metadata` 使用に変更（複数 NIF → 1 NIF に集約）
 - `get_render_data` / `get_particle_data` / `get_item_data` に非推奨ドキュメントと `#[deprecated]` を付与
 
 ---

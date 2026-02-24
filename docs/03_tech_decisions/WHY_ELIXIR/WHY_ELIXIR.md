@@ -49,7 +49,7 @@ BEAM は「壊れることを前提に設計する（Let it crash）」という
 Elixir の `GenServer` は、ゲームループを**状態機械**として自然に表現できます。本プロジェクトでは **Rust が tick を主導**し、物理演算後に Elixir に `{:frame_events, events}` を送信します。
 
 ```elixir
-defmodule Engine.GameLoop do
+defmodule Engine.GameEvents do
   use GenServer
 
   # Rust が物理演算を実行後に送るイベントを受信
@@ -70,7 +70,7 @@ end
 各ゲームシステムが独立したプロセスとして動作し、メッセージまたは ETS で通信します。
 
 ```
-Rust (physics) ──{:frame_events}──▶ Engine.GameLoop
+Rust (physics) ──{:frame_events}──▶ Engine.GameEvents
                                          │
 InputHandler (ETS) ◀──get_move_vector──  │  set_player_input(world_ref) ──▶ NIF
                                          │
@@ -130,7 +130,7 @@ defmodule App.Application do
       Engine.SceneManager,
       Engine.InputHandler,
       Engine.EventBus,
-      Engine.RoomSupervisor,   # GameLoop をルーム単位で起動
+      Engine.RoomSupervisor,   # GameEvents をルーム単位で起動
       Engine.StressMonitor,
       Engine.Stats,
       Engine.Telemetry,
@@ -140,7 +140,7 @@ defmodule App.Application do
 end
 ```
 
-`EventBus` や `InputHandler` がバグでクラッシュしても、`GameLoop` は継続して動作します。Supervisor が該当プロセスを自動再起動し、ゲームは中断なく続きます。`GameLoop` 自体は `RoomSupervisor` 配下でルームごとに起動されます。
+`EventBus` や `InputHandler` がバグでクラッシュしても、`GameEvents` は継続して動作します。Supervisor が該当プロセスを自動再起動し、ゲームは中断なく続きます。`GameEvents` 自体は `RoomSupervisor` 配下でルームごとに起動されます。
 
 ### 「Let it crash」哲学の実践
 
@@ -194,7 +194,7 @@ ETS は BEAM VM に組み込まれたインメモリ Key-Value ストアです�
 defmodule Engine.InputHandler do
   @table :input_state
 
-  # GameLoop が tick ごとにロックフリーで読み取る
+  # GameEvents が tick ごとにロックフリーで読み取る
   def get_move_vector do
     case :ets.lookup(@table, :move) do
       [{:move, vec}] -> vec
@@ -213,7 +213,7 @@ end
 **FrameCache（HUD スナップショット）**
 
 ```elixir
-# GameLoop が NIF から get_frame_metadata で取得した値を書き込み
+# GameEvents が NIF から get_frame_metadata で取得した値を書き込み
 # Rust 側の描画や StressMonitor がロックフリーで読み取る
 Engine.FrameCache.put(enemy_count, bullet_count, physics_ms, hud_data, render_type)
 ```
@@ -262,9 +262,9 @@ Rustler を使うと、Rust の関数が Elixir から**通常の関数呼び出
 # Engine が App.NifBridge をラップ。ゲームからは Engine 経由で利用
 Engine.spawn_enemies(world_ref, :slime, 5)
 Engine.get_level_up_data(world_ref)
-Engine.set_player_input(world_ref, dx, dy)  # GameLoop が InputHandler の結果を渡す
+Engine.set_player_input(world_ref, dx, dy)  # GameEvents が InputHandler の結果を渡す
 
-# 物理演算は Rust がループ内で実行し、{:frame_events, events} を GameLoop に送信
+# 物理演算は Rust がループ内で実行し、{:frame_events, events} を GameEvents に送信
 # Elixir は physics_step を直接呼ばない（Rust 駆動）
 ```
 
@@ -387,7 +387,7 @@ Unity・Unreal・Godot のような統合ゲームエンジンのエコシステ
   1. Supervisor による耐障害性 → ゲームバグからの自動回復
   2. GenServer + SceneManager による宣言的なゲームループ → シーン遷移の管理
   3. Rustler NIF による Rust との透過的な統合 → 性能と生産性の両立
-  4. 将来的な分散処理（ルーム単位の GameLoop、マルチプレイ）への自然な拡張
+  4. 将来的な分散処理（ルーム単位の GameEvents、マルチプレイ）への自然な拡張
   5. ETS による高速なデータ共有（入力状態、HUD スナップショット）
 ```
 

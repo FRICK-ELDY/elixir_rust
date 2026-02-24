@@ -951,7 +951,7 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Step 7 以降でここに GameLoop などを追加する
+      # Step 7 以降でここに GameEvents などを追加する
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]
@@ -1040,7 +1040,7 @@ ls _build\dev\lib\game\priv\native\
 
 **目標**: Elixir の GenServer で 60Hz のゲームループを実装し、Rust の `physics_step` NIF を呼び出す。
 
-**補足**: Elixir のタイマーは BEAM スケジューラ上で動作するため、ミリ秒単位での正確な実行が保証されません。このため、本ステップで一度 GenServer ベースのループを実装したうえで、のちに **Step 41（GameLoop Rust 移行・高精度 60 Hz）** にて Rust 側へ移行します。ここでは「動くループ」の土台として GenServer 版を扱います。
+**補足**: Elixir のタイマーは BEAM スケジューラ上で動作するため、ミリ秒単位での正確な実行が保証されません。このため、本ステップで一度 GenServer ベースのループを実装したうえで、のちに **Step 41（ゲームループの Rust 移行・高精度 60 Hz）** にて Rust 側へ移行します。ここでは「動くループ」の土台として GenServer 版を扱います。
 
 ### 7.1 GameWorld NIF の実装
 
@@ -1066,11 +1066,11 @@ fn physics_step(world: ResourceArc<Mutex<GameWorld>>, delta_ms: f64) -> u32 {
 }
 ```
 
-### 7.2 GameLoop GenServer
+### 7.2 GameEvents GenServer
 
 ```elixir
 # lib/game/game_loop.ex
-defmodule Game.GameLoop do
+defmodule Game.GameEvents do
   use GenServer
   require Logger
 
@@ -1124,14 +1124,14 @@ defmodule Game.InputHandler do
 
   def handle_cast({:key_down, key}, state) do
     new_state = %{state | keys_held: MapSet.put(state.keys_held, key)}
-    # GameLoop に移動ベクトルを通知
+    # GameEvents に移動ベクトルを通知
     dx =
       (if MapSet.member?(new_state.keys_held, :d), do: 1, else: 0) +
       (if MapSet.member?(new_state.keys_held, :a), do: -1, else: 0)
     dy =
       (if MapSet.member?(new_state.keys_held, :s), do: 1, else: 0) +
       (if MapSet.member?(new_state.keys_held, :w), do: -1, else: 0)
-    GenServer.cast(Game.GameLoop, {:input, :move, {dx, dy}})
+    GenServer.cast(Game.GameEvents, {:input, :move, {dx, dy}})
     {:noreply, new_state}
   end
   # key_up も同様
@@ -1433,8 +1433,8 @@ end
 ### 15.1 ゲームフェーズ管理
 
 ```elixir
-# GameLoop の state にフェーズを追加
-defmodule Game.GameLoop do
+# GameEvents の state にフェーズを追加
+defmodule Game.GameEvents do
   # フェーズ: :playing | :paused | :level_up | :game_over
   def handle_info(:tick, %{phase: :game_over} = state) do
     # ゲームオーバー中は物理演算を止める

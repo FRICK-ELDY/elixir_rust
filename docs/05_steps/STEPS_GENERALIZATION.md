@@ -24,7 +24,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 | レイヤー | ヴァンサバ固有の部分 | エンジンとして汎用化したい部分 |
 |----------|----------------------|-------------------------------|
 | **Rust** | `EnemyKind` (Slime, Bat, Golem)、`WeaponKind` (MagicWand, Axe...)、`BossKind`、`physics_step` 内の武器処理 | SoA、空間ハッシュ、フリーリスト、レンダラ、NIF ブリッジ |
-| **Elixir** | `SpawnSystem` (ウェーブ間隔・敵種別)、`BossSystem` (ボススケジュール)、`LevelSystem` (経験値・武器選択)、`render_type` (:playing \| :level_up \| :boss_alert \| :game_over) | GameLoop、SceneManager、EventBus、FrameCache、InputHandler |
+| **Elixir** | `SpawnSystem` (ウェーブ間隔・敵種別)、`BossSystem` (ボススケジュール)、`LevelSystem` (経験値・武器選択)、`render_type` (:playing \| :level_up \| :boss_alert \| :game_over) | GameEvents、SceneManager、EventBus、FrameCache、InputHandler |
 
 ### 新ゲーム追加時の障壁
 
@@ -60,7 +60,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 **成果物**:
 - `docs/06_system_design/GAME_INTERFACE.md` の作成
 - Game behaviour の仮定義（Elixir）
-- 現状の GameLoop / SceneManager / NIF が期待する「ゲーム側の責務」の一覧
+- 現状の GameEvents / SceneManager / NIF が期待する「ゲーム側の責務」の一覧
 
 **具体例（Game behaviour 案）**:
 ```elixir
@@ -106,7 +106,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 **対応**:
 - `lib/game/` を `lib/engine/` と `lib/games/vampire_survivor/` に分割
-- エンジン: `GameLoop`, `SceneManager`, `EventBus`, `FrameCache`, `InputHandler`, `StressMonitor`, `Stats`, `Telemetry`
+- エンジン: `GameEvents`, `SceneManager`, `EventBus`, `FrameCache`, `InputHandler`, `StressMonitor`, `Stats`, `Telemetry`
 - ヴァンサバ: `SpawnSystem`, `BossSystem`, `LevelSystem`, `Scenes.Playing`, `Scenes.LevelUp`, `Scenes.BossAlert`, `Scenes.GameOver`
 - `Application` は `engine` と `games` の両方を監督
 

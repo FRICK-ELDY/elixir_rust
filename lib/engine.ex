@@ -10,7 +10,7 @@ defmodule Engine do
 
   - **ゲーム側**: 敵スポーン、状態取得、レベルアップ制御などは `Engine` の関数を利用する
   - **シーン遷移**: `{:transition, action, state}` の戻り値で表現し、
-    `Engine.SceneManager` の呼び出しはエンジン内部（GameLoop）に委譲する
+    `Engine.SceneManager` の呼び出しはエンジン内部（GameEvents）に委譲する
   - **詳細**: `docs/06_system_design/ENGINE_API.md` を参照
 
   ## 利用例
@@ -129,12 +129,12 @@ defmodule Engine do
     App.NifBridge.skip_level_up(world_ref)
   end
 
-  # ── エンジン内部用（GameLoop が使用。ゲームは通常呼ばない）─────────────
-  # 以下は安定 API の一部として文書化。新規ゲームでは GameLoop が利用するため、
+  # ── エンジン内部用（GameEvents が使用。ゲームは通常呼ばない）─────────────
+  # 以下は安定 API の一部として文書化。新規ゲームでは GameEvents が利用するため、
   # ゲームコードから直接呼ぶ必要はない。
 
   @doc """
-  ワールドを生成する。GameLoop の init で呼ばれる。
+  ワールドを生成する。GameEvents の init で呼ばれる。
   ゲームから直接呼ぶことはない。
   """
   def create_world do
@@ -143,7 +143,7 @@ defmodule Engine do
 
   @doc """
   Step 42: マップ障害物を設定する。
-  GameLoop の init で呼ばれる。obstacles は MapLoader.obstacles_for_map/1 の戻り値。
+  GameEvents の init で呼ばれる。obstacles は MapLoader.obstacles_for_map/1 の戻り値。
   """
   def set_map_obstacles(world_ref, obstacles) do
     App.NifBridge.set_map_obstacles(world_ref, obstacles)
@@ -159,7 +159,7 @@ defmodule Engine do
 
   @doc """
   Step 41: Rust 駆動の高精度ゲームループを起動する。
-  pid には GameLoop の self() を渡す。
+  pid には GameEvents の self() を渡す。
   """
   def start_rust_game_loop(world_ref, control_ref, pid) do
     App.NifBridge.start_rust_game_loop(world_ref, control_ref, pid)
@@ -180,7 +180,7 @@ defmodule Engine do
   end
 
   @doc """
-  物理演算を1ステップ実行する。GameLoop の tick から呼ばれる。
+  物理演算を1ステップ実行する。GameEvents の tick から呼ばれる。
   ゲームから直接呼ぶことはない。
   """
   def physics_step(world_ref, delta_ms) do
@@ -188,7 +188,7 @@ defmodule Engine do
   end
 
   @doc """
-  プレイヤー入力を設定する。GameLoop が InputHandler の結果を渡す。
+  プレイヤー入力を設定する。GameEvents が InputHandler の結果を渡す。
   ゲームから直接呼ぶことはない。
   """
   def set_player_input(world_ref, dx, dy) do
@@ -196,7 +196,7 @@ defmodule Engine do
   end
 
   @doc """
-  フレームイベントをドレインする。GameLoop が EventBus にブロードキャストする。
+  フレームイベントをドレインする。GameEvents が EventBus にブロードキャストする。
   ゲームから直接呼ぶことはない。
   """
   def drain_frame_events(world_ref) do
@@ -205,7 +205,7 @@ defmodule Engine do
 
   @doc """
   フレームメタデータを取得する。FrameCache や HUD 描画に利用。
-  GameLoop が使用。ゲームから直接呼ぶことはない。
+  GameEvents が使用。ゲームから直接呼ぶことはない。
   """
   def get_frame_metadata(world_ref) do
     App.NifBridge.get_frame_metadata(world_ref)
@@ -213,7 +213,7 @@ defmodule Engine do
 
   @doc """
   武器を追加する（Step 38: entity_registry で weapon → ID に解決）。
-  GameLoop の weapon 選択処理で呼ばれる。
+  GameEvents の weapon 選択処理で呼ばれる。
 
   ## 引数
   - `weapon_name` - 追加する武器の名前（atom または string）
@@ -229,7 +229,7 @@ defmodule Engine do
   end
 
   @doc """
-  装備中の武器スロット情報を取得する。GameLoop が context 構築に使用。
+  装備中の武器スロット情報を取得する。GameEvents が context 構築に使用。
   ゲームから直接呼ぶことはない。
   """
   def get_weapon_levels(world_ref) do
@@ -279,7 +279,7 @@ defmodule Engine do
   # ── Step 44: マルチプレイ・ルーム管理 ────────────────────────────────────
 
   @doc """
-  新規ルームを起動する。各ルームは独立した GameLoop + GameWorld を持つ。
+  新規ルームを起動する。各ルームは独立した GameEvents + GameWorld を持つ。
 
   ## 戻り値
   - `{:ok, pid}` - 起動成功
@@ -305,7 +305,7 @@ defmodule Engine do
   def list_rooms, do: Engine.RoomSupervisor.list_rooms()
 
   @doc """
-  ルーム ID に対応する GameLoop の pid を返す。
+  ルーム ID に対応する GameEvents の pid を返す。
   メインルームは `:main`、Phoenix Channel 連携時はルーム文字列を使用。
 
   ## 例
@@ -313,18 +313,18 @@ defmodule Engine do
   """
   def get_loop_for_room(room_id), do: Engine.RoomRegistry.get_loop(room_id)
 
-  # ── シーン操作（GameLoop が transition 処理で使用）───────────────────────
+  # ── シーン操作（GameEvents が transition 処理で使用）───────────────────────
   # ゲームは {:transition, {:push, mod, arg}, state} 等の戻り値で意図を伝え、
-  # 実際の push_scene 等の呼び出しは GameLoop が行う。
+  # 実際の push_scene 等の呼び出しは GameEvents が行う。
 
   @doc """
-  新規シーンをスタックにプッシュする。GameLoop の transition 処理で使用。
+  新規シーンをスタックにプッシュする。GameEvents の transition 処理で使用。
   ゲームは update の戻り値で `{:transition, {:push, mod, arg}, state}` を返す。
   """
   defdelegate push_scene(module, init_arg \\ %{}), to: Engine.SceneManager
 
   @doc """
-  現在のシーンをポップする。GameLoop の transition 処理で使用。
+  現在のシーンをポップする。GameEvents の transition 処理で使用。
   ゲームは `{:transition, :pop, state}` を返す。
   """
   defdelegate pop_scene(), to: Engine.SceneManager
@@ -335,13 +335,13 @@ defmodule Engine do
   """
   defdelegate replace_scene(module, init_arg \\ %{}), to: Engine.SceneManager
 
-  @doc "現在のシーンを返す。GameLoop が使用。"
+  @doc "現在のシーンを返す。GameEvents が使用。"
   defdelegate current_scene(), to: Engine.SceneManager, as: :current
 
   @doc "描画用の現在シーン種別を返す。FrameCache 等が使用。"
   defdelegate render_type(), to: Engine.SceneManager
 
-  @doc "現在シーンの state を更新する。GameLoop が使用。"
+  @doc "現在シーンの state を更新する。GameEvents が使用。"
   defdelegate update_current_scene(fun), to: Engine.SceneManager, as: :update_current
 
   # ── Step 38: entity_registry による ID 解決（内部用）─────────────────────
