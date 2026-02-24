@@ -44,7 +44,7 @@ defmodule Game.MiniShooter do
   @impl Engine.Game
   def assets_path, do: "mini_shooter"
 
-  # ── GameLoop / StressMonitor が参照するオプションAPI ──────────────
+  # ── GameEvents / StressMonitor が参照するオプションAPI ──────────────
   # ヴァンサバと同様のインターフェース。レベルアップなしのためスタブを返す。
 
   def level_up_scene, do: __MODULE__

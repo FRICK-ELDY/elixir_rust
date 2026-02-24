@@ -3,7 +3,7 @@ defmodule Engine.SceneBehaviour do
   シーンコールバックの動作定義。
 
   各シーンは init/1, update/2, render_type/0 を実装する。
-  SceneManager がスタックで管理し、GameLoop が update を呼び出す。
+  SceneManager がスタックで管理し、GameEvents が update を呼び出す。
   """
 
   @doc """
@@ -12,7 +12,7 @@ defmodule Engine.SceneBehaviour do
   @callback init(init_arg :: term()) :: {:ok, state :: term()}
 
   @doc """
-  毎 tick 呼ばれる更新。context は GameLoop が構築する共有状態。
+  毎 tick 呼ばれる更新。context は GameEvents が構築する共有状態。
 
   戻り値（最後の opts は省略可。省略時は %{}）:
   - `{:continue, new_state}` または `{:continue, new_state, opts}`

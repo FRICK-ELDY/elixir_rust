@@ -20,7 +20,7 @@ Phoenix Channels で「友達とつなぐ」サーバーを導入する際の、
 ### 1.2 サーバーの役割
 
 - **友達とつなぐための Phoenix サーバー**を立て、クライアントは WebSocket（Channels）で接続する。
-- 同一 Phoenix アプリ内で、Engine（RoomSupervisor / GameLoop）が動く。ルーム参加時は既存の [RoomChannel 設計](./MULTIPLAYER_PHOENIX_CHANNELS.md) に従う。
+- 同一 Phoenix アプリ内で、Engine（RoomSupervisor / GameEvents）が動く。ルーム参加時は既存の [RoomChannel 設計](./MULTIPLAYER_PHOENIX_CHANNELS.md) に従う。
 - フレンド機能・メッセージ・プレゼンスは Elixir/Phoenix の本領が発揮される領域として、サーバー設計に含める。
 
 ---
@@ -134,8 +134,8 @@ end
 
 | 方式 | 説明 | サーバーの役割 | このプロジェクトでの対応 |
 |------|------|-----------------|---------------------------|
-| **ホスト 1 人 + 他は P2P** | 1 プレイヤーをホストとし、他プレイヤーはホストのクライアントに接続。ゲームのループ・判定はホスト側で行う。 | マッチング・ルーム一覧・「誰がホストか」の通知、NAT トラバーサル補助。ゲームデータは流さない。 | Engine（GameLoop + GameWorld）をホストのクライアントで動かす。Phoenix はルーム作成・参加・WebRTC シグナリングのみ。 |
-| **専用ゲームサーバー** | 1 台のサーバーがゲームの権威となり、全プレイヤーがそのサーバーに接続する。 | マッチングに加え、サーバー上で Engine を動かし、入力の集約・状態の配信を行う。 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) の想定どおり、Phoenix アプリ内で RoomSupervisor / GameLoop を動かす。全員が RoomChannel 経由で接続。 |
+| **ホスト 1 人 + 他は P2P** | 1 プレイヤーをホストとし、他プレイヤーはホストのクライアントに接続。ゲームのループ・判定はホスト側で行う。 | マッチング・ルーム一覧・「誰がホストか」の通知、NAT トラバーサル補助。ゲームデータは流さない。 | Engine（GameEvents + GameWorld）をホストのクライアントで動かす。Phoenix はルーム作成・参加・WebRTC シグナリングのみ。 |
+| **専用ゲームサーバー** | 1 台のサーバーがゲームの権威となり、全プレイヤーがそのサーバーに接続する。 | マッチングに加え、サーバー上で Engine を動かし、入力の集約・状態の配信を行う。 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) の想定どおり、Phoenix アプリ内で RoomSupervisor / GameEvents を動かす。全員が RoomChannel 経由で接続。 |
 
 - **ホスト方式**: サーバー負荷を抑えられる。ホストの回線・マシンがボトルネックになる。友達同士・少〜中規模向け。
 - **専用ゲームサーバー方式**: 公平性・チート耐性・安定性を重視する場合に適する。サーバー運用コストは増える。

@@ -1,10 +1,10 @@
 defmodule Engine.InputHandler do
   @moduledoc """
   キー入力状態を ETS に書き込む。
-  Engine.GameLoop は tick のたびに ETS から読み取る（ポーリング方式）。
+  Engine.GameEvents は tick のたびに ETS から読み取る（ポーリング方式）。
 
-  変更前: キーイベントごとに Engine.GameLoop へ cast → メッセージキューに溜まる
-  変更後: ETS に書き込むだけ → Engine.GameLoop は tick 時に 1 回だけ読む
+  変更前: キーイベントごとに Engine.GameEvents へ cast → メッセージキューに溜まる
+  変更後: ETS に書き込むだけ → Engine.GameEvents は tick 時に 1 回だけ読む
 
   同一フレーム内の複数キーイベントは ETS の上書きで自動マージされる。
   """
@@ -15,7 +15,7 @@ defmodule Engine.InputHandler do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc "Engine.GameLoop が tick のたびに呼ぶ — ロックフリー読み取り"
+  @doc "Engine.GameEvents が tick のたびに呼ぶ — ロックフリー読み取り"
   def get_move_vector do
     case :ets.lookup(@table, :move) do
       [{:move, vec}] -> vec

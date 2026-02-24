@@ -98,7 +98,7 @@ end
 
 ## 3. エンジンがゲームに期待する責務
 
-### 3.1 GameLoop が期待するもの
+### 3.1 GameEvents が期待するもの
 
 | 責務 | 現状の実装 | 備考 |
 |------|------------|------|
@@ -119,7 +119,7 @@ end
 
 | 責務 | 現状の実装 | 備考 |
 |------|------------|------|
-| world_ref の管理 | `GameLoop` が create_world で取得 | ゲーム開始時にエンジンが作成 |
+| world_ref の管理 | `GameEvents` が create_world で取得 | ゲーム開始時にエンジンが作成 |
 | 敵種別・武器種別 | `EnemyKind`, `WeaponKind` が Rust にハードコード | 将来は entity_registry 経由で ID 参照 |
 | render_type の利用 | `get_frame_metadata` → FrameCache → レンダラ | 描画モード切り替え用 |
 | （その他 NIF 呼び出し） | spawn_enemies(kind), add_weapon(name), spawn_boss(kind) など | kind/name は現状 atom/string |

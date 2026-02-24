@@ -1,7 +1,7 @@
 # マップ・セーブ・マルチプレイ・デバッグ支援 ステップガイド
 
 **根拠**: [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
-**前提**: Step 1〜40 まで完了（汎用化・シーン管理・アセット管理・ゲーム分離・2 つ目のゲームミニマル実装済み）。Step 41（GameLoop Rust 移行）は本ドキュメントで優先実施。
+**前提**: Step 1〜40 まで完了（汎用化・シーン管理・アセット管理・ゲーム分離・2 つ目のゲームミニマル実装済み）。Step 41（ゲームループの Rust 移行）は本ドキュメントで優先実施。
 
 このドキュメントは、エンジン分析で挙がっていた残存課題を実装するためのステップガイドです。
 
@@ -10,12 +10,12 @@
 ## 目次
 
 1. [全体ロードマップ](#1-全体ロードマップ)
-2. [Step 41: GameLoop Rust 移行](#2-step-41-gameloop-rust-移行)（優先度高）
+2. [Step 41: ゲームループの Rust 移行](#2-step-41-gameloop-rust-移行)（優先度高）
 3. [Step 42: マップ・障害物システム](#3-step-42-マップ障害物システム)
 4. [Step 43: セーブ・ロード](#4-step-43-セーブロード)
 5. [Step 44: マルチプレイ](#5-step-44-マルチプレイ)
 6. [Step 45: デバッグ支援](#6-step-45-デバッグ支援)
-7. [Step 46: GameLoop を GameEvent(s) にリネーム](#7-step-46-gameloop-を-gameevents-にリネーム)
+7. [Step 46: GameLoop を GameEvents にリネーム](#7-step-46-gameloop-を-gameevents-にリネーム)
 8. [推奨実施順序と依存関係](#8-推奨実施順序と依存関係)
 9. [関連ドキュメント](#9-関連ドキュメント)
 
@@ -27,7 +27,7 @@
 Step 40: 2 つ目のゲーム（ミニマル実装）
   └ 汎用化の検証。[STEPS_GENERALIZATION.md § Step 40](./STEPS_GENERALIZATION.md#step-40-2-つ目のゲームミニマル実装) を参照
 
-Step 41: GameLoop Rust 移行（高精度 60 Hz）
+Step 41: ゲームループの Rust 移行（高精度 60 Hz）
   └ tick 主導権を Rust に、Elixir はイベント駆動
 
 Step 42: マップ・障害物システム
@@ -42,13 +42,13 @@ Step 44: マルチプレイ基盤（ルーム管理）
 Step 45: デバッグ支援（NIF）
   └ パニックトレース・NifResult 統一
 
-Step 46: GameLoop を GameEvent(s) にリネーム
+Step 46: GameLoop を GameEvents にリネーム
   └ Elixir 側の役割（frame_events 受信・フェーズ管理）に合わせたモジュール名へ変更
 ```
 
 **実施順序の推奨**:
 1. **Step 40（2 つ目のゲーム）** — 汎用化の検証。STEPS_GENERALIZATION で定義済み
-2. **Step 41（GameLoop Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
+2. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
 3. **Step 45（デバッグ）** — 他ステップの開発効率を上げるため早期に
 4. **Step 42（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
 5. **Step 43（セーブ）** — 独立した機能。マップの影響を受けない
@@ -56,7 +56,7 @@ Step 46: GameLoop を GameEvent(s) にリネーム
 
 ---
 
-## 2. Step 41: GameLoop Rust 移行（高精度 60 Hz）
+## 2. Step 41: ゲームループの Rust 移行（高精度 60 Hz）
 
 ### 2.1 目標
 
@@ -88,12 +88,12 @@ Step 46: GameLoop を GameEvent(s) にリネーム
 
 #### 41.2 Rust → Elixir 通信
 
-- `drain_frame_events` の結果をスレッドから Elixir の GenServer（例: EventBus または GameLoop の代替プロセス）へ送信
+- `drain_frame_events` の結果をスレッドから Elixir の GenServer（例: EventBus または GameEvents の代替プロセス）へ送信
 - `:erlang.send(pid, {:frame_events, events})` または Port/Threaded NIF を利用
 
 #### 41.3 Elixir: tick 駆動の停止、イベント駆動への移行
 
-- **GameLoop GenServer**: tick の `Process.send_after` を削除。代わりに Rust からの `{:frame_events, _}` 等を受信
+- **GameEvents GenServer**: tick の `Process.send_after` を削除。代わりに Rust からの `{:frame_events, _}` 等を受信
 - **シーン制御**: `level_up` / `game_over` / `boss_defeated` イベントで SceneManager が push/pop/replace
 - **pause/resume**: LevelUp・BossAlert 中は Rust に `pause_physics` を通知。Elixir が `resume` を送るまで physics を止める
 
@@ -259,13 +259,13 @@ end
 
 #### 43.3 ハイスコアの永続化
 
-ゲームオーバー時に GameLoop が `Engine.save_high_score(score)` を自動呼び出し。GameOver シーンの init_arg に `high_scores` を渡し、FrameCache にも格納して描画側で利用可能に。
+ゲームオーバー時に GameEvents が `Engine.save_high_score(score)` を自動呼び出し。GameOver シーンの init_arg に `high_scores` を渡し、FrameCache にも格納して描画側で利用可能に。
 
-#### 43.4 Engine / GameLoop API
+#### 43.4 Engine / GameEvents API
 
 - **Engine.save_session/1**, **Engine.load_session/1**: セーブ/ロード
-- **Engine.GameLoop.save_session/0**: cast でセーブを実行
-- **Engine.GameLoop.load_session/0**: call でロードを実行し、Playing シーンへ遷移
+- **Engine.GameEvents.save_session/0**: cast でセーブを実行
+- **Engine.GameEvents.load_session/0**: call でロードを実行し、Playing シーンへ遷移
 
 ### 4.5 確認ポイント
 
@@ -277,10 +277,10 @@ end
 
 ```elixir
 # セーブ
-Engine.GameLoop.save_session()
+Engine.GameEvents.save_session()
 
 # ロード（セーブがあれば Playing に復帰）
-Engine.GameLoop.load_session()
+Engine.GameEvents.load_session()
 
 # ハイスコア確認
 Engine.load_high_scores()
@@ -322,15 +322,15 @@ Engine.best_score()
 
 **実装済み**:
 
-- **Engine.RoomRegistry**: Registry で room_id → GameLoop pid を管理
+- **Engine.RoomRegistry**: Registry で room_id → GameEvents pid を管理
 - **Engine.RoomSupervisor**: DynamicSupervisor。`start_room(room_id)` / `stop_room(room_id)` / `list_rooms()`
-- **Engine.GameLoop**: `room_id` オプションに対応。`:main` は従来どおり `Engine.GameLoop` の名前で起動し、SceneManager・FrameCache を駆動。それ以外は headless（physics のみ）
+- **Engine.GameEvents**: `room_id` オプションに対応。`:main` は従来どおり `Engine.GameEvents` の名前で起動し、SceneManager・FrameCache を駆動。それ以外は headless（physics のみ）
 - **Engine**: `start_room/1`, `stop_room/1`, `list_rooms/0`, `get_loop_for_room/1` を公開
 
 #### 44.3 Step 44b: Phoenix Channels 連携（将来）
 
 - `RoomChannel` で `join("room:123")` 時に `Engine.start_room("123")` を呼ぶ
-- 入力イベントを Channel でブロードキャストし、各クライアントの GameLoop が受信
+- 入力イベントを Channel でブロードキャストし、各クライアントの GameEvents が受信
 - 状態同期は「入力のブロードキャスト」または「定期的なスナップショット配信」で行う
 
 詳細: [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md)
@@ -442,11 +442,11 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 ---
 
-## 7. Step 46: GameLoop を GameEvent(s) にリネーム
+## 7. Step 46: GameLoop を GameEvents にリネーム
 
 ### 7.1 目標
 
-- **Elixir 側の GenServer 名を役割に合わせて変更する**: Step 41 以降、tick 駆動は Rust に移り、Elixir の当該プロセスは「Rust からの `{:frame_events, events}` を受信し、フェーズ管理・NIF 呼び出しを行う」役割になっている。そのため **GameLoop** という名前は誤解を招くので、**GameEvent** または **GameEvents** にリネームする。
+- **Elixir 側の GenServer 名を役割に合わせて変更する**: Step 41 以降、tick 駆動は Rust に移り、Elixir の当該プロセスは「Rust からの `{:frame_events, events}` を受信し、フェーズ管理・NIF 呼び出しを行う」役割になっている。そのため **GameLoop** という名前は誤解を招くので、**GameEvent** または **GameEvents** にリネームする（本実装では **GameEvents** を採用）。
 
 ### 7.2 なぜ重要か
 
@@ -475,7 +475,7 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 - **Application**: `Engine.GameLoop` を子に起動している箇所 → `Engine.GameEvents`
 - **RoomSupervisor**: 子 spec で `Engine.GameLoop` を起動している箇所 → `Engine.GameEvents`
-- **RoomRegistry**: 「GameLoop pid」などのコメント・ドキュメント
+- **RoomRegistry**: 「GameEvents pid」などのコメント・ドキュメント
 - **Engine モジュール**: `start_room` 内で `Engine.GameLoop.start_link(...)` を呼んでいる箇所 → `Engine.GameEvents.start_link(...)`
 - **Engine.Game / 各ゲーム**: `Engine.GameLoop.save_session` 等の API 呼び出し → `Engine.GameEvents.save_session`
 - **NIF ブリッジ・Rust**: `start_rust_game_loop` に渡している `pid` は「GameEvents の pid」である（名前のみの変更のため引数はそのままでよい）
@@ -483,7 +483,7 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 #### 46.3 後方互換（オプション）
 
-移行期間中のみ、`Engine.GameLoop` をエイリアスとして残すこともできる。
+移行期間中のみ、旧名 `Engine.GameLoop` をエイリアスとして残すこともできる。
 
 ```elixir
 # lib/engine/game_loop.ex（旧ファイルを残す場合）
@@ -516,7 +516,7 @@ end
 ```mermaid
 flowchart TB
     S40[Step 40\n2つ目のゲーム]
-    S41[Step 41\nGameLoop Rust 移行]
+    S41[Step 41\nゲームループの Rust 移行]
     S42[Step 42\nマップ・障害物]
     S43[Step 43\nセーブ・ロード]
     S44[Step 44\nマルチプレイ]
@@ -536,12 +536,12 @@ flowchart TB
 
 **推奨順序**:
 1. **Step 40（2 つ目のゲーム）** — 汎用化の検証
-2. **Step 41（GameLoop Rust 移行）** — 精度確保のため最優先
+2. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先
 3. **Step 45（デバッグ支援）** — 他ステップの開発を効率化
 4. **Step 42（マップ）** — ゲーム性に直結
 5. **Step 43（セーブ）** — 独立。マップ完了後でも可
 6. **Step 44（マルチプレイ）** — 設計変更が大きいため最後
-7. **Step 46（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
+7. **Step 46（GameEvents → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
 
 **並行可能**: Step 42 と Step 43 は互いに依存しないため並行実施可能。Step 46 は 41 完了後であればいつでも実施可能（44 のドキュメント更新とまとめてもよい）。
 

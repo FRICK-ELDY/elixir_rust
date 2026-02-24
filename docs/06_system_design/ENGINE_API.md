@@ -11,7 +11,7 @@
 
 - `Game.NifBridge` を直接呼び出さない
 - `Engine.SceneManager` を直接呼び出さない（シーン遷移は update の戻り値で表現）
-- エンジン内部（GameLoop、FrameCache 等）は必要に応じて NifBridge / SceneManager を直接利用してよい
+- エンジン内部（GameEvents、FrameCache 等）は必要に応じて NifBridge / SceneManager を直接利用してよい
 
 この方針により、将来 NIF の実装が変わっても、ゲームコードの変更を最小限に抑えられる。
 
@@ -26,7 +26,7 @@
 | `Engine.SceneBehaviour` | シーンが実装する behaviour | 実装する |
 | `Game.NifBridge` | Rust NIF のラッパー | 呼ばない |
 | `Engine.SceneManager` | シーンスタック管理 | 呼ばない |
-| `Engine.GameLoop` | 60Hz ループ orchestration | 呼ばない |
+| `Engine.GameEvents` | 60Hz ループ orchestration | 呼ばない |
 
 ---
 
@@ -53,15 +53,15 @@ context の `world_ref` を受け取り、ワールドに対する操作を行�
 | `Engine.start_room(room_id)` | 新規ルームを起動。`{:ok, pid}` / `{:error, :already_started}` |
 | `Engine.stop_room(room_id)` | ルームを終了。`{:error, :not_found}` はルーム不在時 |
 | `Engine.list_rooms()` | アクティブなルーム ID のリスト |
-| `Engine.get_loop_for_room(room_id)` | ルームの GameLoop pid。`{:ok, pid}` / `:error` |
+| `Engine.get_loop_for_room(room_id)` | ルームの GameEvents pid。`{:ok, pid}` / `:error` |
 
 ### 3.3 エンジン内部用（ゲームは通常呼ばない）
 
-GameLoop が利用。将来の拡張やカスタムループ実装のため文書化する。
+GameEvents が利用。将来の拡張やカスタムループ実装のため文書化する。
 
 | 関数 | 説明 |
 |------|------|
-| `Engine.create_world()` | ワールドを生成。GameLoop の init で呼ばれる |
+| `Engine.create_world()` | ワールドを生成。GameEvents の init で呼ばれる |
 | `Engine.physics_step(world_ref, delta_ms)` | 物理演算を1ステップ実行 |
 | `Engine.set_player_input(world_ref, dx, dy)` | プレイヤー入力を設定 |
 | `Engine.drain_frame_events(world_ref)` | フレームイベントを取得（EventBus に broadcast） |
@@ -69,7 +69,7 @@ GameLoop が利用。将来の拡張やカスタムループ実装のため文�
 | `Engine.add_weapon(world_ref, weapon_name)` | 武器を追加（atom または string） |
 | `Engine.get_weapon_levels(world_ref)` | 装備中の武器スロット情報を取得 |
 
-### 3.4 シーン操作（GameLoop が transition で使用）
+### 3.4 シーン操作（GameEvents が transition で使用）
 
 ゲームは **直接呼ばない**。update の戻り値で遷移意図を伝える。
 
@@ -81,7 +81,7 @@ GameLoop が利用。将来の拡張やカスタムループ実装のため文�
 | `{:transition, {:push, mod, init_arg}, state}` | 新規シーンをプッシュ |
 | `{:transition, {:replace, mod, init_arg}, state}` | 現在のシーンを置換 |
 
-実際の `push_scene` / `pop_scene` / `replace_scene` は GameLoop が `Engine` 経由で呼ぶ。
+実際の `push_scene` / `pop_scene` / `replace_scene` は GameEvents が `Engine` 経由で呼ぶ。
 
 ---
 

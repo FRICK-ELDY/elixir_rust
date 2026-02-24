@@ -3,22 +3,22 @@ defmodule Engine.FrameCache do
   フレームごとのゲーム状態スナップショットを ETS に書き込む。
 
   ETS の特性:
-  - 書き込みは GameLoop（単一ライター）のみ — 競合なし
+  - 書き込みは GameEvents（単一ライター）のみ — 競合なし
   - 読み取りは任意のプロセスからロックフリーで可能
   - read_concurrency: true で並列読み取りを最適化
-  - GameLoop がクラッシュして ETS テーブルが消えても、
-    Supervisor 再起動後に GameLoop.init/1 で再作成される
+  - GameEvents がクラッシュして ETS テーブルが消えても、
+    Supervisor 再起動後に GameEvents.init/1 で再作成される
   """
 
   @table :frame_cache
 
-  @doc "GameLoop.init/1 から呼ぶ — ETS テーブルを作成する"
+  @doc "GameEvents.init/1 から呼ぶ — ETS テーブルを作成する"
   def init do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
   end
 
   @doc """
-  GameLoop が毎秒（60 フレームごと）書き込む。
+  GameEvents が毎秒（60 フレームごと）書き込む。
 
   - render_type: シーンの render_type/0 の戻り値（任意の atom）
   - high_scores: Step 43: ゲームオーバー時にハイスコア一覧を渡す（任意）

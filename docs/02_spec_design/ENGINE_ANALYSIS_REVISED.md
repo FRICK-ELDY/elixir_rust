@@ -66,11 +66,11 @@
 - **SoA ECS** — EnemyWorld, BulletWorld, ParticleWorld, ItemWorld が SoA + フリーリストで O(1) スポーン
 - **空間ハッシュ** — 衝突判定と最近接探索の両方に活用、O(n) 全探索を回避
 - **rayon 並列 AI** — Chase AI をデータ並列化。x86_64 では SIMD 版でさらに高速化
-- **RwLock** — 読み取り専用 NIF が並行実行可能、StressMonitor と GameLoop の競合解消
+- **RwLock** — 読み取り専用 NIF が並行実行可能、StressMonitor と GameEvents の競合解消
 
 ### 2.2 信頼性・耐障害性面
 
-- **OTP Supervisor** — SceneManager, InputHandler, EventBus, GameLoop, StressMonitor, Stats, Telemetry を `one_for_one` で監視
+- **OTP Supervisor** — SceneManager, InputHandler, EventBus, GameEvents, StressMonitor, Stats, Telemetry を `one_for_one` で監視
 - **EventBus** — フレームイベントを Stats 等にノンブロッキング配信、ゲームループへの影響なし
 - **ETS** — FrameCache と InputState でプロセス間ロックフリー共有
 

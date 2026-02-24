@@ -3,7 +3,7 @@ defmodule Engine.StressMonitor do
   Independent performance monitoring process.
 
   This demonstrates a key Elixir/OTP strength: lightweight processes.
-  The StressMonitor runs completely independently from the GameLoop —
+  The StressMonitor runs completely independently from the GameEvents —
   if it crashes, the game continues unaffected (one_for_one supervision).
 
   It samples the game world every second and:

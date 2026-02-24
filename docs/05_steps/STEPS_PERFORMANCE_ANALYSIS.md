@@ -5,7 +5,7 @@
 Step 25 までで完成したゲームは、Rust が重い計算を担い、Elixir が司令塔として機能する設計です。  
 このドキュメントでは、**現状コードの具体的な改善点**を分析し、Elixir/OTP の強みをさらに引き出す手法を提案します。
 
-> **注意**: 本ドキュメントで述べているアーキテクチャ（GameLoop が Elixir/GenServer 側にある構成など）は**当時のもの**です。のちに Step 41 にてゲームループは Rust 側へ移行しています。記載内容はその時点の分析・提案として参照してください。
+> **注意**: 本ドキュメントで述べているアーキテクチャ（GameEvents が Elixir/GenServer 側にある構成など）は**当時のもの**です。のちに Step 41 にてゲームループは Rust 側へ移行しています。記載内容はその時点の分析・提案として参照してください。
 
 ---
 
@@ -17,10 +17,10 @@ Step 25 までで完成したゲームは、Rust が重い計算を担い、Elix
 ┌─────────────────────────────────────────────────────┐
 │  BEAM VM (Elixir / OTP)                             │
 │                                                     │
-│  Game.GameLoop ──── 60Hz tick ──→ NIF (Rust)        │
+│  Game.GameEvents ──── 60Hz tick ──→ NIF (Rust)        │
 │  Game.StressMonitor ─ 1Hz ──────→ NIF (Rust)        │
 │  Game.Stats ─────── async cast ─→ (pure Elixir)     │
-│  Game.InputHandler ─ event ─────→ GameLoop cast     │
+│  Game.InputHandler ─ event ─────→ GameEvents cast     │
 │  Game.SpawnSystem ── pure fn ───→ (no state)        │
 └─────────────────────────────────────────────────────┘
          ↕ Mutex<GameWorldInner>
@@ -43,8 +43,8 @@ Step 25 までで完成したゲームは、Rust が重い計算を担い、Elix
 | `BulletWorld::spawn_ex` の線形スキャン | `lib.rs:270` | ★★ |
 | `exclude.contains(&i)` が O(N) | `lib.rs:429` | ★ |
 | ゲームイベントが Elixir に届かない | 全体 | ★★★ |
-| `Stats.record_kill` が GameLoop から呼ばれていない | `stats.ex` | ★★ |
-| `StressMonitor` が `GameLoop` に call して world_ref を取得 | `stress_monitor.ex:109` | ★ |
+| `Stats.record_kill` が GameEvents から呼ばれていない | `stats.ex` | ★★ |
+| `StressMonitor` が `GameEvents` に call して world_ref を取得 | `stress_monitor.ex:109` | ★ |
 
 ---
 
@@ -56,7 +56,7 @@ Step 25 までで完成したゲームは、Rust が重い計算を担い、Elix
 
 ### 問題
 
-現在、Rust NIF の結果（敵撃破・レベルアップ・ダメージ）は `GameLoop` の中で処理されるが、  
+現在、Rust NIF の結果（敵撃破・レベルアップ・ダメージ）は `GameEvents` の中で処理されるが、  
 `Game.Stats` には通知されていない。`Stats.record_kill` は定義されているが **一度も呼ばれていない**。
 
 ```elixir
@@ -212,7 +212,7 @@ end
 
 ### 問題
 
-`GameLoop` と `StressMonitor` が同じデータを独立して取得している。
+`GameEvents` と `StressMonitor` が同じデータを独立して取得している。
 
 ```elixir
 # game_loop.ex:235
@@ -226,8 +226,8 @@ bullet_count  = Game.NifBridge.get_bullet_count(world_ref)
 {hp, max_hp, score, elapsed_s} = Game.NifBridge.get_hud_data(world_ref)
 ```
 
-さらに `StressMonitor` は `GameLoop` に `GenServer.call` して `world_ref` を取得するため、  
-毎秒 1 回 `GameLoop` のメッセージキューをブロックしている。
+さらに `StressMonitor` は `GameEvents` に `GenServer.call` して `world_ref` を取得するため、  
+毎秒 1 回 `GameEvents` のメッセージキューをブロックしている。
 
 ### 解決策: ETS テーブルにフレームスナップショットをキャッシュ
 
@@ -238,12 +238,12 @@ defmodule Game.FrameCache do
   フレームごとのゲーム状態スナップショットを ETS に書き込む。
 
   ETS の特性:
-  - 書き込みは GameLoop（単一ライター）のみ
+  - 書き込みは GameEvents（単一ライター）のみ
   - 読み取りは任意のプロセスからロックフリーで可能
   - プロセスクラッシュ時は ETS テーブルごと消えるが、
     Supervisor が再起動すれば自動的に再作成される
 
-  これにより StressMonitor は GameLoop に call せず、
+  これにより StressMonitor は GameEvents に call せず、
   ETS から直接データを読み取れる。
   """
 
@@ -253,7 +253,7 @@ defmodule Game.FrameCache do
     :ets.new(@table, [:named_table, :public, read_concurrency: true])
   end
 
-  @doc "GameLoop が毎フレーム書き込む"
+  @doc "GameEvents が毎フレーム書き込む"
   def put(enemy_count, bullet_count, physics_ms, hud_data) do
     :ets.insert(@table, {:snapshot, %{
       enemy_count:  enemy_count,
@@ -292,7 +292,7 @@ end
 ```
 
 ```elixir
-# stress_monitor.ex — ETS から読む（GameLoop への call が不要になる）
+# stress_monitor.ex — ETS から読む（GameEvents への call が不要になる）
 defp sample_and_log(state) do
   case Game.FrameCache.get() do
     :empty -> state
@@ -305,7 +305,7 @@ end
 
 ### 効果
 
-- `StressMonitor` → `GameLoop` への `GenServer.call` が消える
+- `StressMonitor` → `GameEvents` への `GenServer.call` が消える
 - NIF 呼び出し回数が毎秒 4 回削減（`get_enemy_count` × 2、`get_frame_time_ms` × 2 など）
 - `StressMonitor` が `world_ref` を保持する必要がなくなり、設計がシンプルになる
 
@@ -540,12 +540,12 @@ end
 
 ### 問題
 
-`InputHandler` は `key_down` / `key_up` のたびに `GameLoop` に `cast` を送る。  
+`InputHandler` は `key_down` / `key_up` のたびに `GameEvents` に `cast` を送る。  
 高速なキー入力（ゲームパッド等）では毎フレーム複数の cast が届く可能性がある。
 
 ```elixir
 # input_handler.ex:46 — キーイベントごとに cast
-GenServer.cast(Game.GameLoop, {:input, :move, {dx, dy}})
+GenServer.cast(Game.GameEvents, {:input, :move, {dx, dy}})
 ```
 
 ### 解決策: 入力状態のポーリング化
@@ -555,10 +555,10 @@ GenServer.cast(Game.GameLoop, {:input, :move, {dx, dy}})
 defmodule Game.InputHandler do
   @moduledoc """
   キー入力状態を ETS に書き込む。
-  GameLoop は tick のたびに ETS から読み取る（ポーリング）。
+  GameEvents は tick のたびに ETS から読み取る（ポーリング）。
 
   利点:
-  - GameLoop のメッセージキューに入力 cast が溜まらない
+  - GameEvents のメッセージキューに入力 cast が溜まらない
   - 同一フレーム内の複数キーイベントが自動的にマージされる
   - ETS 読み取りはロックフリー（read_concurrency: true）
   """
@@ -570,7 +570,7 @@ defmodule Game.InputHandler do
     :ets.insert(@table, {:move, {0, 0}})
   end
 
-  @doc "GameLoop が tick のたびに呼ぶ"
+  @doc "GameEvents が tick のたびに呼ぶ"
   def get_move_vector do
     case :ets.lookup(@table, :move) do
       [{:move, vec}] -> vec
@@ -583,7 +583,7 @@ defmodule Game.InputHandler do
     dx = calc_dx(keys_held)
     dy = calc_dy(keys_held)
     :ets.insert(@table, {:move, {dx, dy}})
-    # GameLoop への cast は不要になる
+    # GameEvents への cast は不要になる
   end
 end
 ```
@@ -604,7 +604,7 @@ end
 ### 問題
 
 `GameWorld(pub Mutex<GameWorldInner>)` は、読み取り専用の NIF 関数（`get_enemy_count` など）でも  
-排他ロックを取得する。`StressMonitor` が読み取り中に `GameLoop` の tick がブロックされる可能性がある。
+排他ロックを取得する。`StressMonitor` が読み取り中に `GameEvents` の tick がブロックされる可能性がある。
 
 ```rust
 // lib.rs:609
@@ -635,7 +635,7 @@ fn get_enemy_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
 
 ### 効果
 
-- `StressMonitor` と `GameLoop` が同時に NIF を呼んでも、読み取り系はブロックしない
+- `StressMonitor` と `GameEvents` が同時に NIF を呼んでも、読み取り系はブロックしない
 - `physics_step`（書き込み）は依然として排他ロックを取得するが、読み取り専用 NIF との競合が解消
 
 ---
@@ -770,7 +770,7 @@ pub fn update_chase_ai_simd(enemies: &mut EnemyWorld, player_x: f32, player_y: f
 ### 1. 並行性（Concurrency）
 
 ```
-GameLoop ─── 60Hz ──→ Rust NIF
+GameEvents ─── 60Hz ──→ Rust NIF
 StressMonitor ─ 1Hz ──→ ETS（ロックフリー読み取り）
 Stats ──────── async ─→ EventBus 経由でイベント受信
 Telemetry ─── async ─→ 計測データを非同期集計
@@ -783,8 +783,8 @@ Telemetry ─── async ─→ 計測データを非同期集計
 
 ```elixir
 # application.ex — one_for_one 戦略
-# Stats がクラッシュしても GameLoop は止まらない
-# StressMonitor がクラッシュしても GameLoop は止まらない
+# Stats がクラッシュしても GameEvents は止まらない
+# StressMonitor がクラッシュしても GameEvents は止まらない
 # EventBus がクラッシュしても Supervisor が即座に再起動
 ```
 

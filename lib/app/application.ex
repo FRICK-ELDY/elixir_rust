@@ -10,15 +10,15 @@ defmodule App.Application do
     System.put_env("GAME_ASSETS_ID", assets_path)
 
     children = [
-      # Step 44: ルーム ID → GameLoop pid の Registry
+      # Step 44: ルーム ID → GameEvents pid の Registry
       {Registry, [keys: :unique, name: Engine.RoomRegistry]},
-      # G2: シーン管理 — GameLoop より前に起動
+      # G2: シーン管理 — GameEvents より前に起動
       Engine.SceneManager,
-      # Input handler: translates key events to GameLoop casts
+      # Input handler: translates key events to GameEvents (ETS 経由)
       Engine.InputHandler,
-      # Step 26: イベントバス — GameLoop より前に起動
+      # Step 26: イベントバス — GameEvents より前に起動
       Engine.EventBus,
-      # Step 44: ルーム管理（内部で GameLoop を起動）
+      # Step 44: ルーム管理（内部で GameEvents を起動）
       Engine.RoomSupervisor,
       # Independent performance monitor
       Engine.StressMonitor,

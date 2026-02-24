@@ -1,10 +1,9 @@
-defmodule Engine.GameLoop do
+defmodule Engine.GameEvents do
   @moduledoc """
-  60 Hz game loop implemented as a GenServer.
+  Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer。
 
-  Step 41: Rust 駆動の高精度タイマーを使用。
-  tick の主導権を Rust に移し、Process.send_after の ±数 ms ジッターを解消。
-  Elixir は {:frame_events, events} を受信してイベント駆動でシーン制御を行う。
+  Step 41: tick 駆動は Rust 側で高精度 60 Hz。Elixir は `{:frame_events, events}` を
+  受信してイベント駆動でシーン制御・入力設定・EventBus 配信を行う。
 
   Step 44: ルーム単位で複数インスタンスが起動可能。
   :main ルームのみが SceneManager・FrameCache を駆動する（表示・入力対象）。
@@ -69,7 +68,7 @@ defmodule Engine.GameLoop do
     if room_id == :main, do: Engine.FrameCache.init()
     start_ms = now_ms()
 
-    # Step 41: Rust 駆動ゲームループを起動（高精度 60Hz）
+    # Step 41: Rust 駆動ゲームループを起動（高精度 60Hz）。pid は当 GenServer（GameEvents）の self()
     Engine.start_rust_game_loop(world_ref, control_ref, self())
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
