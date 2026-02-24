@@ -108,7 +108,7 @@
 | 45 | デバッグ支援（NIF） |
 
 **推奨順序**: 41 → 45 → 42 → 43 → 44（42 と 43 は並行可）  
-**詳細**: [STEPS_EXTENSION.md](./STEPS_EXTENSION.md)（Step 40 は [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) を参照）
+**詳細**: [STEPS_EXTENSION.md](./STEPS_EXTENSION.md)
 
 ---
 
