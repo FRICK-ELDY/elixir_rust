@@ -109,8 +109,9 @@
 | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) | **システムアーキテクチャ全体像**。クライアント〜Phoenix サーバー〜Engine の構成、Channel・実装優先順位（SERVER_DESIGN 準拠） | 全体像・設計参照時 |
 | [ASSET_MANAGEMENT.md](./06_system_design/ASSET_MANAGEMENT.md) | G3: アセット管理システム設計。AssetId、パスマッピング、Elixir/Rust の責務分離、実行時ロード | PRIORITY_STEPS G3 関連 |
 | [ENGINE_API.md](./06_system_design/ENGINE_API.md) | 安定化されたエンジン API リファレンス。ゲームから利用する関数、ルーム管理（Step 44） | API 参照時 |
+| [EPIC_ONLINE_SERVICES.md](./06_system_design/EPIC_ONLINE_SERVICES.md) | **EOS 採用方針**（友達とつなぐ）。マッチング・ロビー・フレンド・ボイスを EOS で賄い、維持コストを抑える。プラグイン化の指針 | マルチプレイ・友達連携の第一選択 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44: Phoenix Channels 連携の設計指針。RoomChannel 実装例、入力配信、状態同期 | マルチプレイ検討時 |
-| [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) | **サーバー設計**（Phoenix Channels 導入を視野に）。認証・プレゼンス・フレンド・メッセージ・通知と Channel 構成、実装優先順位 | サーバー設計・友達連携検討時 |
+| [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) | **サーバー設計**（Phoenix Channels 導入を視野に）。認証・プレゼンス・フレンド・メッセージ・通知と Channel 構成、実装優先順位。EOS を使わない場合の代替 | サーバー設計・友達連携検討時 |
 | [REFACTOR_PROPOSAL.md](./06_system_design/REFACTOR_PROPOSAL.md) | `lib.rs` / `main.rs` の責務整理。`renderer` を lib 側に移動する提案。実施タイミング: Step 15 完了後 | 提案中 |
 
 ---
