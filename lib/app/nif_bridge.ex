@@ -80,4 +80,10 @@ defmodule App.NifBridge do
 
   # エリート敵をスポーンする（hp_multiplier: HP 倍率）
   def spawn_elite_enemy(_world, _kind, _count, _hp_multiplier), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 41: Rust 駆動ゲームループ
+  def create_game_loop_control(), do: :erlang.nif_error(:nif_not_loaded)
+  def start_rust_game_loop(_world, _control, _pid), do: :erlang.nif_error(:nif_not_loaded)
+  def pause_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
+  def resume_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
 end
