@@ -1950,9 +1950,8 @@ fn run_rust_game_loop(
         if next_tick > now {
             thread::sleep(next_tick - now);
         }
-        if next_tick <= now {
-            next_tick = Instant::now();
-        }
+        // 遅延時はリセットせず next_tick を維持。スリープをスキップして即座に処理することで
+        // フレーム間隔の一定性を保ち、ジッターを防ぐ。
 
         let events: Vec<(Atom, u32, u32)> = if control.is_paused() {
             Vec::new()
@@ -1968,7 +1967,7 @@ fn run_rust_game_loop(
         // 毎フレーム送信（pause 中は空リスト）。LevelUp/BossAlert も update を回すため。
         let mut env = OwnedEnv::new();
         let _ = env.send_and_clear(&pid, |env| {
-            (frame_events(), events.clone()).encode(env)
+            (frame_events(), events).encode(env)
         });
     }
 }
