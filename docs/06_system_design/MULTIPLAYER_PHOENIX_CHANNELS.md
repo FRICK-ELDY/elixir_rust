@@ -23,14 +23,10 @@ Step 44 で用意したルーム管理基盤と Phoenix Channels を連携する
 
 def join("room:" <> room_id, _params, socket) do
   case Engine.start_room(room_id) do
-    {:ok, _pid} ->
-      {:ok, assign(socket, :room_id, room_id)}
-
-    {:error, :already_started} ->
-      {:ok, assign(socket, :room_id, room_id)}
-
-    {:error, _} ->
+    {:error, reason} when reason != :already_started ->
       {:error, %{reason: "room_start_failed"}}
+    _ ->
+      {:ok, assign(socket, :room_id, room_id)}
   end
 end
 ```

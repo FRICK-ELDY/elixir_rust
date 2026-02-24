@@ -36,7 +36,7 @@ defmodule App.Application do
       case Engine.RoomSupervisor.start_room(:main) do
         {:ok, _} -> :ok
         {:error, :already_started} -> :ok
-        _ -> :ok
+        {:error, reason} -> raise "Failed to start main room: #{inspect(reason)}"
       end
     end
 

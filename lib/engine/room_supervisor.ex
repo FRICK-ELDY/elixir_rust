@@ -68,7 +68,7 @@ defmodule Engine.RoomSupervisor do
   def stop_room(room_id) when is_binary(room_id) or is_atom(room_id) do
     case Engine.RoomRegistry.get_loop(room_id) do
       {:ok, pid} ->
-        Engine.RoomRegistry.unregister(room_id)
+        # 登録解除は GameLoop の terminate/2（:main）または Registry の自動解除（:via）で行う
         DynamicSupervisor.terminate_child(__MODULE__, pid)
         Logger.info("[ROOM] Stopped room #{inspect(room_id)}")
         :ok
