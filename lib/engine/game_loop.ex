@@ -91,7 +91,6 @@ defmodule Engine.GameLoop do
     Engine.RoomRegistry.unregister(:main)
     :ok
   end
-
   def terminate(_reason, _state), do: :ok
 
   @impl true
