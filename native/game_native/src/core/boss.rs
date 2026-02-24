@@ -1,12 +1,24 @@
 //! ボスエネミーの共通定義（main.rs / lib.rs で共有）
 
-/// ボスの種類
+/// ボスの種類（セーブデータ互換のため #[repr(u8)] と明示値で固定）
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[repr(u8)]
 pub enum BossKind {
-    SlimeKing,
-    BatLord,
-    StoneGolem,
+    SlimeKing   = 0,
+    BatLord     = 1,
+    StoneGolem  = 2,
+}
+
+impl BossKind {
+    /// セーブデータからのデシリアライズ用。未知の ID は None。
+    pub fn from_u8(id: u8) -> Option<Self> {
+        match id {
+            0 => Some(Self::SlimeKing),
+            1 => Some(Self::BatLord),
+            2 => Some(Self::StoneGolem),
+            _ => None,
+        }
+    }
 }
 
 impl BossKind {

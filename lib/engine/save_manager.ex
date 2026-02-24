@@ -1,4 +1,6 @@
 defmodule Engine.SaveManager do
+  require Logger
+
   @moduledoc """
   Step 43: セーブ・ロード管理。
 
@@ -134,10 +136,16 @@ defmodule Engine.SaveManager do
         try do
           :erlang.binary_to_term(binary)
         rescue
-          _ -> []
+          e ->
+            Logger.warning("Failed to deserialize high scores: #{Exception.message(e)}")
+            []
         end
 
-      {:error, _} ->
+      {:error, :enoent} ->
+        []
+
+      {:error, reason} ->
+        Logger.warning("Failed to read high scores file: #{:file.format_error(reason)}")
         []
     end
   end

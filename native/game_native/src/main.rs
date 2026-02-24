@@ -1565,11 +1565,7 @@ impl GameWorld {
                 .collect(),
             next_boss_index:  self.next_boss_index,
             boss:             self.boss.as_ref().filter(|b| b.alive).map(|b| BossSave {
-                kind:   match b.kind {
-                    BossKind::SlimeKing => 0,
-                    BossKind::BatLord => 1,
-                    BossKind::StoneGolem => 2,
-                },
+                kind:   b.kind as u8,
                 x:      b.x,
                 y:      b.y,
                 hp:     b.hp,
@@ -1605,13 +1601,9 @@ impl GameWorld {
             self.weapon_slots.push(WeaponSlot::new(0));
         }
 
-        self.boss = data.boss.as_ref().map(|b| {
-            let kind = match b.kind {
-                0 => BossKind::SlimeKing,
-                1 => BossKind::BatLord,
-                _ => BossKind::StoneGolem,
-            };
-            BossState {
+        self.boss = data.boss.as_ref().and_then(|b| {
+            let kind = BossKind::from_u8(b.kind)?;
+            Some(BossState {
                 kind,
                 x: b.x, y: b.y,
                 hp: b.hp, max_hp: b.max_hp,
@@ -1619,7 +1611,7 @@ impl GameWorld {
                 invincible: false, invincible_timer: 0.0,
                 alive: true,
                 is_dashing: false, dash_timer: 0.0, dash_vx: 0.0, dash_vy: 0.0,
-            }
+            })
         });
 
         self.enemies = EnemyWorld::new();
