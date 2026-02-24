@@ -17,8 +17,12 @@ static PLAYER_HURT_BYTES:  &[u8] = include_bytes!("../../../assets/audio/player_
 static ITEM_PICKUP_BYTES:  &[u8] = include_bytes!("../../../assets/audio/item_pickup.wav");
 
 use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+
+use serde::{Deserialize, Serialize};
 
 use audio::AudioManager;
 
@@ -40,7 +44,7 @@ use core::physics::spatial_hash::CollisionWorld;
 use core::enemy::EnemyKind;
 use core::boss::BossKind;
 use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_around_player};
-use renderer::{BossHudInfo, HudData, Renderer};
+use renderer::{BossHudInfo, GameUiState, HudData, Renderer};
 
 // Step 42: game_window 用のデフォルト障害物（マップ中央付近に配置・起動時に見える）
 const DEFAULT_OBSTACLES: &[(f32, f32, f32, u8)] = &[
@@ -376,6 +380,37 @@ enum GamePhase {
     Title,
     Playing,
     GameOver,
+}
+
+// ─── Step 43: セーブ・ロード（game_window 用）──────────────────────
+
+const SAVE_PATH: &str = "saves/session.dat";
+
+#[derive(Serialize, Deserialize)]
+struct SaveData {
+    player_x:         f32,
+    player_y:         f32,
+    player_hp:        f32,
+    player_max_hp:    f32,
+    score:            u32,
+    elapsed_seconds:  f32,
+    level:            u32,
+    exp:              u32,
+    kill_count:       u32,
+    camera_x:         f32,
+    camera_y:         f32,
+    weapon_slots:     Vec<(u8, u32)>,
+    next_boss_index:  usize,
+    boss:             Option<BossSave>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BossSave {
+    kind:   u8,
+    x:      f32,
+    y:      f32,
+    hp:     f32,
+    max_hp: f32,
 }
 
 // Step 25: スコアポップアップ
@@ -1511,6 +1546,116 @@ impl GameWorld {
             kill_count:      self.kill_count,
         }
     }
+
+    fn to_save_data(&self) -> SaveData {
+        SaveData {
+            player_x:         self.player.x,
+            player_y:         self.player.y,
+            player_hp:        self.player.hp,
+            player_max_hp:    self.player.max_hp,
+            score:            self.score,
+            elapsed_seconds:  self.elapsed_seconds,
+            level:            self.level,
+            exp:              self.exp,
+            kill_count:       self.kill_count,
+            camera_x:         self.camera_x,
+            camera_y:         self.camera_y,
+            weapon_slots:     self.weapon_slots.iter()
+                .map(|s| (s.kind_id, s.level))
+                .collect(),
+            next_boss_index:  self.next_boss_index,
+            boss:             self.boss.as_ref().filter(|b| b.alive).map(|b| BossSave {
+                kind:   match b.kind {
+                    BossKind::SlimeKing => 0,
+                    BossKind::BatLord => 1,
+                    BossKind::StoneGolem => 2,
+                },
+                x:      b.x,
+                y:      b.y,
+                hp:     b.hp,
+                max_hp: b.max_hp,
+            }),
+        }
+    }
+
+    fn load_from_save_data(&mut self, data: &SaveData) {
+        self.player.x = data.player_x;
+        self.player.y = data.player_y;
+        self.player.hp = data.player_hp;
+        self.player.max_hp = data.player_max_hp;
+        self.player.input_dx = 0.0;
+        self.player.input_dy = 0.0;
+        self.player.invincible_timer = 0.0;
+
+        self.score = data.score;
+        self.elapsed_seconds = data.elapsed_seconds;
+        self.level = data.level;
+        self.exp = data.exp;
+        self.kill_count = data.kill_count;
+        self.level_up_pending = false;
+
+        self.camera_x = data.camera_x;
+        self.camera_y = data.camera_y;
+        self.next_boss_index = data.next_boss_index;
+
+        self.weapon_slots = data.weapon_slots.iter()
+            .map(|&(kind_id, level)| WeaponSlot { kind_id, level, cooldown_timer: 0.0 })
+            .collect();
+        if self.weapon_slots.is_empty() {
+            self.weapon_slots.push(WeaponSlot::new(0));
+        }
+
+        self.boss = data.boss.as_ref().map(|b| {
+            let kind = match b.kind {
+                0 => BossKind::SlimeKing,
+                1 => BossKind::BatLord,
+                _ => BossKind::StoneGolem,
+            };
+            BossState {
+                kind,
+                x: b.x, y: b.y,
+                hp: b.hp, max_hp: b.max_hp,
+                phase_timer: kind.special_interval(),
+                invincible: false, invincible_timer: 0.0,
+                alive: true,
+                is_dashing: false, dash_timer: 0.0, dash_vx: 0.0, dash_vy: 0.0,
+            }
+        });
+
+        self.enemies = EnemyWorld::new();
+        self.bullets = BulletWorld::new();
+        self.particles = ParticleWorld::new(67890);
+        self.items = ItemWorld::new();
+        self.magnet_timer = 0.0;
+        self.score_popups.clear();
+        self.collision.dynamic.clear();
+    }
+
+    fn save_to_file(&self) -> Result<(), String> {
+        let data = self.to_save_data();
+        let bytes = bincode::serialize(&data).map_err(|e| e.to_string())?;
+        fs::create_dir_all(Path::new(SAVE_PATH).parent().unwrap_or(Path::new(".")))
+            .map_err(|e| e.to_string())?;
+        fs::write(SAVE_PATH, bytes).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn load_from_file(&mut self) -> Result<(), String> {
+        let bytes = fs::read(SAVE_PATH).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "No save data".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
+        let data: SaveData = bincode::deserialize(&bytes).map_err(|e| e.to_string())?;
+        self.load_from_save_data(&data);
+        Ok(())
+    }
+
+    fn has_save(&self) -> bool {
+        Path::new(SAVE_PATH).exists()
+    }
 }
 
 // ─── winit application ────────────────────────────────────────
@@ -1523,6 +1668,8 @@ struct App {
     last_update: Option<Instant>,
     // Step 22: 音声マネージャ（デバイスなし環境では None）
     audio:       Option<AudioManager>,
+    // Step 43: セーブ・ロード用 UI 状態
+    ui_state:    GameUiState,
 }
 
 impl App {
@@ -1534,6 +1681,7 @@ impl App {
             keys_held:   HashSet::new(),
             last_update: None,
             audio:       None,
+            ui_state:    GameUiState::default(),
         }
     }
 }
@@ -1668,7 +1816,8 @@ impl ApplicationHandler for App {
                     let camera_offset  = self.game.camera_offset();
                     renderer.update_instances(&render_data, &particle_data, &item_data, &obstacle_data, camera_offset);
                     let hud = self.game.hud_data(renderer.current_fps);
-                    if let Some(chosen) = renderer.render(window, &hud) {
+                    self.ui_state.has_save = self.game.has_save();
+                    if let Some(chosen) = renderer.render(window, &hud, &mut self.ui_state) {
                         match chosen.as_str() {
                             // Step 25: タイトル「Start」
                             "__start__" => {
@@ -1683,6 +1832,33 @@ impl ApplicationHandler for App {
                                 if let Some(ref am) = self.audio {
                                     am.resume_bgm();
                                 }
+                            }
+                            // Step 43: セーブ
+                            "__save__" => {
+                                match self.game.save_to_file() {
+                                    Ok(()) => {
+                                        self.ui_state.save_toast = Some(("Saved!".to_string(), 2.0));
+                                    }
+                                    Err(e) => {
+                                        self.ui_state.save_toast = Some((format!("Save failed: {e}"), 3.0));
+                                    }
+                                }
+                                self.ui_state.has_save = true;
+                            }
+                            // Step 43: ロード（ダイアログ表示をトリガー）
+                            "__load__" => {
+                                self.ui_state.load_dialog = Some(self.game.has_save());
+                            }
+                            "__load_confirm__" => {
+                                self.ui_state.load_dialog = None;
+                                if let Err(e) = self.game.load_from_file() {
+                                    self.ui_state.save_toast = Some((format!("Load failed: {e}"), 3.0));
+                                } else {
+                                    self.ui_state.save_toast = Some(("Loaded!".to_string(), 2.0));
+                                }
+                            }
+                            "__load_cancel__" => {
+                                self.ui_state.load_dialog = None;
                             }
                             _ => self.game.select_weapon(&chosen),
                         }

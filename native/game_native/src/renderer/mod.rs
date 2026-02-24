@@ -234,6 +234,18 @@ impl Default for HudData {
     }
 }
 
+/// Step 43: セーブ・ロード用 UI 状態
+#[derive(Default)]
+pub struct GameUiState {
+    /// トースト表示 (メッセージ, 残り秒数)
+    pub save_toast:     Option<(String, f32)>,
+    /// ロードダイアログ: None=閉, Some(true)=確認待ち, Some(false)=「セーブデータなし」
+    pub load_dialog:    Option<bool>,
+    pub has_save:       bool,
+    /// ボタンクリックでセットするアクション（毎フレーム消費）
+    pub pending_action: Option<String>,
+}
+
 // ─── Renderer ─────────────────────────────────────────────────
 
 pub struct Renderer {
@@ -768,8 +780,9 @@ impl Renderer {
         );
     }
 
-    /// HUD を描画し、レベルアップ画面でボタンが押された場合は選択された武器名を返す
-    pub fn render(&mut self, window: &Window, hud: &HudData) -> Option<String> {
+    /// HUD を描画し、レベルアップ画面でボタンが押された場合は選択された武器名を返す。
+    /// Step 43: ui_state でセーブ/ロードダイアログ・トーストを制御する。
+    pub fn render(&mut self, window: &Window, hud: &HudData, ui_state: &mut GameUiState) -> Option<String> {
         // ─── FPS 計測 ────────────────────────────────────────────
         self.frame_count += 1;
         let elapsed = self.fps_timer.elapsed();
@@ -835,7 +848,7 @@ impl Renderer {
         let raw_input = self.egui_winit.take_egui_input(window);
         let mut chosen_weapon: Option<String> = None;
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
-            chosen_weapon = build_hud_ui(ctx, hud, self.current_fps);
+            chosen_weapon = build_hud_ui(ctx, hud, self.current_fps, ui_state);
         });
 
         self.egui_winit.handle_platform_output(window, full_output.platform_output);
@@ -893,12 +906,40 @@ impl Renderer {
 /// - レベルアップ選択: 武器名
 /// - タイトル画面「Start」: "__start__"
 /// - ゲームオーバー「Retry」: "__retry__"
-fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> {
-    match hud.phase {
+/// - Step 43: セーブ「__save__」/ ロード「__load__」/ ロード確認「__load_confirm__」「__load_cancel__」
+fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32, ui_state: &mut GameUiState) -> Option<String> {
+    // トースト更新（毎フレーム減衰）
+    if let Some((_, ref mut t)) = ui_state.save_toast {
+        *t -= ctx.input(|i| i.stable_dt);
+        if *t <= 0.0 {
+            ui_state.save_toast = None;
+        }
+    }
+
+    let mut chosen = match hud.phase {
         GamePhase::Title    => build_title_ui(ctx),
         GamePhase::GameOver => build_game_over_ui(ctx, hud),
-        GamePhase::Playing  => build_playing_ui(ctx, hud, fps),
+        GamePhase::Playing  => build_playing_ui(ctx, hud, fps, ui_state),
+    };
+
+    // ロードダイアログ（モーダル）
+    if ui_state.load_dialog.is_some() {
+        if let Some(dialog_result) = build_load_dialog(ctx, ui_state) {
+            chosen = Some(dialog_result);
+        }
     }
+
+    // pending_action（Save/Load ボタン）を優先
+    if let Some(action) = ui_state.pending_action.take() {
+        chosen = Some(action);
+    }
+
+    // セーブトースト表示
+    if let Some((ref msg, _)) = ui_state.save_toast {
+        build_save_toast(ctx, msg);
+    }
+
+    chosen
 }
 
 /// タイトル画面（操作説明 + START ボタン）
@@ -1000,11 +1041,102 @@ fn build_game_over_ui(ctx: &egui::Context, hud: &HudData) -> Option<String> {
     chosen
 }
 
-/// プレイ中の全 HUD（フラッシュ・ポップアップ・ステータスバー・ボス HP・レベルアップ）
-fn build_playing_ui(ctx: &egui::Context, hud: &HudData, fps: f32) -> Option<String> {
+/// Step 43: ロード確認ダイアログ
+fn build_load_dialog(ctx: &egui::Context, ui_state: &mut GameUiState) -> Option<String> {
+    let dialog_type = ui_state.load_dialog?;
+    let mut result = None;
+
+    egui::Area::new(egui::Id::new("load_dialog"))
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 200))
+                .inner_margin(egui::Margin::symmetric(40, 30))
+                .corner_radius(12.0)
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 180, 255)))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        if dialog_type {
+                            ui.label(
+                                egui::RichText::new("Load saved game?")
+                                    .color(egui::Color32::from_rgb(220, 220, 255))
+                                    .size(20.0)
+                                    .strong(),
+                            );
+                            ui.label(
+                                egui::RichText::new("Current progress will be lost.")
+                                    .color(egui::Color32::from_rgb(180, 180, 200))
+                                    .size(14.0),
+                            );
+                            ui.add_space(20.0);
+                            ui.horizontal(|ui| {
+                                if ui.add(
+                                    egui::Button::new(egui::RichText::new("Load").color(egui::Color32::WHITE))
+                                        .fill(egui::Color32::from_rgb(60, 120, 200))
+                                        .min_size(egui::vec2(100.0, 36.0)),
+                                ).clicked() {
+                                    result = Some("__load_confirm__".to_string());
+                                }
+                                if ui.add(
+                                    egui::Button::new(egui::RichText::new("Cancel").color(egui::Color32::WHITE))
+                                        .fill(egui::Color32::from_rgb(80, 80, 80))
+                                        .min_size(egui::vec2(100.0, 36.0)),
+                                ).clicked() {
+                                    result = Some("__load_cancel__".to_string());
+                                }
+                            });
+                        } else {
+                            ui.label(
+                                egui::RichText::new("No save data")
+                                    .color(egui::Color32::from_rgb(255, 200, 100))
+                                    .size(20.0)
+                                    .strong(),
+                            );
+                            ui.add_space(20.0);
+                            if ui.add(
+                                egui::Button::new(egui::RichText::new("OK").color(egui::Color32::WHITE))
+                                    .fill(egui::Color32::from_rgb(80, 80, 80))
+                                    .min_size(egui::vec2(100.0, 36.0)),
+                            ).clicked() {
+                                result = Some("__load_cancel__".to_string());
+                            }
+                        }
+                    });
+                });
+        });
+
+    result
+}
+
+/// Step 43: セーブトースト（画面上部中央に数秒表示）
+fn build_save_toast(ctx: &egui::Context, msg: &str) {
+    egui::Area::new(egui::Id::new("save_toast"))
+        .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 80.0))
+        .order(egui::Order::Tooltip)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgba_unmultiplied(20, 80, 20, 230))
+                .inner_margin(egui::Margin::symmetric(24, 12))
+                .corner_radius(8.0)
+                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 255, 100)))
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new(msg)
+                            .color(egui::Color32::from_rgb(200, 255, 200))
+                            .size(18.0)
+                            .strong(),
+                    );
+                });
+        });
+}
+
+/// プレイ中の全 HUD（フラッシュ・ポップアップ・ステータスバー・ボス HP・レベルアップ・セーブ/ロード）
+fn build_playing_ui(ctx: &egui::Context, hud: &HudData, fps: f32, ui_state: &mut GameUiState) -> Option<String> {
     build_screen_flash_ui(ctx, hud);
     build_score_popups_ui(ctx, hud);
-    build_playing_hud_ui(ctx, hud, fps);
+    build_playing_hud_ui(ctx, hud, fps, ui_state);
     build_boss_hp_bar_ui(ctx, hud);
     build_level_up_ui(ctx, hud)
 }
@@ -1053,7 +1185,7 @@ fn build_score_popups_ui(ctx: &egui::Context, hud: &HudData) {
 }
 
 /// 上部ステータスバー（HP・EXP・スコア・タイマー・武器）と右上デバッグ情報
-fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
+fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32, ui_state: &mut GameUiState) -> Option<String> {
     // 上部 HUD バー
     egui::Area::new(egui::Id::new("hud_top"))
         .anchor(egui::Align2::LEFT_TOP, egui::vec2(8.0, 8.0))
@@ -1156,6 +1288,21 @@ fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
                                 );
                             }
                         }
+
+                        // Step 43: セーブ・ロードボタン
+                        ui.separator();
+                        if ui.add(
+                            egui::Button::new(egui::RichText::new("Save").color(egui::Color32::from_rgb(100, 220, 100)))
+                                .min_size(egui::vec2(50.0, 22.0)),
+                        ).clicked() {
+                            ui_state.pending_action = Some("__save__".to_string());
+                        }
+                        if ui.add(
+                            egui::Button::new(egui::RichText::new("Load").color(egui::Color32::from_rgb(100, 180, 255)))
+                                .min_size(egui::vec2(50.0, 22.0)),
+                        ).clicked() {
+                            ui_state.pending_action = Some("__load__".to_string());
+                        }
                     });
                 });
         });
@@ -1199,6 +1346,8 @@ fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32) {
                     }
                 });
         });
+
+    None
 }
 
 /// ボス HP バー（画面上部中央）

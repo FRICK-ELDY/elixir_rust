@@ -249,99 +249,56 @@ end
 
 ### 5.4 実装内容
 
-#### 42.1 Rust: スナップショット取得 NIF
+#### 43.1 Rust: スナップショット取得 NIF
 
 `#[derive(NifMap)]` で構造体を Elixir の map と相互変換する。Rustler の標準的な型を使い、そのままコンパイル可能。
 
-```rust
-// lib.rs
-use rustler::NifMap;
-
-#[derive(NifMap)]
-struct SaveSnapshot {
-    player_hp: f32,
-    player_x: f32,
-    player_y: f32,
-    level: u32,
-    score: u32,
-    elapsed_seconds: f32,
-    // 武器情報などネストが必要な場合は別の NifMap 構造体を定義
-}
-
-#[rustler::nif]
-fn get_save_snapshot(world: ResourceArc<GameWorld>) -> NifResult<SaveSnapshot> {
-    let w = world.0.read().map_err(|_| rustler::Error::Atom("lock_poisoned"))?;
-    Ok(SaveSnapshot {
-        player_hp: w.player.hp,
-        player_x: w.player.x,
-        player_y: w.player.y,
-        level: w.player.level,
-        score: w.score,
-        elapsed_seconds: w.elapsed_seconds,
-    })
-}
-
-#[rustler::nif]
-fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot) -> NifResult<Atom> {
-    let mut w = world.0.write().map_err(|_| rustler::Error::Atom("lock_poisoned"))?;
-    w.player.hp = snapshot.player_hp;
-    w.player.x = snapshot.player_x;
-    // ... その他フィールドを復元
-    Ok(ok())
-}
-```
-
+- **SaveSnapshot**: `player_hp`, `player_x`, `player_y`, `player_max_hp`, `level`, `exp`, `score`, `elapsed_seconds`, `weapon_slots`（`{kind_id, level}` のリスト）
+- **get_save_snapshot**: 現在のゲーム状態をスナップショットとして取得
+- **load_save_snapshot**: スナップショットを復元（敵・弾・ボスはクリア）
 - スナップショットは **Elixir の map** として受け渡される（NifMap が自動変換）
-- Rust はシリアライズ形式に依存しない。Elixir が JSON や `:erlang.term_to_binary` で永続化
+- Rust はシリアライズ形式に依存しない。Elixir が `:erlang.term_to_binary` で永続化
 
-#### 42.2 Elixir: SaveManager モジュール
+#### 43.2 Elixir: SaveManager モジュール
 
-状態を持たないユーティリティとして純粋なモジュールで定義する。
+`lib/engine/save_manager.ex` で状態を持たないユーティリティとして定義。
 
-```elixir
-# lib/engine/save_manager.ex
-defmodule Engine.SaveManager do
-  @save_path "saves/session.dat"
+- **save_session/1**: `saves/session.dat` にセーブ
+- **load_session/1**: セーブを復元（`:ok` / `:no_save` / `{:error, reason}`）
+- **has_save?/0**: セーブファイルの存在確認
+- **save_high_score/1**: スコアを `saves/high_scores.dat` に記録（上位 10 件）
+- **load_high_scores/0**: ハイスコア一覧を取得
+- **best_score/0**: ベストスコア（1位）を取得
 
-  def save(world_ref) do
-    snapshot = App.NifBridge.get_save_snapshot(world_ref)
-    binary = :erlang.term_to_binary(snapshot)
-    File.mkdir_p!("saves")
-    File.write!(@save_path, binary)
-  end
+#### 43.3 ハイスコアの永続化
 
-  def load(world_ref) do
-    case File.read(@save_path) do
-      {:ok, binary} ->
-        snapshot = :erlang.binary_to_term(binary)
-        App.NifBridge.load_save_snapshot(world_ref, snapshot)
-      _ -> :no_save
-    end
-  end
-end
-```
+ゲームオーバー時に GameLoop が `Engine.save_high_score(score)` を自動呼び出し。GameOver シーンの init_arg に `high_scores` を渡し、FrameCache にも格納して描画側で利用可能に。
 
-#### 42.3 ハイスコアの永続化
+#### 43.4 Engine / GameLoop API
 
-```elixir
-# ハイスコアは独立したファイルまたは ETS/DETS
-def save_high_score(score) do
-  current = load_high_scores()
-  new_list = [score | current] |> Enum.take(10) |> Enum.sort(:desc)
-  File.write!("saves/high_scores.dat", :erlang.term_to_binary(new_list))
-end
-```
-
-#### 42.4 ゲームオーバーシーンでの活用
-
-- ゲームオーバー時に `SaveManager.save/1` を呼ぶ（オプション）
-- ハイスコア表示は `SaveManager.load_high_scores/0` から取得
+- **Engine.save_session/1**, **Engine.load_session/1**: セーブ/ロード
+- **Engine.GameLoop.save_session/0**: cast でセーブを実行
+- **Engine.GameLoop.load_session/0**: call でロードを実行し、Playing シーンへ遷移
 
 ### 5.5 確認ポイント
 
-- [ ] セーブ後にゲームを終了し、ロードで復元できる
-- [ ] ハイスコアがファイルに保存され、再起動後も表示される
-- [ ] セーブファイルが壊れた場合のエラーハンドリング（`load` が `:no_save` を返す）
+- [x] セーブ後にゲームを終了し、ロードで復元できる
+- [x] ハイスコアがファイルに保存され、再起動後も表示される
+- [x] セーブファイルが壊れた場合のエラーハンドリング（`load_session` が `:no_save` を返す）
+
+**利用例**（IEx から）:
+
+```elixir
+# セーブ
+Engine.GameLoop.save_session()
+
+# ロード（セーブがあれば Playing に復帰）
+Engine.GameLoop.load_session()
+
+# ハイスコア確認
+Engine.load_high_scores()
+Engine.best_score()
+```
 
 ---
 
