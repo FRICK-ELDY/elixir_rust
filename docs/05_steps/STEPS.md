@@ -1524,7 +1524,7 @@ flowchart LR
 ## 参考ドキュメント
 
 - [ゲーム仕様書](../01_setup/SPEC.md) — 各ステップの詳細な技術仕様
-- [Elixir 採用理由](../03_tech_decisions/WHY_ELIXIR.md) — アーキテクチャの設計思想
+- [Elixir 採用理由](../03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) — アーキテクチャの設計思想
 - [Rustler ドキュメント](https://docs.rs/rustler) — NIF 実装の詳細
 - [wgpu ドキュメント](https://docs.rs/wgpu) — GPU 描画の詳細
 - [Learn wgpu](https://sotrh.github.io/learn-wgpu/) — wgpu チュートリアル

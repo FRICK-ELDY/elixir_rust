@@ -42,9 +42,23 @@
 
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
-| [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md) | ゲームロジック層に Elixir（BEAM VM）を採用した理由。BEAM の設計思想、ゲームループ適合性、並行性、耐障害性、Rust との役割分担 | アーキテクチャ理解時 |
+| [WHY_ELIXIR/WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) | ゲームロジック層に Elixir（BEAM VM）を採用した理由。BEAM の設計思想、ゲームループ適合性、並行性、耐障害性、Rust との役割分担。依存関係一覧あり | アーキテクチャ理解時 |
+| [WHY_Rustler.md](./03_tech_decisions/WHY_Rustler.md) | Rustler（NIF 連携）の選定理由 | アーキテクチャ理解時 |
+| [WHY_ELIXIR/WHY_Telemetry.md](./03_tech_decisions/WHY_ELIXIR/WHY_Telemetry.md) | Telemetry の選定理由 | アーキテクチャ理解時 |
+| [WHY_ELIXIR/WHY_BEAM.md](./03_tech_decisions/WHY_ELIXIR/WHY_BEAM.md) | BEAM 組み込み機能の活用 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_RUST.md](./03_tech_decisions/WHY_RUST/WHY_RUST.md) | 物理演算・描画・音声層に Rust を採用した理由。ゼロコスト抽象化、SoA、wgpu、Elixir との役割分担。依存関係一覧あり | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_wgpu.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_wgpu.md) | wgpu の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_winit.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_winit.md) | winit の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_egui.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_egui.md) | egui の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_AUDIO/WHY_rodio.md](./03_tech_decisions/WHY_RUST/WHY_AUDIO/WHY_rodio.md) | rodio の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_SERIALIZE/WHY_serde.md](./03_tech_decisions/WHY_RUST/WHY_SERIALIZE/WHY_serde.md) | serde の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_SERIALIZE/WHY_bincode.md](./03_tech_decisions/WHY_RUST/WHY_SERIALIZE/WHY_bincode.md) | bincode の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_PHYSICS/WHY_rustc_hash.md](./03_tech_decisions/WHY_RUST/WHY_PHYSICS/WHY_rustc_hash.md) | rustc-hash の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_pollster.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_pollster.md) | pollster の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_bytemuck.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_bytemuck.md) | bytemuck の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_WGPU/WHY_image.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_image.md) | image の選定理由 | アーキテクチャ理解時 |
+| [WHY_RUST/WHY_RAYON.md](./03_tech_decisions/WHY_RUST/WHY_RAYON.md) | Chase AI の並列化に rayon を採用した理由。Work-Stealing、SoA との相乗効果、実測結果、他ライブラリとの比較 | パフォーマンス理解時 |
 | [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md) | **Elixir/Rust 役割分担方針**。「苦手なものは Rust に投げる」。タイミング精度、将来の拡張、スコープ外・サポートしない項目 | アーキテクチャ理解時 |
-| [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) | Chase AI の並列化に rayon を採用した理由。Work-Stealing、SoA との相乗効果、実測結果、他ライブラリとの比較 | パフォーマンス理解時 |
 
 ---
 
@@ -119,9 +133,29 @@ docs/
 │   ├── ENGINE_ANALYSIS_REVISED.md
 │   └── ENGINE_ANALYSIS.md（アーカイブ）
 ├── 03_tech_decisions/     技術選定の背景
-│   ├── WHY_ELIXIR.md
-│   ├── ELIXIR_RUST_DIVISION.md
-│   └── WHY_RAYON.md
+│   ├── WHY_ELIXIR/
+│   │   ├── WHY_ELIXIR.md
+│   │   ├── WHY_Telemetry.md
+│   │   └── WHY_BEAM.md
+│   ├── WHY_RUST/
+│   │   ├── WHY_RUST.md
+│   │   ├── WHY_WGPU/
+│   │   │   ├── WHY_wgpu.md
+│   │   │   ├── WHY_winit.md
+│   │   │   ├── WHY_egui.md
+│   │   │   ├── WHY_pollster.md
+│   │   │   ├── WHY_bytemuck.md
+│   │   │   └── WHY_image.md
+│   │   ├── WHY_AUDIO/
+│   │   │   └── WHY_rodio.md
+│   │   ├── WHY_SERIALIZE/
+│   │   │   ├── WHY_serde.md
+│   │   │   └── WHY_bincode.md
+│   │   ├── WHY_PHYSICS/
+│   │   │   └── WHY_rustc_hash.md
+│   │   └── WHY_RAYON.md
+│   ├── WHY_Rustler.md
+│   └── ELIXIR_RUST_DIVISION.md
 ├── 04_roadmap/            実装ロードマップ
 │   ├── PRIORITY_STEPS.md
 │   └── NEXT_STEPS.md
@@ -173,7 +207,7 @@ docs/
 | マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_MAP_SAVE_MULTI_DEBUG.md](./05_steps/STEPS_MAP_SAVE_MULTI_DEBUG.md) |
 | Phoenix Channels でマルチプレイ連携したい | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
-| なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RAYON.md) |
+| なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md), [WHY_RUST.md](./03_tech_decisions/WHY_RUST/WHY_RUST.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RUST/WHY_RAYON.md) |
 | エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
 | プロジェクト全体の評価・振り返りをしたい | [PROJECT_EVALUATION.md](./02_spec_design/PROJECT_EVALUATION.md) |
 | 発表用の資料が欲しい | [PRESENTATION.md](./07_presentation/PRESENTATION.md) |

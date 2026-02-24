@@ -73,7 +73,7 @@
 
 - **設計・仕様・ロードマップが網羅的** — SPEC、ENGINE_ANALYSIS_REVISED、ELIXIR_RUST_DIVISION、STEPS 系が揃っている
 - **ステップガイドが実装に追従** — チェックリスト付きで進捗が分かりやすい
-- **技術選定の根拠が明文化** — WHY_ELIXIR、WHY_RAYON など「なぜ」が残っている
+- **技術選定の根拠が明文化** — WHY_ELIXIR、WHY_RUST、WHY_RAYON など「なぜ」が残っている
 
 ### 2.5 技術的独自性
 
