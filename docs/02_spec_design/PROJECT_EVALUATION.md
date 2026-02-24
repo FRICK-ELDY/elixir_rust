@@ -39,11 +39,11 @@
 | 仕様項目 | 状態 |
 |----------|------|
 | Slime, Bat, Golem | ✅ 実装済み |
-| Skeleton, Ghost | ✅ 実装済み（Step 47） |
+| Skeleton, Ghost | ❌ 未実装 |
 | Magic Wand, Axe, Lightning, Whip | ✅ 実装済み |
-| Garlic | ✅ 実装済み（Step 47） |
+| Garlic | ❌ 未実装 |
 | 障害物（木・岩） | ✅ 実装済み |
-| Ghost 壁すり抜け | ✅ 実装済み（Ghost 実装 + passes_through_obstacles） |
+| Ghost 壁すり抜け | ⚠️ 基盤あり（kind でスキップ可能）、Ghost 自体未実装 |
 | マップ 4096×4096 | ✅ 実装済み |
 | ボス（Slime King, Bat Lord, Stone Golem） | ✅ 実装済み |
 
@@ -99,9 +99,10 @@
 - **音声アセットの事前生成** — Python スクリプト実行が前提。CI や新規参加者のオンボーディングが増える
 - **2 言語習得コスト** — 参入障壁が高く、チーム開発には不向き
 
-### 3.3 仕様との乖離（Step 47 で解消）
+### 3.3 仕様との乖離
 
-- **Skeleton, Ghost, Garlic** — Step 47 で実装済み。敵 Skeleton（60秒〜）/ Ghost（120秒〜）、武器 Garlic（オーラダメージ）、Ghost の壁すり抜け（`passes_through_obstacles`）を運用。
+- **Skeleton, Ghost, Garlic 未実装** — SPEC に記載があるがゲームコンテンツとして未着手
+- **Ghost の壁すり抜け** — 障害物システムは kind でスキップ可能な設計だが、Ghost 自体がないため検証されていない
 
 ### 3.4 エコシステム・ツール
 
