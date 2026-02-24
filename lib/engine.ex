@@ -142,6 +142,14 @@ defmodule Engine do
   end
 
   @doc """
+  Step 42: マップ障害物を設定する。
+  GameLoop の init で呼ばれる。obstacles は MapLoader.obstacles_for_map/1 の戻り値。
+  """
+  def set_map_obstacles(world_ref, obstacles) do
+    App.NifBridge.set_map_obstacles(world_ref, obstacles)
+  end
+
+  @doc """
   Step 41: ゲームループ制御用リソースを作成する。
   pause_physics / resume_physics で使用。
   """

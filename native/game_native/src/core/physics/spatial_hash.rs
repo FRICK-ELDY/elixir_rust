@@ -54,17 +54,68 @@ impl SpatialHash {
     }
 }
 
+// ─── Static Obstacle（Step 42: マップ・障害物システム）───────────────
+/// 円形障害物（木・岩など）。kind: 0=木, 1=岩（将来: Ghost のすり抜け判定用）
+#[derive(Clone, Copy, Debug)]
+pub struct StaticObstacle {
+    pub x:      f32,
+    pub y:      f32,
+    pub radius: f32,
+    pub kind:   u8,
+}
+
 // ─── Collision World ──────────────────────────────────────────
-/// 動的オブジェクト（敵・プレイヤー）を管理する Spatial Hash
+/// 動的オブジェクト（敵・プレイヤー）と静的障害物を管理
 pub struct CollisionWorld {
-    pub dynamic: SpatialHash,
+    pub dynamic:        SpatialHash,
+    /// 静的障害物の Spatial Hash（レベルロード時に構築）
+    pub static_hash:    SpatialHash,
+    /// 障害物データ本体
+    pub obstacles:      Vec<StaticObstacle>,
 }
 
 impl CollisionWorld {
     /// cell_size = 当たり判定半径の 2〜3 倍（例: 32px → 80px）
     pub fn new(cell_size: f32) -> Self {
         Self {
-            dynamic: SpatialHash::new(cell_size),
+            dynamic:     SpatialHash::new(cell_size),
+            static_hash: SpatialHash::new(cell_size),
+            obstacles:   Vec::new(),
+        }
+    }
+
+    /// 障害物リストから Spatial Hash を再構築（set_map_obstacles NIF から呼ぶ）
+    pub fn rebuild_static(&mut self, obstacles: &[(f32, f32, f32, u8)]) {
+        self.obstacles.clear();
+        self.static_hash.clear();
+        for (x, y, radius, kind) in obstacles {
+            let idx = self.obstacles.len();
+            self.obstacles.push(StaticObstacle {
+                x: *x, y: *y, radius: *radius, kind: *kind,
+            });
+            self.static_hash.insert(idx, *x, *y);
+        }
+    }
+
+    /// 指定範囲内の障害物インデックスを buf に格納（アロケーションなし）
+    pub fn query_static_nearby_into(
+        &self,
+        x: f32, y: f32, radius: f32,
+        buf: &mut Vec<usize>,
+    ) {
+        buf.clear();
+        let candidates = self.static_hash.query_nearby(x, y, radius);
+        for idx in candidates {
+            if idx >= self.obstacles.len() {
+                continue;
+            }
+            let o = &self.obstacles[idx];
+            let hit_r = radius + o.radius;
+            let dx = x - o.x;
+            let dy = y - o.y;
+            if dx * dx + dy * dy <= hit_r * hit_r {
+                buf.push(idx);
+            }
         }
     }
 }

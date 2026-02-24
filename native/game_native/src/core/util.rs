@@ -62,6 +62,7 @@ mod tests {
 }
 
 /// 画面外の四辺いずれかにランダムに配置（マップ端からスポーン）
+#[allow(dead_code)] // 互換性のため残す
 pub fn spawn_position_outside(rng: &mut SimpleRng, map_width: f32, map_height: f32) -> (f32, f32) {
     let margin = 80.0;
     match rng.next_u32() % 4 {
@@ -70,4 +71,21 @@ pub fn spawn_position_outside(rng: &mut SimpleRng, map_width: f32, map_height: f
         2 => (-margin, rng.next_f32() * map_height),
         _ => (map_width + margin, rng.next_f32() * map_height),
     }
+}
+
+/// プレイヤー周囲の円周上に配置（SPEC: 800〜1200px の円周上・画面外）
+/// 敵がプレイヤーから見つけやすい距離にスポーンする
+pub fn spawn_position_around_player(
+    rng: &mut SimpleRng,
+    player_x: f32,
+    player_y: f32,
+    min_dist: f32,
+    max_dist: f32,
+) -> (f32, f32) {
+    let angle = rng.next_f32() * std::f32::consts::TAU;
+    let dist = min_dist + rng.next_f32() * (max_dist - min_dist);
+    (
+        player_x + angle.cos() * dist,
+        player_y + angle.sin() * dist,
+    )
 }

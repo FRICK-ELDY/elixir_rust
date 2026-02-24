@@ -28,6 +28,12 @@ defmodule Engine.GameLoop do
   @impl true
   def init(_opts) do
     world_ref = Engine.create_world()
+
+    # Step 42: マップ障害物をロード
+    map_id = Application.get_env(:game, :map, :plain)
+    obstacles = Engine.MapLoader.obstacles_for_map(map_id)
+    Engine.set_map_obstacles(world_ref, obstacles)
+
     control_ref = Engine.create_game_loop_control()
     Engine.FrameCache.init()
     start_ms = now_ms()
