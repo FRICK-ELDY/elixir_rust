@@ -93,4 +93,7 @@ defmodule App.NifBridge do
   # Step 43: セーブ・ロード
   def get_save_snapshot(_world), do: :erlang.nif_error(:nif_not_loaded)
   def load_save_snapshot(_world, _snapshot), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Step 45: デバッグ用 — ワールド状態を文字列で取得（dev ビルド時のみ有効。release では {:error, :debug_build_only}）
+  def debug_dump_world(_world), do: :erlang.nif_error(:nif_not_loaded)
 end
