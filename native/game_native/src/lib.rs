@@ -21,6 +21,7 @@ use core::constants::{
 };
 use core::item::{ItemKind, ItemWorld};
 use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::obstacle_resolve;
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
@@ -806,16 +807,21 @@ fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> NifResul
     Ok(ok())
 }
 
+/// プレイヤー周囲 800〜1200px の円周上にスポーン位置を生成（spawn_enemies / spawn_elite_enemy 共通）
+fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Vec<(f32, f32)> {
+    let px = w.player.x + PLAYER_RADIUS;
+    let py = w.player.y + PLAYER_RADIUS;
+    (0..count)
+        .map(|_| spawn_position_around_player(&mut w.rng, px, py, 800.0, 1200.0))
+        .collect()
+}
+
 /// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Ghost）
 /// SPEC: プレイヤーから 800〜1200px の円周上にスポーン（見つけやすい距離）
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
-    let px = w.player.x + PLAYER_RADIUS;
-    let py = w.player.y + PLAYER_RADIUS;
-    let positions: Vec<(f32, f32)> = (0..count)
-        .map(|_| spawn_position_around_player(&mut w.rng, px, py, 800.0, 1200.0))
-        .collect();
+    let positions = get_spawn_positions_around_player(&mut w, count);
     w.enemies.spawn(&positions, kind_id);
     Ok(ok())
 }
@@ -837,37 +843,6 @@ fn set_map_obstacles(world: ResourceArc<GameWorld>, obstacles_term: Term) -> Nif
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     w.collision.rebuild_static(&obstacles);
     Ok(ok())
-}
-
-/// Step 42: プレイヤーが障害物と重なっている場合に押し出す（複数障害物対応）
-fn resolve_obstacles_player(
-    collision: &CollisionWorld,
-    player: &mut PlayerState,
-    buf: &mut Vec<usize>,
-) {
-    for _ in 0..5 {
-        let cx = player.x + PLAYER_RADIUS;
-        let cy = player.y + PLAYER_RADIUS;
-        collision.query_static_nearby_into(cx, cy, PLAYER_RADIUS, buf);
-        let mut pushed = false;
-        for &idx in buf.iter() {
-            if let Some(o) = collision.obstacles.get(idx) {
-                let dx = cx - o.x;
-                let dy = cy - o.y;
-                let dist = (dx * dx + dy * dy).sqrt().max(0.001);
-                let overlap = (PLAYER_RADIUS + o.radius) - dist;
-                if overlap > 0.0 {
-                    player.x += (dx / dist) * overlap;
-                    player.y += (dy / dist) * overlap;
-                    pushed = true;
-                    break;
-                }
-            }
-        }
-        if !pushed {
-            break;
-        }
-    }
 }
 
 /// Step 42: 敵が障害物と重なっている場合に押し出す（Ghost はスキップ）
@@ -918,7 +893,12 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     }
 
     // Step 42: プレイヤー vs 障害物（重なったら押し出し）
-    resolve_obstacles_player(&mut w.collision, &mut w.player, &mut w.obstacle_query_buf);
+    obstacle_resolve::resolve_obstacles_player(
+        &w.collision,
+        &mut w.player.x,
+        &mut w.player.y,
+        &mut w.obstacle_query_buf,
+    );
 
     w.player.x = w.player.x.clamp(0.0, MAP_WIDTH  - PLAYER_SIZE);
     w.player.y = w.player.y.clamp(0.0, MAP_HEIGHT - PLAYER_SIZE);
@@ -1983,11 +1963,7 @@ fn is_player_dead(world: ResourceArc<GameWorld>) -> NifResult<bool> {
 fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     let ep = EnemyParams::get(kind_id);
-    let px = w.player.x + PLAYER_RADIUS;
-    let py = w.player.y + PLAYER_RADIUS;
-    let positions: Vec<(f32, f32)> = (0..count)
-        .map(|_| spawn_position_around_player(&mut w.rng, px, py, 800.0, 1200.0))
-        .collect();
+    let positions = get_spawn_positions_around_player(&mut w, count);
     // 通常スポーン後に HP を倍率で上書き
     let before_len = w.enemies.positions_x.len();
     w.enemies.spawn(&positions, kind_id);

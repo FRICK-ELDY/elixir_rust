@@ -103,19 +103,17 @@ impl CollisionWorld {
         x: f32, y: f32, radius: f32,
         buf: &mut Vec<usize>,
     ) {
-        buf.clear();
-        let candidates = self.static_hash.query_nearby(x, y, radius);
-        for idx in candidates {
-            if idx >= self.obstacles.len() {
-                continue;
+        self.static_hash.query_nearby_into(x, y, radius + 80.0, buf);
+        let obstacles = &self.obstacles;
+        buf.retain(|&idx| {
+            if let Some(o) = obstacles.get(idx) {
+                let hit_r = radius + o.radius;
+                let dx = x - o.x;
+                let dy = y - o.y;
+                dx * dx + dy * dy <= hit_r * hit_r
+            } else {
+                false
             }
-            let o = &self.obstacles[idx];
-            let hit_r = radius + o.radius;
-            let dx = x - o.x;
-            let dy = y - o.y;
-            if dx * dx + dy * dy <= hit_r * hit_r {
-                buf.push(idx);
-            }
-        }
+        });
     }
 }

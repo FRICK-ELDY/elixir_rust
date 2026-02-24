@@ -33,6 +33,7 @@ use core::constants::{
 use core::item::{ItemKind, ItemWorld};
 use core::entity_params::{WeaponParams, lightning_chain_count, whip_range};
 use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use core::physics::obstacle_resolve;
 use core::physics::rng::SimpleRng;
 use core::physics::separation::{apply_separation, EnemySeparation};
 use core::physics::spatial_hash::CollisionWorld;
@@ -1361,32 +1362,14 @@ impl GameWorld {
         (self.camera_x, self.camera_y)
     }
 
-    /// Step 42: プレイヤーが障害物と重なっている場合に押し出す
+    /// Step 42: プレイヤーが障害物と重なっている場合に押し出す（core::physics::obstacle_resolve と共通）
     fn resolve_obstacles_player(&mut self) {
-        let cx = self.player.x + PLAYER_RADIUS;
-        let cy = self.player.y + PLAYER_RADIUS;
-        self.collision.query_static_nearby_into(cx, cy, PLAYER_RADIUS, &mut self.obstacle_query_buf);
-        for _ in 0..5 {
-            let cx = self.player.x + PLAYER_RADIUS;
-            let cy = self.player.y + PLAYER_RADIUS;
-            self.collision.query_static_nearby_into(cx, cy, PLAYER_RADIUS, &mut self.obstacle_query_buf);
-            let mut pushed = false;
-            for &idx in &self.obstacle_query_buf {
-                if let Some(o) = self.collision.obstacles.get(idx) {
-                    let dx = cx - o.x;
-                    let dy = cy - o.y;
-                    let dist = (dx * dx + dy * dy).sqrt().max(0.001);
-                    let overlap = (PLAYER_RADIUS + o.radius) - dist;
-                    if overlap > 0.0 {
-                        self.player.x += (dx / dist) * overlap;
-                        self.player.y += (dy / dist) * overlap;
-                        pushed = true;
-                        break;
-                    }
-                }
-            }
-            if !pushed { break; }
-        }
+        obstacle_resolve::resolve_obstacles_player(
+            &self.collision,
+            &mut self.player.x,
+            &mut self.player.y,
+            &mut self.obstacle_query_buf,
+        );
     }
 
     /// Step 42: 敵が障害物と重なっている場合に押し出す（main には Ghost なし）
