@@ -194,6 +194,6 @@
 | [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) | 元の詳細分析（アーカイブ） |
 | [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) | コードベース準拠の再評価版 |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外項目 |
-| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 40（GameLoop Rust 移行）含む実装ロードマップ |
+| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 41（GameLoop Rust 移行）含む実装ロードマップ |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計 |
