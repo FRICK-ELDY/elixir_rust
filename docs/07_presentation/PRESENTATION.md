@@ -56,6 +56,22 @@
 **2 つの世界が、それぞれの得意分野だけを担当する。**  
 これがこのエンジンの核心です。
 
+### 1.1 マルチプレイ・友達連携時の拡張（Phoenix サーバー）
+
+友達とつなぐ・マルチプレイを有効にする場合、**Phoenix サーバー**がクライアントとエンジンの間に立つ。認証・プレゼンス・フレンド・メッセージ・通知はサーバー側、ゲームルームは同一 Phoenix アプリ内の Engine（RoomSupervisor / GameLoop）と連携する。
+
+```
+  クライアント  ──WebSocket──►  Phoenix（認証・user: / room: Channel）
+                                      │
+                                      ▼
+                               Engine（RoomSupervisor, GameLoop）  ◄──NIF──►  Rust
+```
+
+- **Channel 構成**: `user:<id>`（メッセージ・通知・フレンド）、`room:<id>`（ゲーム）、`lobby`（プレゼンス）
+- **実装優先順位**: 認証 → プレゼンス → ゲームルーム連携 → フレンド → 通知 → メッセージ
+
+詳細は [ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md)・[SERVER_DESIGN.md](../06_system_design/SERVER_DESIGN.md) を参照。
+
 ---
 
 ## 2. なぜ Elixir なのか — BEAM VM の底力
@@ -449,6 +465,8 @@ Step 41〜44: 拡張（マップ・障害物、セーブ・ロード、マルチ
 | [STEPS_QUALITY.md](../05_steps/STEPS_QUALITY.md) | Step 16〜25 クオリティアップ |
 | [STEPS_PERF.md](../05_steps/STEPS_PERF.md) | Step 26〜31 パフォーマンス改善 |
 | [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 41〜44 マップ・セーブ・マルチ・デバッグ |
+| [ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md) | システムアーキテクチャ全体像（サーバー層含む） |
+| [SERVER_DESIGN.md](../06_system_design/SERVER_DESIGN.md) | サーバー設計（認証・プレゼンス・フレンド・メッセージ・Channel） |
 | [ENGINE_API.md](../06_system_design/ENGINE_API.md) | エンジン API 設計（安定化） |
 | [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱み総合サマリー |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書・技術アーキテクチャ詳細 |

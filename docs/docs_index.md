@@ -106,6 +106,7 @@
 
 | ドキュメント | 内容 | 状態 |
 |-------------|------|------|
+| [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) | **システムアーキテクチャ全体像**。クライアント〜Phoenix サーバー〜Engine の構成、Channel・実装優先順位（SERVER_DESIGN 準拠） | 全体像・設計参照時 |
 | [ASSET_MANAGEMENT.md](./06_system_design/ASSET_MANAGEMENT.md) | G3: アセット管理システム設計。AssetId、パスマッピング、Elixir/Rust の責務分離、実行時ロード | PRIORITY_STEPS G3 関連 |
 | [ENGINE_API.md](./06_system_design/ENGINE_API.md) | 安定化されたエンジン API リファレンス。ゲームから利用する関数、ルーム管理（Step 44） | API 参照時 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44: Phoenix Channels 連携の設計指針。RoomChannel 実装例、入力配信、状態同期 | マルチプレイ検討時 |
@@ -168,6 +169,7 @@ docs/
 │   ├── STEPS_EXTENSION.md
 │   └── STEPS_GENERALIZATION.md
 ├── 06_system_design/      システム設計・提案
+│   ├── ARCHITECTURE.md
 │   ├── ASSET_MANAGEMENT.md
 │   ├── ENGINE_API.md
 │   ├── MULTIPLAYER_PHOENIX_CHANNELS.md
@@ -208,6 +210,7 @@ docs/
 | 改善の優先度を知りたい | [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) |
 | 汎用ゲームエンジン化の次の Step を知りたい | [STEPS_GENERALIZATION.md](./05_steps/STEPS_GENERALIZATION.md) |
 | マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_EXTENSION.md](./05_steps/STEPS_EXTENSION.md) |
+| システム全体のアーキテクチャを把握したい | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) |
 | Phoenix Channels でマルチプレイ連携したい | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) |
 | サーバー設計（認証・フレンド・メッセージ）を検討したい | [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
