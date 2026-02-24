@@ -16,6 +16,8 @@
 | **パフォーマンス** | 26〜31 | イベントバス・ETS・フリーリスト・Spatial Hash・Telemetry・SIMD |
 | **汎用化** | 32〜39 | Game インターフェース・シーン汎用化・ゲーム分離・2 つ目のゲーム土台 |
 | **拡張** | 40〜47 | ゲームループの Rust 移行・マップ・セーブ・マルチ・デバッグ・GameEvents リネーム・SPEC 未実装コンテンツ |
+| **3D・三人称FPS** | 48〜54 | WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./STEPS_3D.md)） |
+| **Slot・コンポーネント** | 55〜61 | シーングラフ（Slot）と Component を Elixir で管理・スナップショットで Rust 描画・シリアライズ・Prefab・エディタ基盤（[STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md)） |
 
 ---
 
@@ -114,17 +116,53 @@
 
 ---
 
-## 7. 依存関係（概要）
+## 7. Step 48〜54: 3D・三人称 FPS
+
+| Step | 目標 | 備考 |
+|------|------|------|
+| 48 | 3D レンダリング基盤 | wgpu で 3D パイプライン・深度バッファ・頂点/法線/UV |
+| 49 | 3D カメラ・三人称視点 | View/Projection 行列・カメラ追従 |
+| 50 | 3D メッシュ描画・アトラス流用 | 既存スプライトアトラスを 3D テクスチャに |
+| 51 | 三人称プレイヤー制御 | 移動・カメラ追従・照準（WASD・マウス） |
+| 52 | 射撃・弾丸・レイキャスト | FPS 武器・ヒット判定 |
+| 53 | 敵の 3D スポーン・AI・衝突 | 敵配置・Chase AI・ダメージ・経験値 |
+| 54 | UI・アセット流用・ポリッシュ | HUD・BGM/SE 流用・ゲーム選択統合 |
+
+**目的**: WGPU 対応プラットフォームで 3D を動かし、[ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) の 3D ゲーム適性を上げる。アセットはヴァンパイアサバイバーズ系画像を流用。  
+**詳細**: [STEPS_3D.md](./STEPS_3D.md)
+
+---
+
+## 8. Step 55〜61: Slot・コンポーネント
+
+| Step | 目標 | 備考 |
+|------|------|------|
+| 55 | Slot（transform 階層）のデータ構造 | Elixir で id / parent_id / local_transform を管理 |
+| 56 | コンポーネント型・レジストリと Slot への付与 | Camera, Player, Enemy, Mesh 等の型と Slot への付与 |
+| 57 | ワールド行列計算・シーンスナップショット・Rust 連携 | 毎フレーム Elixir → Rust にスナップショットを渡して描画 |
+| 58 | 物理結果の Rust → Elixir 反映（Slot 同期） | 物理ステップの結果で Slot の位置を更新 |
+| 59 | シーンシリアライズ・保存/ロード | シーンファイル形式・バージョン・ロード |
+| 60 | Prefab とインスタンス | 再利用可能な Slot サブツリー・インスタンス化とオーバーライド |
+| 61 | ビジュアルエディタ向け基盤 | コンポーネントスキーマ公開・選択・Undo の検討と最小実装 |
+
+**目的**: Step 48〜54 完了後、Slot（transform 階層）＋ Component を Elixir で管理し、Rust はシーンスナップショットで描画する設計に移行。ビジュアルエディタを見据えた基盤を整える。  
+**詳細**: [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md)
+
+---
+
+## 9. 依存関係（概要）
 
 - **1〜15**: 直列（環境 → ウィンドウ → 描画 → NIF → ループ → ゲームプレイ）
 - **16〜25**: 15 完了後、直列または一部並行可能
 - **26〜31**: 25 完了後。29/28 を先にするとパフォーマンス効果が大きい
 - **32〜40**: 31 完了後。汎用化は 32→33→34→35→36→37→38→39→40 の順が無難
 - **41〜47**: 40 完了後。41 を優先すると他ステップの土台ができる。46 は 41 完了後であればいつでも実施可。47 は 42 完了後が望ましい
+- **48〜54**: 47 完了後（または並行）。3D・三人称 FPS の実装
+- **55〜61**: 54 完了後。Slot・コンポーネントを Elixir で管理する設計への移行とエディタ基盤
 
 ---
 
-## 8. 関連ドキュメント
+## 10. 関連ドキュメント
 
 | ドキュメント | 用途 |
 |-------------|------|
@@ -133,6 +171,8 @@
 | [STEPS_PERF.md](./STEPS_PERF.md) | Step 26〜31 の詳細手順・コード |
 | [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md) | パフォーマンス課題の分析・提案 |
 | [STEPS_EXTENSION.md](./STEPS_EXTENSION.md) | Step 40〜47 の詳細 |
+| [STEPS_3D.md](./STEPS_3D.md) | Step 48〜54 3D・三人称 FPS の詳細 |
+| [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md) | Step 55〜61 Slot・コンポーネントの詳細 |
 | [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | Step 32〜40 汎用化の詳細 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 実施優先度（P1〜P7, G1〜G3） |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様・技術仕様 |
