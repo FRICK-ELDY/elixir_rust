@@ -304,8 +304,8 @@
 
 - [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) — 再評価版（本ロードマップの根拠）  
 - [ENGINE_ANALYSIS.md](../02_spec_design/ENGINE_ANALYSIS.md) — 元の分析（アーカイブ）
-- [NEXT_STEPS.md](./NEXT_STEPS.md) — 次の Step 提案（Step 32〜40）。汎用ゲームエンジン化
+- [STEPS_GENERALIZATION.md](../05_steps/STEPS_GENERALIZATION.md) — 次の Step 提案（Step 32〜40）。汎用ゲームエンジン化
 - [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) — G3 アセット管理システムの設計・実装
 - [STEPS_PERF.md](../05_steps/STEPS_PERF.md) — パフォーマンス改善の詳細実装手順
-- [STEPS.md](../05_steps/STEPS.md) — 初回実装ステップ（Step 1〜25）
+- [STEPS_BASE.md](../05_steps/STEPS_BASE.md) — 初回実装ステップ（Step 1〜25）
 - [SPEC.md](../01_setup/SPEC.md) — ゲーム仕様書

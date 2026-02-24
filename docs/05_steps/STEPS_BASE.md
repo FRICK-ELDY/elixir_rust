@@ -8,19 +8,19 @@
 ## 全体ロードマップ
 
 ```
-Step 1: 環境構築
-Step 2: Rust クレート雛形 + ウィンドウ表示
-Step 3: wgpu 初期化 + 単色クリア
-Step 4: スプライト 1 枚描画
-Step 5: インスタンシング（100体描画）
-Step 6: Elixir プロジェクト + Rustler NIF 連携
-Step 7: ゲームループ（GenServer 60Hz tick）
-Step 8: プレイヤー移動
-Step 9: 敵スポーン + 追跡 AI（100体）
+Step 1:  環境構築
+Step 2:  ウィンドウ表示（Rust クレート・winit）
+Step 3:  wgpu 初期化・単色クリア
+Step 4:  スプライト 1 枚描画
+Step 5:  インスタンシング描画（100 体）
+Step 6:  NIF 連携（Elixir + Rustler）
+Step 7:  ゲームループ（GenServer 60 Hz）
+Step 8:  プレイヤー移動
+Step 9:  敵スポーン・追跡 AI
 Step 10: 衝突判定（Spatial Hash）
 Step 11: 武器・弾丸システム
-Step 12: 大規模スポーン（5000体）+ パフォーマンス最適化
-Step 13: UI（HP バー・スコア・タイマー）
+Step 12: 大規模スポーン・最適化（5000 体）
+Step 13: UI（HP・スコア・タイマー）
 Step 14: レベルアップ・武器選択
 Step 15: ゲームオーバー・リスタート
 ```
@@ -102,7 +102,7 @@ mix --version
 
 ---
 
-## Step 2: Rust クレート雛形 + ウィンドウ表示
+## Step 2: ウィンドウ表示（Rust クレート・winit）
 
 **目標**: winit でウィンドウを開き、タイトルバーに「Elixir x Rust Survivor」と表示する。
 
@@ -209,7 +209,7 @@ cargo run --bin game_window
 
 ---
 
-## Step 3: wgpu 初期化 + 単色クリア
+## Step 3: wgpu 初期化・単色クリア
 
 **目標**: wgpu を初期化し、画面を濃い紫（ゲームの背景色）でクリアする。
 
@@ -502,7 +502,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 ---
 
-## Step 5: インスタンシング（100体描画）
+## Step 5: インスタンシング描画（100 体）
 
 **目標**: GPU インスタンシングで 100 体のスプライトを 1 draw call で描画する。
 
@@ -762,7 +762,7 @@ cargo run --bin game_window
 
 ---
 
-## Step 6: Elixir プロジェクト + Rustler NIF 連携
+## Step 6: NIF 連携（Elixir + Rustler）
 
 **目標**: `mix new` で Elixir プロジェクトを作成し、Rustler NIF で Rust の関数を Elixir から呼び出す。  
 このステップ完了後、Elixir と Rust が同一プロセス内で通信できる基盤が整う。
@@ -1036,7 +1036,7 @@ ls _build\dev\lib\game\priv\native\
 
 ---
 
-## Step 7: ゲームループ（GenServer 60Hz tick）
+## Step 7: ゲームループ（GenServer 60 Hz）
 
 **目標**: Elixir の GenServer で 60Hz のゲームループを実装し、Rust の `physics_step` NIF を呼び出す。
 
@@ -1158,7 +1158,7 @@ fn set_player_input(
 
 ---
 
-## Step 9: 敵スポーン + 追跡 AI（100体）
+## Step 9: 敵スポーン・追跡 AI
 
 **目標**: 画面外から敵を 100 体スポーンさせ、プレイヤーを追跡させる。
 
@@ -1304,7 +1304,7 @@ pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usiz
 
 ---
 
-## Step 12: 大規模スポーン（5000体）+ パフォーマンス最適化
+## Step 12: 大規模スポーン・最適化（5000 体）
 
 **目標**: 5000 体の敵を 60fps で動かす。
 
@@ -1360,7 +1360,7 @@ use rayon::prelude::*;
 
 ---
 
-## Step 13: UI（HP バー・スコア・タイマー）
+## Step 13: UI（HP・スコア・タイマー）
 
 **目標**: 画面上部に HP バー、スコア、経過時間を表示する。
 

@@ -18,25 +18,25 @@ Step 25 までで完成したゲームをベースに、**Elixir/OTP の強み�
 
 ```
 【フェーズ1: Rust コア — パフォーマンス即効】
-  Step 29  Spatial Hash 最近接 + RwLock（P1, P2）  ← 最優先ボトルネック解消
-  Step 28  Rust フリーリスト（P3）
-  Step 31  SIMD AI 高速化（P4・オプション）
+  Step 29  Spatial Hash 最近接・RwLock（P1, P2）  ← 最優先ボトルネック解消
+  Step 28  フリーリスト（スポーン O(1)）（P3）
+  Step 31  SIMD AI 高速化（オプション）（P4）
 
 【フェーズ2: Elixir レイヤー】
   Step 26  イベントバス（P5）                      ← 拡張の基盤
-  Step 27  ETS キャッシュ + 入力ポーリング（P6）
+  Step 27  ETS キャッシュ・入力ポーリング（P6）
   Step 30  Telemetry 計測基盤（P7）
 ```
 
-**従来の Step 番号順**（EventBus ファースト）:
+**Step 番号順**:
 
 ```
-Step 26: イベントバス（OTP の関心分離 — Elixir 最重要改善）
-Step 27: ETS キャッシュ + 入力ポーリング化（プロセス間通信の最適化）
-Step 28: Rust フリーリスト（スポーン O(1) 化）
-Step 29: Spatial Hash 最近接 + RwLock（AI 高速化 + ロック競合解消）
-Step 30: Telemetry 計測基盤（観測可能性）
-Step 31: SIMD AI 高速化（上級・オプション）
+Step 26: イベントバス
+Step 27: ETS キャッシュ・入力ポーリング
+Step 28: フリーリスト（スポーン O(1)）
+Step 29: Spatial Hash 最近接・RwLock
+Step 30: Telemetry 計測基盤
+Step 31: SIMD AI 高速化（オプション）
 ```
 
 ---
@@ -71,7 +71,7 @@ Step 31 ─── さらなる高速化（オプション）
 
 ---
 
-## Step 26: イベントバス（OTP の関心分離）
+## Step 26: イベントバス
 
 **PRIORITY_STEPS**: P5
 
@@ -339,7 +339,7 @@ children = [
 
 ---
 
-## Step 27: ETS キャッシュ + 入力ポーリング化
+## Step 27: ETS キャッシュ・入力ポーリング
 
 **PRIORITY_STEPS**: P6
 
@@ -582,7 +582,7 @@ end
 
 ---
 
-## Step 28: Rust フリーリスト（スポーン O(1) 化）
+## Step 28: フリーリスト（スポーン O(1)）
 
 **PRIORITY_STEPS**: P3
 
@@ -779,7 +779,7 @@ impl EnemyWorld {
 
 ---
 
-## Step 29: Spatial Hash 最近接 + RwLock
+## Step 29: Spatial Hash 最近接・RwLock
 
 **PRIORITY_STEPS**: P1（空間ハッシュ化）, P2（RwLock）
 
@@ -1065,7 +1065,7 @@ children = [
 
 ---
 
-## Step 31: SIMD AI 高速化（上級・オプション）
+## Step 31: SIMD AI 高速化（オプション）
 
 **PRIORITY_STEPS**: P4（オプション）
 

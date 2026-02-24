@@ -25,33 +25,26 @@
 
 ```
 Step 40: 2 つ目のゲーム（ミニマル実装）
-  └ 汎用化の検証。極小の 2 つ目のゲームを実装
-  └ [NEXT_STEPS.md § Step 40](../04_roadmap/NEXT_STEPS.md#step-40-2-つ目のゲームミニマル実装) を参照
+  └ 汎用化の検証。[STEPS_GENERALIZATION.md § Step 40](./STEPS_GENERALIZATION.md#step-40-2-つ目のゲームミニマル実装) を参照
 
-Step 41: GameLoop Rust 移行（優先度高）
-  └ Elixir の Process.send_after → Rust の高精度タイマー
-  └ 固定間隔 physics、イベント駆動で Elixir と連携
-  └ リズムゲー・競技FPS など精度重視ジャンルに対応可能に
+Step 41: GameLoop Rust 移行（高精度 60 Hz）
+  └ tick 主導権を Rust に、Elixir はイベント駆動
 
 Step 42: マップ・障害物システム
-  └ 無限平面 → 障害物・壁・タイルマップ対応
-  └ Ghost（壁すり抜け）の実装を可能にする
+  └ 障害物・壁・Ghost 対応
 
 Step 43: セーブ・ロード
-  └ ゲーム状態の永続化
-  └ ハイスコア・実績の保存基盤
+  └ セッション永続化・ハイスコア
 
-Step 44: マルチプレイ
-  └ GameWorld の設計変更
+Step 44: マルチプレイ基盤（ルーム管理）
   └ Phoenix Channels 連携の土台
 
-Step 45: デバッグ支援
-  └ NIF クラッシュ時のトレース改善
-  └ Elixir/Rust 境界でのデバッグ容易化
+Step 45: デバッグ支援（NIF）
+  └ パニックトレース・NifResult 統一
 ```
 
 **実施順序の推奨**:
-1. **Step 40（2 つ目のゲーム）** — 汎用化の検証。NEXT_STEPS で定義済み
+1. **Step 40（2 つ目のゲーム）** — 汎用化の検証。STEPS_GENERALIZATION で定義済み
 2. **Step 41（GameLoop Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
 3. **Step 45（デバッグ）** — 他ステップの開発効率を上げるため早期に
 4. **Step 42（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
@@ -64,12 +57,12 @@ Step 45: デバッグ支援
 
 **目標**: 汎用化が機能していることを検証するために、極小の 2 つ目のゲームを実装する。
 
-**詳細**: [NEXT_STEPS.md § Step 40](../04_roadmap/NEXT_STEPS.md#step-40-2-つ目のゲームミニマル実装) を参照。  
+**詳細**: [STEPS_GENERALIZATION.md § Step 40](./STEPS_GENERALIZATION.md#step-40-2-つ目のゲームミニマル実装) を参照。  
 例: 「タイトル → プレイ（敵が直進するだけ）→ ゲームオーバー」のみのミニゲーム。`lib/games/mini_shooter/` を作成し、`config :game, current: Game.MiniShooter` で切り替えて起動できることを確認する。
 
 ---
 
-## 3. Step 41: GameLoop Rust 移行
+## 3. Step 41: GameLoop Rust 移行（高精度 60 Hz）
 
 ### 3.1 目標
 
@@ -302,7 +295,7 @@ Engine.best_score()
 
 ---
 
-## 6. Step 44: マルチプレイ
+## 6. Step 44: マルチプレイ基盤（ルーム管理）
 
 ### 6.1 目標
 
@@ -360,7 +353,7 @@ Engine.best_score()
 
 ---
 
-## 7. Step 45: デバッグ支援
+## 7. Step 45: デバッグ支援（NIF）
 
 ### 7.1 目標
 
@@ -498,4 +491,4 @@ flowchart TB
 | [SPEC.md](../01_setup/SPEC.md) | 障害物・マップの仕様 |
 | [STEPS_QUALITY.md](./STEPS_QUALITY.md) | 背景タイル・マップサイズの既存記載 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | マップアセットのロード方針 |
-| [NEXT_STEPS.md](../04_roadmap/NEXT_STEPS.md) | Step 32〜40 の汎用化ロードマップ |
+| [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | Step 32〜40 の汎用化ロードマップ |
