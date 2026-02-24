@@ -92,21 +92,24 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Elixir BEAM VM                           │
 │                                                                 │
-│  ┌─────────────────┐  ┌──────────────┐  ┌────────────────────┐ │
-│  │  GameLoop       │  │ InputHandler │  │  Supervisor Tree   │ │
-│  │  GenServer      │  │  GenServer   │  │  (障害時自動再起動) │ │
-│  │  (60Hz tick)    │  │              │  │                    │ │
-│  └────────┬────────┘  └──────┬───────┘  └────────────────────┘ │
-│           │                  │                                  │
-│  ┌────────▼──────────────────▼──────────────────────────────┐  │
-│  │              ETS Tables（コンポーネントストア）            │  │
-│  │   :positions  :health  :sprite_ids  :ai_states           │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  ┌──────────────┐  ┌────────────────────┐  ┌─────────────────┐ │
+│  │ InputHandler │  │  Supervisor Tree   │  │ Stats / Spawn    │ │
+│  │  GenServer   │  │  (障害時自動再起動) │  │ (イベント購読等) │ │
+│  └──────┬───────┘  └────────────────────┘  └────────┬────────┘ │
+│         │                                            │          │
+│  ┌──────▼────────────────────────────────────────────▼──────┐   │
+│  │              ETS Tables（コンポーネントストア等）          │   │
+│  └───────────────────────────────────────────────────────────┘   │
 └─────────────────────┬───────────────────────────────────────────┘
-                      │ Rustler NIF (dirty_cpu)
-                      │ ResourceArc<Mutex<GameWorld>>
+                      │ Rustler NIF（入力送信・スポーン・状態取得）
+                      │ ResourceArc<Mutex<GameWorld>> 等
 ┌─────────────────────▼───────────────────────────────────────────┐
 │                         Rust Native                             │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  Game Loop（60 Hz・高精度）                               │   │
+│  │  winit EventLoop 内で physics_step → レンダー → 次フレーム │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │  ECS World   │  │   Physics    │  │    wgpu Renderer     │  │
@@ -114,10 +117,8 @@
 │  │              │  │  Hash        │  │                      │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
 │                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  winit EventLoop（メインスレッド）                       │    │
-│  │  crossbeam-channel でレンダラーと通信                    │    │
-│  └─────────────────────────────────────────────────────────┘    │
+│  入力は NIF（input_event）で Elixir → Rust。イベントは Rust →   │
+│  Elixir（チャネル／NIF コールバック等）で通知可能。             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -125,20 +126,20 @@
 
 ```mermaid
 flowchart LR
-    subgraph beam [BEAM VM Schedulers]
-        S1[Scheduler 1\nGameLoop tick]
-        S2[Scheduler 2\nInputHandler]
-        DC["DirtyCPU Scheduler\nphysics_step NIF"]
+    subgraph beam [BEAM VM]
+        S1[Scheduler\nInputHandler]
+        S2[Stats / Spawn\nイベント処理]
     end
 
-    subgraph rust_threads [Rust Threads]
-        MT["Main Thread\nwinit EventLoop"]
+    subgraph rust_threads [Rust]
+        MT["Main Thread\nwinit EventLoop + Game Loop 60Hz"]
         RT["Render Thread\nwgpu submit"]
     end
 
-    S1 -->|"NIF call"| DC
-    DC -->|"crossbeam send"| RT
-    MT -->|"window events"| S2
+    S1 -->|"input_event NIF"| MT
+    MT -->|"ウィンドウイベント等"| S1
+    MT -->|"physics_step 内部"| RT
+    MT -->|"イベント送信（任意）"| S2
     RT --> MT
 ```
 
@@ -251,6 +252,8 @@ pub struct BulletWorld {
 
 ### 4.1 NIF 関数一覧
 
+ゲームループは **Rust 側で 60 Hz 駆動** するため、Elixir から `physics_step` を呼ぶことはない。Rust のループ内で物理演算・レンダリングが行われる。
+
 ```elixir
 # lib/game/nif_bridge.ex
 defmodule Game.NifBridge do
@@ -258,19 +261,15 @@ defmodule Game.NifBridge do
     otp_app: :game,
     crate: :game_native
 
-  # ワールド初期化
+  # ワールド初期化（Rust 側でゲームループ開始の契機になる場合あり）
   @spec create_world(map()) :: {:ok, reference()} | {:error, term()}
   def create_world(_config), do: :erlang.nif_error(:nif_not_loaded)
 
-  # 物理演算ステップ（dirty_cpu: BEAMスケジューラをブロックしない）
-  @spec physics_step(reference(), float()) :: binary()
-  def physics_step(_world_ref, _delta_ms), do: :erlang.nif_error(:nif_not_loaded)
-
-  # 入力イベント送信
+  # 入力イベント送信（Elixir → Rust。InputHandler 等から呼ぶ）
   @spec input_event(reference(), atom(), any()) :: :ok
   def input_event(_world_ref, _event_type, _data), do: :erlang.nif_error(:nif_not_loaded)
 
-  # 敵スポーン
+  # 敵スポーン（Elixir の SpawnSystem 等から NIF で呼ぶ）
   @spec spawn_enemies(reference(), atom(), non_neg_integer()) :: :ok
   def spawn_enemies(_world_ref, _enemy_type, _count), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -278,15 +277,15 @@ defmodule Game.NifBridge do
   @spec get_game_state(reference()) :: map()
   def get_game_state(_world_ref), do: :erlang.nif_error(:nif_not_loaded)
 
-  # レンダラー初期化（winit スレッド起動）
+  # レンダラー初期化・ゲームループ開始（winit スレッド起動。Rust 内で 60 Hz ループ）
   @spec init_renderer(map()) :: :ok | {:error, term()}
   def init_renderer(_window_config), do: :erlang.nif_error(:nif_not_loaded)
 end
 ```
 
-### 4.2 physics_step の戻り値バイナリ形式
+### 4.2 レンダリングデータ（Rust 内部）
 
-`physics_step/2` はレンダリングに必要な最小限のデータをバイナリで返す。
+ゲームループが Rust 側にあるため、`physics_step` は **Rust 内で呼ばれ**、その結果は同一プロセス内でレンダラーに渡される（Elixir には返さない）。レンダリング用のデータレイアウトは以下のとおり。
 
 ```
 バイナリレイアウト（リトルエンディアン）:
@@ -310,7 +309,7 @@ end
 ```
 
 ```elixir
-# Elixir 側でのデコード例
+# 同一バイナリ形式を Elixir で扱う場合のデコード例（デバッグ・リプレイ等）
 defmodule Game.RenderDataDecoder do
   def decode(<<
     entity_count::uint32-little,
@@ -337,12 +336,14 @@ defmodule Game.RenderDataDecoder do
 end
 ```
 
-### 4.3 Rust 側 NIF 実装パターン
+### 4.3 Rust 側のゲームループと NIF
+
+ゲームループは **Rust の winit EventLoop 内** で 60 Hz 駆動する。毎フレーム、Rust 内で `physics_step` 相当の処理を行い、その結果をレンダラーに渡す。Elixir が tick を送る構成ではない。
 
 ```rust
-// native/game_native/src/lib.rs
+// native/game_native/src/lib.rs（イメージ）
 
-use rustler::{ResourceArc, Env, Binary, OwnedBinary};
+use rustler::ResourceArc;
 use std::sync::Mutex;
 
 pub struct GameWorld {
@@ -353,39 +354,19 @@ pub struct GameWorld {
     pub frame_id: u32,
 }
 
-// ResourceArc でゲームワールドをElixirに渡す（参照のみ）
+// ResourceArc でゲームワールドを Elixir に渡す（参照のみ）。Rust 側ループでも同一 world を参照。
 #[rustler::nif]
 fn create_world(config: GameConfig) -> ResourceArc<Mutex<GameWorld>> {
     ResourceArc::new(Mutex::new(GameWorld::new(config)))
 }
 
-// dirty_cpu: BEAMスケジューラをブロックしない重い処理
-#[rustler::nif(schedule = "DirtyCpu")]
-fn physics_step<'a>(
-    env: Env<'a>,
-    world: ResourceArc<Mutex<GameWorld>>,
-    delta_ms: f32,
-) -> Binary<'a> {
-    let mut world = world.lock().unwrap();
+// ゲームループは Rust 内（winit の run 内など）で実行。
+// 例: 毎フレーム world.write().unwrap() → update_movement / resolve_collisions / update_ai / cleanup_dead_entities
+//      → レンダリングデータをレンダースレッドへ送信。Elixir には返さない。
+```
 
-    // 1. 移動計算
-    world.update_movement(delta_ms / 1000.0);
-    // 2. 衝突判定
-    world.resolve_collisions();
-    // 3. AI 更新
-    world.update_ai(delta_ms / 1000.0);
-    // 4. 死亡処理
-    world.cleanup_dead_entities();
-
-    world.frame_id += 1;
-
-    // レンダリングデータをバイナリとして返す（コピー最小化）
-    let size = world.render_data_size();
-    let mut binary = OwnedBinary::new(size).unwrap();
-    world.write_render_data(binary.as_mut_slice());
-    binary.release(env)
-}
-
+```rust
+// Elixir から呼ばれる NIF の例
 #[rustler::nif]
 fn spawn_enemies(
     world: ResourceArc<Mutex<GameWorld>>,
@@ -620,6 +601,8 @@ pub fn update_enemy_movement(world: &mut EnemyWorld, player_x: f32, player_y: f3
 
 ### 7.1 Supervisor ツリー
 
+ゲームループは **Rust 側で 60 Hz 駆動** するため、Elixir に「GameLoop GenServer」は存在しない。Elixir は入力送信・スポーン指示・Stats 等の役割のみ持つ。
+
 ```elixir
 # lib/game/application.ex
 defmodule Game.Application do
@@ -629,12 +612,11 @@ defmodule Game.Application do
     children = [
       # ETS テーブル初期化（最初に起動）
       Game.ComponentStore,
-      # レンダラー初期化（Rust winit スレッド起動）
+      # レンダラー初期化・ゲームループ開始（Rust winit スレッド起動。Rust 内で 60 Hz ループ）
       Game.RendererSupervisor,
-      # 入力ハンドラ
+      # 入力ハンドラ（ウィンドウイベントを NIF で Rust に送る）
       Game.InputHandler,
-      # メインゲームループ（最後に起動）
-      Game.GameLoop,
+      # 必要に応じて Stats / イベント購読プロセス等
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]
@@ -643,63 +625,10 @@ defmodule Game.Application do
 end
 ```
 
-### 7.2 GameLoop GenServer
+### 7.2 ゲームループ（Rust 側）と Elixir の役割
 
-```elixir
-# lib/game/game_loop.ex
-defmodule Game.GameLoop do
-  use GenServer
-
-  @tick_ms 16  # 約 60fps
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
-
-  def init(_opts) do
-    {:ok, world_ref} = Game.NifBridge.create_world(%{
-      map_width: 4096,
-      map_height: 4096,
-      max_enemies: 5000,
-    })
-
-    Process.send_after(self(), :tick, @tick_ms)
-
-    {:ok, %{
-      world_ref: world_ref,
-      last_tick: System.monotonic_time(:millisecond),
-      score: 0,
-      elapsed_seconds: 0.0,
-    }}
-  end
-
-  def handle_info(:tick, state) do
-    now = System.monotonic_time(:millisecond)
-    delta = now - state.last_tick
-
-    # Rust に物理演算を委譲（dirty_cpu NIF）
-    render_data = Game.NifBridge.physics_step(state.world_ref, delta * 1.0)
-
-    # スポーンシステムの更新
-    new_elapsed = state.elapsed_seconds + delta / 1000.0
-    Game.SpawnSystem.maybe_spawn(state.world_ref, new_elapsed)
-
-    # 次の tick をスケジュール
-    Process.send_after(self(), :tick, @tick_ms)
-
-    {:noreply, %{state |
-      last_tick: now,
-      elapsed_seconds: new_elapsed,
-    }}
-  end
-
-  # 入力イベントを受信（InputHandler から cast）
-  def handle_cast({:input, event_type, data}, state) do
-    Game.NifBridge.input_event(state.world_ref, event_type, data)
-    {:noreply, state}
-  end
-end
-```
+- **Rust**: winit の EventLoop 内で高精度 60 Hz のゲームループを回す。毎フレーム、物理演算（physics 相当）→ レンダリングを実行。入力は Elixir から `input_event` NIF で受け取る。
+- **Elixir**: `InputHandler` がキー入力等を受け、`Game.NifBridge.input_event(world_ref, type, data)` で Rust に送る。`SpawnSystem` はタイマー等で `spawn_enemies` NIF を呼ぶ。Rust からイベント（撃破・レベルアップ等）を受け取る場合は、チャネルや NIF コールバックで Elixir に通知する構成を検討する。
 
 ### 7.3 SpawnSystem
 
