@@ -16,17 +16,15 @@
 5. [Step 44: マルチプレイ](#5-step-44-マルチプレイ)
 6. [Step 45: デバッグ支援](#6-step-45-デバッグ支援)
 7. [Step 46: GameLoop を GameEvents にリネーム](#7-step-46-gameloop-を-gameevents-にリネーム)
-8. [推奨実施順序と依存関係](#8-推奨実施順序と依存関係)
-9. [関連ドキュメント](#9-関連ドキュメント)
+8. [Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）](#8-step-47-spec-未実装コンテンツskeleton--ghost--garlic--壁すり抜け)
+9. [推奨実施順序と依存関係](#9-推奨実施順序と依存関係)
+10. [関連ドキュメント](#10-関連ドキュメント)
 
 ---
 
 ## 1. 全体ロードマップ
 
 ```
-Step 40: 2 つ目のゲーム（ミニマル実装）
-  └ 汎用化の検証。[STEPS_GENERALIZATION.md § Step 40](./STEPS_GENERALIZATION.md#step-40-2-つ目のゲームミニマル実装) を参照
-
 Step 41: ゲームループの Rust 移行（高精度 60 Hz）
   └ tick 主導権を Rust に、Elixir はイベント駆動
 
@@ -44,15 +42,17 @@ Step 45: デバッグ支援（NIF）
 
 Step 46: GameLoop を GameEvents にリネーム
   └ Elixir 側の役割（frame_events 受信・フェーズ管理）に合わせたモジュール名へ変更
+
+Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
+  └ PROJECT_EVALUATION §1.2 の未実装項目を実装。敵 Skeleton・Ghost、武器 Garlic、Ghost の障害物すり抜け。
 ```
 
 **実施順序の推奨**:
-1. **Step 40（2 つ目のゲーム）** — 汎用化の検証。STEPS_GENERALIZATION で定義済み
-2. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
-3. **Step 45（デバッグ）** — 他ステップの開発効率を上げるため早期に
-4. **Step 42（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
-5. **Step 43（セーブ）** — 独立した機能。マップの影響を受けない
-6. **Step 44（マルチプレイ）** — 設計変更が大きいため最後に
+1. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
+2. **Step 45（デバッグ）** — 他ステップの開発効率を上げるため早期に
+3. **Step 42（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
+4. **Step 43（セーブ）** — 独立した機能。マップの影響を受けない
+5. **Step 44（マルチプレイ）** — 設計変更が大きいため最後に
 
 ---
 
@@ -511,7 +511,49 @@ end
 
 ---
 
-## 8. 推奨実施順序と依存関係
+## 8. Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
+
+### 8.1 目標
+
+- **PROJECT_EVALUATION.md §1.2** および **SPEC_GAME_Survivor.md** に記載の未実装項目を実装する。
+- 敵: **Skeleton**（60秒〜・高HP）、**Ghost**（120秒〜・壁すり抜け）を追加。
+- 武器: **Garlic**（プレイヤー周囲オーラで常時ダメージ 5/秒）を追加。
+- **Ghost 壁すり抜け**: 既存の `EnemyParams::passes_through_obstacles(kind_id)` により障害物をスキップする敵として Ghost を運用する。
+
+### 8.2 実装内容
+
+#### 47.1 Rust: 敵パラメータ（entity_params）
+
+- 敵 ID を拡張: `0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost`。
+- `ENEMY_TABLE` を 5 要素にし、Skeleton（HP 60, 速度 60, ダメージ 15/秒, render_kind 5）、Ghost（HP 40, 速度 100, 壁すり抜け, render_kind 4）を追加。
+- `passes_through_obstacles(id)` は `id == ENEMY_ID_GHOST`（4）のとき `true`。Step 42 の `resolve_obstacles_enemy` で既に参照済み。
+
+#### 47.2 Rust: 武器 Garlic（entity_params + lib）
+
+- `WEAPON_ID_GARLIC = 6`、`WEAPON_TABLE` に Garlic（cooldown 0.2s, damage 1 → 5 dmg/sec 相当のオーラ）を追加。
+- `garlic_radius(weapon_id, level)` でオーラ半径（例: 80 + (level-1)*15 px）を定義。
+- 武器ループで `WEAPON_ID_GARLIC` のとき、プレイヤー中心の `garlic_radius` 内の敵に一定間隔でダメージを付与（キル時は経験値・アイテム・パーティクルを既存と同様に処理）。
+
+#### 47.3 Rust: レンダリング
+
+- 敵 `render_kind` 4（Ghost）, 5（Skeleton）に対応。`enemy_sprite_size` / `enemy_anim_uv` で kind 4, 5 を追加（プレースホルダーで既存 Bat/Golem UV を流用可）。
+
+#### 47.4 Elixir: ゲーム層
+
+- **entity_registry**: `enemies` に `skeleton: 3`, `ghost: 4` を追加（golem は 2 のまま）。`weapons` に `garlic: 6` を追加。
+- **SpawnSystem**: `enemy_kind_for_wave` で経過時間に応じて Skeleton（60秒〜）、Ghost（120秒〜）、Golem（180秒〜）を混在させる。
+- **LevelSystem**: `@all_weapons` に `:garlic` を追加し、`weapon_label(:garlic)` を定義。
+
+### 8.3 確認ポイント
+
+- [x] Skeleton が 60 秒以降のウェーブで出現し、高 HP で動作する。
+- [x] Ghost が 120 秒以降のウェーブで出現し、障害物（木・岩）をすり抜けて移動する。
+- [x] Garlic をレベルアップで選択でき、装備するとプレイヤー周囲の敵に持続ダメージが入る。
+- [x] PROJECT_EVALUATION.md §1.2 の「Skeleton, Ghost」「Garlic」「Ghost 壁すり抜け」がすべて ✅ 実装済み に更新できる。
+
+---
+
+## 9. 推奨実施順序と依存関係
 
 ```mermaid
 flowchart TB
@@ -522,6 +564,7 @@ flowchart TB
     S44[Step 44\nマルチプレイ]
     S45[Step 45\nデバッグ支援]
     S46[Step 46\nGameEvents リネーム]
+    S47[Step 47\nSkeleton/Ghost/Garlic]
 
     S40 --> S41
     S41 --> S45
@@ -532,22 +575,22 @@ flowchart TB
     S42 --> S43
     S43 --> S44
     S44 --> S46
+    S42 --> S47
 ```
 
 **推奨順序**:
-1. **Step 40（2 つ目のゲーム）** — 汎用化の検証
-2. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先
-3. **Step 45（デバッグ支援）** — 他ステップの開発を効率化
-4. **Step 42（マップ）** — ゲーム性に直結
-5. **Step 43（セーブ）** — 独立。マップ完了後でも可
-6. **Step 44（マルチプレイ）** — 設計変更が大きいため最後
-7. **Step 46（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
+1. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先
+2. **Step 45（デバッグ支援）** — 他ステップの開発を効率化
+3. **Step 42（マップ）** — ゲーム性に直結
+4. **Step 43（セーブ）** — 独立。マップ完了後でも可
+5. **Step 44（マルチプレイ）** — 設計変更が大きいため最後
+6. **Step 46（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
 
 **並行可能**: Step 42 と Step 43 は互いに依存しないため並行実施可能。Step 46 は 41 完了後であればいつでも実施可能（44 のドキュメント更新とまとめてもよい）。
 
 ---
 
-## 9. 関連ドキュメント
+## 10. 関連ドキュメント
 
 | ドキュメント | 用途 |
 |-------------|------|

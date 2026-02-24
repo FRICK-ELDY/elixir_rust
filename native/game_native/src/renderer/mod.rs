@@ -153,12 +153,14 @@ impl CameraUniform {
 const MAX_INSTANCES: usize = 14502;
 
 // 敵タイプ別のスプライトサイズ（px）
-// kind: 1=slime(40px), 2=bat(24px), 3=golem(64px)
+// kind: 1=slime(40px), 2=bat(24px), 3=golem(64px), 4=ghost(32px), 5=skeleton(40px)
 // Step 24: boss kind: 11=SlimeKing(96px), 12=BatLord(96px), 13=StoneGolem(128px)
 fn enemy_sprite_size(kind: u8) -> f32 {
     match kind {
         2  => 24.0,   // Bat: 小さい
         3  => 64.0,   // Golem: 大きい
+        4  => 32.0,   // Ghost
+        5  => 40.0,   // Skeleton
         11 => 96.0,   // Slime King: 巨大
         12 => 96.0,   // Bat Lord: 巨大
         13 => 128.0,  // Stone Golem: 最大
@@ -166,11 +168,22 @@ fn enemy_sprite_size(kind: u8) -> f32 {
     }
 }
 
+/// Skeleton 用 UV（Golem と同スロットでプレースホルダー）
+fn skeleton_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    golem_anim_uv(frame)
+}
+/// Ghost 用 UV（Bat と同スロットでプレースホルダー）
+fn ghost_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
+    bat_anim_uv(frame)
+}
+
 /// Step 23/24: アニメーションフレームを考慮した敵 UV（ボスは静止スプライト）
 fn enemy_anim_uv(kind: u8, frame: u8) -> ([f32; 2], [f32; 2]) {
     match kind {
         2  => bat_anim_uv(frame),
         3  => golem_anim_uv(frame),
+        4  => ghost_anim_uv(frame),
+        5  => skeleton_anim_uv(frame),
         11 => slime_king_uv(),
         12 => bat_lord_uv(),
         13 => stone_golem_uv(),

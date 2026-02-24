@@ -5,7 +5,7 @@ defmodule Game.VampireSurvivor.LevelSystemTest do
     test "空のレベルマップからは未所持武器が3つ返る" do
       choices = Game.VampireSurvivor.LevelSystem.generate_weapon_choices(%{})
       assert length(choices) == 3
-      assert Enum.all?(choices, &(&1 in [:magic_wand, :axe, :cross, :whip, :fireball, :lightning]))
+      assert Enum.all?(choices, &(&1 in [:magic_wand, :garlic, :axe, :cross, :whip, :fireball, :lightning]))
     end
 
     test "最大レベルの武器は除外される" do
@@ -40,13 +40,14 @@ defmodule Game.VampireSurvivor.LevelSystemTest do
       levels = %{magic_wand: 1, axe: 2, cross: 3}
       choices = Game.VampireSurvivor.LevelSystem.generate_weapon_choices(levels)
       assert length(choices) == 3
-      # 未所持（whip, fireball, lightning）が優先、次に低レベル
-      assert Enum.all?(choices, &(&1 in [:magic_wand, :axe, :cross, :whip, :fireball, :lightning]))
+      # 未所持（garlic, whip, fireball, lightning）が優先、次に低レベル
+      assert Enum.all?(choices, &(&1 in [:magic_wand, :garlic, :axe, :cross, :whip, :fireball, :lightning]))
     end
 
     test "全武器が最大レベルなら空" do
       levels = %{
         magic_wand: 8,
+        garlic: 8,
         axe: 8,
         cross: 8,
         whip: 8,
@@ -60,6 +61,7 @@ defmodule Game.VampireSurvivor.LevelSystemTest do
   describe "weapon_label/1 and weapon_label/2" do
     test "weapon_label/1: 武器名のみ" do
       assert Game.VampireSurvivor.LevelSystem.weapon_label(:magic_wand) == "Magic Wand (auto-aim)"
+      assert Game.VampireSurvivor.LevelSystem.weapon_label(:garlic) == "Garlic (aura damage)"
       assert Game.VampireSurvivor.LevelSystem.weapon_label(:axe) == "Axe (upward throw)"
       assert Game.VampireSurvivor.LevelSystem.weapon_label(:cross) == "Cross (4-way fire)"
       assert Game.VampireSurvivor.LevelSystem.weapon_label(:whip) == "Whip (fan sweep)"

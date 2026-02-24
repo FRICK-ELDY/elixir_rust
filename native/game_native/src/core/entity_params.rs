@@ -16,17 +16,19 @@ pub struct EnemyParams {
     pub particle_color: [f32; 4],
 }
 
-/// ヴァンサバの敵 ID: 0=Slime, 1=Bat, 2=Golem, 3=Ghost（壁すり抜け）
+/// ヴァンサバの敵 ID: 0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost（壁すり抜け）
 pub const ENEMY_ID_SLIME: u8 = 0;
 pub const ENEMY_ID_BAT:   u8 = 1;
 pub const ENEMY_ID_GOLEM: u8 = 2;
-pub const ENEMY_ID_GHOST: u8 = 3;
+pub const ENEMY_ID_SKELETON: u8 = 3;
+pub const ENEMY_ID_GHOST: u8 = 4;
 
-static ENEMY_TABLE: [EnemyParams; 4] = [
-    EnemyParams { max_hp: 30.0,   speed: 80.0,  radius: 20.0, exp_reward: 5,  damage_per_sec: 20.0, render_kind: 1, particle_color: [1.0, 0.5, 0.1, 1.0] }, // Slime
-    EnemyParams { max_hp: 15.0,   speed: 160.0, radius: 12.0, exp_reward: 3,  damage_per_sec: 10.0, render_kind: 2, particle_color: [0.7, 0.2, 0.9, 1.0] }, // Bat
-    EnemyParams { max_hp: 150.0,  speed: 40.0,  radius: 32.0, exp_reward: 20, damage_per_sec: 40.0, render_kind: 3, particle_color: [0.6, 0.6, 0.6, 1.0] }, // Golem
-    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] }, // Ghost（壁すり抜け）
+static ENEMY_TABLE: [EnemyParams; 5] = [
+    EnemyParams { max_hp: 30.0,   speed: 80.0,  radius: 20.0, exp_reward: 5,  damage_per_sec: 20.0, render_kind: 1, particle_color: [1.0, 0.5, 0.1, 1.0] },   // Slime
+    EnemyParams { max_hp: 15.0,   speed: 160.0, radius: 12.0, exp_reward: 3,  damage_per_sec: 10.0, render_kind: 2, particle_color: [0.7, 0.2, 0.9, 1.0] },   // Bat
+    EnemyParams { max_hp: 150.0,  speed: 40.0,  radius: 32.0, exp_reward: 20, damage_per_sec: 40.0, render_kind: 3, particle_color: [0.6, 0.6, 0.6, 1.0] },   // Golem
+    EnemyParams { max_hp: 60.0,   speed: 60.0,  radius: 22.0, exp_reward: 10, damage_per_sec: 15.0, render_kind: 5, particle_color: [0.9, 0.85, 0.7, 1.0] },  // Skeleton（高HP）
+    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] },   // Ghost（壁すり抜け）
 ];
 
 impl EnemyParams {
@@ -69,17 +71,24 @@ pub const WEAPON_ID_CROSS:     u8 = 2;
 pub const WEAPON_ID_WHIP:      u8 = 3;
 pub const WEAPON_ID_FIREBALL:  u8 = 4;
 pub const WEAPON_ID_LIGHTNING: u8 = 5;
+pub const WEAPON_ID_GARLIC:    u8 = 6;
 
 static MW_TABLE: [usize; 9] = [0, 1, 1, 2, 2, 3, 3, 4, 4];
 static CROSS_TABLE: [usize; 9] = [0, 4, 4, 4, 8, 8, 8, 8, 8];
 
-static WEAPON_TABLE: [WeaponParams; 6] = [
+/// Garlic のオーラ半径（px）: 80 + (level - 1) * 15
+pub fn garlic_radius(_weapon_id: u8, level: u32) -> f32 {
+    80.0 + (level as f32 - 1.0) * 15.0
+}
+
+static WEAPON_TABLE: [WeaponParams; 7] = [
     WeaponParams { cooldown: 1.0,  damage: 10, as_u8: 0, name: "magic_wand", bullet_table: Some(&MW_TABLE) },
     WeaponParams { cooldown: 1.5,  damage: 25, as_u8: 1, name: "axe",        bullet_table: None },
     WeaponParams { cooldown: 2.0,  damage: 15, as_u8: 2, name: "cross",      bullet_table: Some(&CROSS_TABLE) },
     WeaponParams { cooldown: 1.0,  damage: 30, as_u8: 3, name: "whip",       bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 20, as_u8: 4, name: "fireball",   bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 15, as_u8: 5, name: "lightning",  bullet_table: None },
+    WeaponParams { cooldown: 0.2,  damage: 1,  as_u8: 6, name: "garlic",    bullet_table: None },  // 1 dmg/0.2s = 5 dmg/sec オーラ
 ];
 
 impl WeaponParams {

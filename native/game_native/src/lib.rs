@@ -5,10 +5,10 @@ pub use core::enemy::EnemyKind;
 pub use core::boss::BossKind;
 
 use core::entity_params::{
-    BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count,
+    garlic_radius, BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count,
     BOSS_ID_BAT_LORD, BOSS_ID_SLIME_KING, BOSS_ID_STONE_GOLEM,
-    WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_LIGHTNING,
-    WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP,
+    WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_GARLIC,
+    WEAPON_ID_LIGHTNING, WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP,
 };
 use core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
@@ -827,7 +827,7 @@ fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Ve
         .collect()
 }
 
-/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Ghost）
+/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost）
 /// SPEC: プレイヤーから 800〜1200px の円周上にスポーン（見つけやすい距離）
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> NifResult<Atom> {
@@ -1226,7 +1226,55 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                _ => {} // 未知の武器 ID（6 以上）は何もしない
+                WEAPON_ID_GARLIC => {
+                    // プレイヤー周囲オーラで一定間隔ダメージ（5 dmg/sec 想定: 0.2s 毎に 1）
+                    let radius = garlic_radius(kind_id, level);
+                    let radius_sq = radius * radius;
+                    let candidates = w.collision.dynamic.query_nearby(px, py, radius);
+                    for ei in candidates {
+                        if !w.enemies.alive[ei] { continue; }
+                        let ex = w.enemies.positions_x[ei];
+                        let ey = w.enemies.positions_y[ei];
+                        let ddx = ex - px;
+                        let ddy = ey - py;
+                        if ddx * ddx + ddy * ddy > radius_sq { continue; }
+                        w.enemies.hp[ei] -= dmg as f32;
+                        let kind_e = w.enemies.kind_ids[ei];
+                        let ep = EnemyParams::get(kind_e);
+                        let hit_x = ex + ep.radius;
+                        let hit_y = ey + ep.radius;
+                        if w.enemies.hp[ei] <= 0.0 {
+                            w.enemies.kill(ei);
+                            w.frame_events.push(FrameEvent::EnemyKilled {
+                                enemy_kind: kind_e,
+                                weapon_kind: wp.as_u8,
+                            });
+                            w.score += ep.exp_reward * 2;
+                            w.exp += ep.exp_reward;
+                            if !w.level_up_pending {
+                                let required = exp_required_for_next(w.level);
+                                if w.exp >= required {
+                                    w.level_up_pending = true;
+                                    w.frame_events.push(FrameEvent::LevelUp { new_level: w.level + 1 });
+                                }
+                            }
+                            w.particles.emit(hit_x, hit_y, 8, ep.particle_color);
+                            let roll = w.rng.next_u32() % 100;
+                            let (item_kind, item_value) = if roll < 2 {
+                                (ItemKind::Magnet, 0)
+                            } else if roll < 7 {
+                                (ItemKind::Potion, 20)
+                            } else {
+                                (ItemKind::Gem, ep.exp_reward)
+                            };
+                            w.items.spawn(hit_x, hit_y, item_kind, item_value);
+                        } else {
+                            w.particles.emit(hit_x, hit_y, 2, [0.9, 0.9, 0.3, 0.6]);
+                        }
+                    }
+                    w.weapon_slots[si].cooldown_timer = cd;
+                }
+                _ => {} // 未知の武器 ID（7 以上）は何もしない
             }
         }
     }
@@ -1997,7 +2045,7 @@ fn is_player_dead(world: ResourceArc<GameWorld>) -> NifResult<bool> {
 }
 
 /// エリート敵をスポーンする（通常敵の hp_multiplier 倍の HP を持つ）
-/// kind_id: 0=Slime, 1=Bat, 2=Golem
+/// kind_id: 0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost
 /// hp_multiplier: 1.0 = 通常、3.0 = エリート（HP 3 倍）
 #[rustler::nif]
 fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, hp_multiplier: f64) -> NifResult<Atom> {
