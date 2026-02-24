@@ -361,7 +361,7 @@ fn create_world(config: GameConfig) -> ResourceArc<Mutex<GameWorld>> {
 }
 
 // ゲームループは Rust 内（winit の run 内など）で実行。
-// 例: 毎フレーム world.lock() → update_movement / resolve_collisions / update_ai / cleanup_dead_entities
+// 例: 毎フレーム world.write().unwrap() → update_movement / resolve_collisions / update_ai / cleanup_dead_entities
 //      → レンダリングデータをレンダースレッドへ送信。Elixir には返さない。
 ```
 

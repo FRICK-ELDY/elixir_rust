@@ -1040,7 +1040,7 @@ ls _build\dev\lib\game\priv\native\
 
 **目標**: Elixir の GenServer で 60Hz のゲームループを実装し、Rust の `physics_step` NIF を呼び出す。
 
-**補足**: Elixir（GenServer）は高精度な 60 Hz タイミングが苦手なため、本ステップで一度 GenServer ベースのループを実装したうえで、のちに **Step 41（GameLoop Rust 移行・高精度 60 Hz）** にて Rust 側へ移行する。ここでは「動くループ」の土台として GenServer 版を扱う。
+**補足**: Elixir のタイマーは BEAM スケジューラ上で動作するため、ミリ秒単位での正確な実行が保証されません。このため、本ステップで一度 GenServer ベースのループを実装したうえで、のちに **Step 41（GameLoop Rust 移行・高精度 60 Hz）** にて Rust 側へ移行します。ここでは「動くループ」の土台として GenServer 版を扱います。
 
 ### 7.1 GameWorld NIF の実装
 
