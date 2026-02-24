@@ -66,9 +66,11 @@ defmodule Game.VampireSurvivor.SpawnSystem do
 
   def enemy_kind_for_wave(elapsed_sec) do
     cond do
-      elapsed_sec < 30  -> :slime
-      elapsed_sec < 60  -> Enum.random([:slime, :bat])
-      true              -> Enum.random([:slime, :bat, :golem])
+      elapsed_sec < 30   -> :slime
+      elapsed_sec < 60   -> Enum.random([:slime, :bat])
+      elapsed_sec < 120  -> Enum.random([:slime, :bat, :skeleton])
+      elapsed_sec < 180  -> Enum.random([:slime, :bat, :skeleton, :ghost])
+      true               -> Enum.random([:slime, :bat, :skeleton, :ghost, :golem])
     end
   end
 
@@ -76,9 +78,9 @@ defmodule Game.VampireSurvivor.SpawnSystem do
     cond do
       elapsed_sec <  30  -> "Wave 1 - Tutorial"
       elapsed_sec <  60  -> "Wave 2 - Warming Up (Bat added)"
-      elapsed_sec < 120  -> "Wave 3 - Getting Serious (Golem added)"
-      elapsed_sec < 180  -> "Wave 4 - Intense"
-      elapsed_sec < 600  -> "Wave 5 - Max"
+      elapsed_sec < 120  -> "Wave 3 - Skeleton added"
+      elapsed_sec < 180  -> "Wave 4 - Ghost added (wall-pass)"
+      elapsed_sec < 600  -> "Wave 5 - Golem added"
       true               -> "Wave 6 - ELITE (HP x3)"
     end
   end

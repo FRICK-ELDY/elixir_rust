@@ -23,9 +23,9 @@ defmodule Game.VampireSurvivor do
   @impl Engine.Game
   def entity_registry do
     %{
-      enemies: %{slime: 0, bat: 1, golem: 2, ghost: 3},
+      enemies: %{slime: 0, bat: 1, golem: 2, skeleton: 3, ghost: 4},
       weapons: %{
-        magic_wand: 0, axe: 1, cross: 2, whip: 3, fireball: 4, lightning: 5
+        magic_wand: 0, axe: 1, cross: 2, whip: 3, fireball: 4, lightning: 5, garlic: 6
       },
       bosses: %{slime_king: 0, bat_lord: 1, stone_golem: 2}
     }

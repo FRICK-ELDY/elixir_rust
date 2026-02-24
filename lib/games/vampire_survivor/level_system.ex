@@ -5,7 +5,7 @@ defmodule Game.VampireSurvivor.LevelSystem do
   Weapon choice generation is pure Elixir data transformation.
   """
 
-  @all_weapons [:magic_wand, :axe, :cross, :whip, :fireball, :lightning]
+  @all_weapons [:magic_wand, :garlic, :axe, :cross, :whip, :fireball, :lightning]
   @max_weapon_level 8
   @max_weapon_slots 6
 
@@ -30,10 +30,11 @@ defmodule Game.VampireSurvivor.LevelSystem do
   def weapon_label(weapon, _level), do: weapon_label(weapon)
 
   def weapon_label(:magic_wand), do: "Magic Wand (auto-aim)"
+  def weapon_label(:garlic),     do: "Garlic (aura damage)"
   def weapon_label(:axe),        do: "Axe (upward throw)"
   def weapon_label(:cross),      do: "Cross (4-way fire)"
   def weapon_label(:whip),       do: "Whip (fan sweep)"
   def weapon_label(:fireball),   do: "Fireball (piercing)"
   def weapon_label(:lightning),  do: "Lightning (chain)"
-  def weapon_label(other),       do: to_string(other)
+  def weapon_label(other),      do: to_string(other)
 end

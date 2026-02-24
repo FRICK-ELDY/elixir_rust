@@ -47,10 +47,10 @@ defmodule Game.VampireSurvivor.SpawnSystemTest do
       assert Game.VampireSurvivor.SpawnSystem.wave_label(0) == "Wave 1 - Tutorial"
       assert Game.VampireSurvivor.SpawnSystem.wave_label(29) == "Wave 1 - Tutorial"
       assert Game.VampireSurvivor.SpawnSystem.wave_label(30) == "Wave 2 - Warming Up (Bat added)"
-      assert Game.VampireSurvivor.SpawnSystem.wave_label(60) == "Wave 3 - Getting Serious (Golem added)"
-      assert Game.VampireSurvivor.SpawnSystem.wave_label(120) == "Wave 4 - Intense"
-      assert Game.VampireSurvivor.SpawnSystem.wave_label(180) == "Wave 5 - Max"
-      assert Game.VampireSurvivor.SpawnSystem.wave_label(599) == "Wave 5 - Max"
+      assert Game.VampireSurvivor.SpawnSystem.wave_label(60) == "Wave 3 - Skeleton added"
+      assert Game.VampireSurvivor.SpawnSystem.wave_label(120) == "Wave 4 - Ghost added (wall-pass)"
+      assert Game.VampireSurvivor.SpawnSystem.wave_label(180) == "Wave 5 - Golem added"
+      assert Game.VampireSurvivor.SpawnSystem.wave_label(599) == "Wave 5 - Golem added"
       assert Game.VampireSurvivor.SpawnSystem.wave_label(600) == "Wave 6 - ELITE (HP x3)"
     end
   end
@@ -69,9 +69,19 @@ defmodule Game.VampireSurvivor.SpawnSystemTest do
       assert Enum.all?(results, &(&1 in [:slime, :bat]))
     end
 
-    test "60秒〜は :slime, :bat, :golem のいずれか" do
-      results = for _ <- 1..50, do: Game.VampireSurvivor.SpawnSystem.enemy_kind_for_wave(120)
-      assert Enum.all?(results, &(&1 in [:slime, :bat, :golem]))
+    test "60〜120秒は :slime, :bat, :skeleton のいずれか" do
+      results = for _ <- 1..50, do: Game.VampireSurvivor.SpawnSystem.enemy_kind_for_wave(90)
+      assert Enum.all?(results, &(&1 in [:slime, :bat, :skeleton]))
+    end
+
+    test "120〜180秒は :slime, :bat, :skeleton, :ghost のいずれか" do
+      results = for _ <- 1..50, do: Game.VampireSurvivor.SpawnSystem.enemy_kind_for_wave(150)
+      assert Enum.all?(results, &(&1 in [:slime, :bat, :skeleton, :ghost]))
+    end
+
+    test "180秒〜は :slime, :bat, :skeleton, :ghost, :golem のいずれか" do
+      results = for _ <- 1..50, do: Game.VampireSurvivor.SpawnSystem.enemy_kind_for_wave(200)
+      assert Enum.all?(results, &(&1 in [:slime, :bat, :skeleton, :ghost, :golem]))
     end
   end
 end
