@@ -1189,6 +1189,7 @@ dependencies = [
  "log",
  "pollster",
  "rayon",
+ "rodio",
  "rustler",
  "serde",
  "wgpu",

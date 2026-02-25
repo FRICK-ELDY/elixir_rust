@@ -24,6 +24,8 @@ image = "0.25"
 egui = "0.31"
 egui-wgpu = "0.31"
 egui-winit = "0.31"
+# 1.7.3: asset / audio（game_window から統合）
+rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "vorbis"] }
 
 [profile.dev]
 opt-level = 1  # デバッグビルドでも最低限の最適化
