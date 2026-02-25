@@ -33,8 +33,9 @@
 2. [現状の整理](#2-現状の整理)
 3. [分割・整理の目標](#3-分割整理の目標)
 4. [フォルダ構成案（採用: 3 クレート + 機能別）](#4-フォルダ構成案採用-3-クレート--機能別)
-5. [実施ステップ（検討項目）](#5-実施ステップ検討項目)
-6. [関連ドキュメント](#6-関連ドキュメント)
+5. [1.6.8 Elixir・Mix のビルドパス確認](#168-elixirmix-のビルドパス確認)
+6. [実施ステップ（検討項目）](#6-実施ステップ検討項目)
+7. [関連ドキュメント](#7-関連ドキュメント)
 
 ---
 
@@ -306,7 +307,32 @@ native/
 
 ---
 
-## 5. 実施ステップ（検討項目）
+## 1.6.8 Elixir・Mix のビルドパス確認
+
+3 クレート構成（game_core / game_native / game_window）のため、Rustler が **game_native** クレートを正しくビルド・ロードするよう、Elixir 側の設定を明示する。
+
+### 採用した設定
+
+- **config/config.exs** に `App.NifBridge` 用の Rustler 設定を追加し、**path** で NIF クレートの場所を指定する。
+- Rustler のデフォルトはプロジェクトルート直下の `native/` を参照するが、ワークスペース化後はクレートが `native/game_native/` にあるため、`path: "native/game_native"` を明示する。
+
+```elixir
+# config/config.exs（抜粋）
+config :game, App.NifBridge,
+  path: "native/game_native"
+```
+
+- **lib/app/nif_bridge.ex** は従来どおり `use Rustler, otp_app: :game, crate: :game_native` のまま。crate 名は NIF ライブラリのクレート名（game_native）と一致している。
+
+### 確認手順
+
+1. プロジェクトルートで `mix compile` を実行する。
+2. Rustler が `native/game_native` をビルドし、`priv/native/` に `.so`（Linux/macOS）または `.dll`（Windows）が出力されることを確認する。
+3. `iex -S mix` で起動し、`App.NifBridge.add(1, 2)` など NIF がロードされていることを確認する。
+
+---
+
+## 6. 実施ステップ（検討項目）
 
 本フェーズは **Workspace Layout ツールの整備** → **3 クレート構成への移行** → **game_native 内のモジュール分割** を順に実施する。
 
@@ -327,7 +353,7 @@ native/
 
 ---
 
-## 6. 関連ドキュメント
+## 7. 関連ドキュメント
 
 | ドキュメント | 用途 |
 |-------------|------|
