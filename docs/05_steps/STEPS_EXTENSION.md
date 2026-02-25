@@ -1,22 +1,40 @@
-# マップ・セーブ・マルチプレイ・デバッグ支援 ステップガイド
+# 1.5 拡張（全7項）
+
+**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.5 節。
 
 **根拠**: [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
-**前提**: Step 1〜40 まで完了（汎用化・シーン管理・アセット管理・ゲーム分離・2 つ目のゲームミニマル実装済み）。Step 41（ゲームループの Rust 移行）は本ドキュメントで優先実施。
+**前提**: 1.4（汎用化）まで完了。1.5.1（ゲームループの Rust 移行）は本ドキュメントで優先実施。
 
 このドキュメントは、エンジン分析で挙がっていた残存課題を実装するためのステップガイドです。
 
 ---
 
+## 1.5 節 全体ロードマップ（1.5.1〜1.5.7）
+
+| 項 | 目標 | 備考 |
+|----|------|------|
+| 1.5.1 | ゲームループの Rust 移行（高精度 60 Hz） | 1.1.7 のゲームループを Rust 側に移行 |
+| 1.5.2 | マップ・障害物システム | |
+| 1.5.3 | セーブ・ロード | |
+| 1.5.4 | マルチプレイ基盤（ルーム管理） | |
+| 1.5.5 | デバッグ支援（NIF） | |
+| 1.5.6 | GameLoop を GameEvents にリネーム | Elixir 側の役割に合わせてモジュール名を変更 |
+| 1.5.7 | SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け） | 2.完了後が望ましい |
+
+**推奨順序**: 1. → 5. → 2. → 3. → 4. → 6.（2.と3.は並行可）。7.は 2.完了後が望ましい。
+
+---
+
 ## 目次
 
-1. [全体ロードマップ](#1-全体ロードマップ)
-2. [Step 41: ゲームループの Rust 移行](#2-step-41-gameloop-rust-移行)（優先度高）
-3. [Step 42: マップ・障害物システム](#3-step-42-マップ障害物システム)
-4. [Step 43: セーブ・ロード](#4-step-43-セーブロード)
-5. [Step 44: マルチプレイ](#5-step-44-マルチプレイ)
-6. [Step 45: デバッグ支援](#6-step-45-デバッグ支援)
-7. [Step 46: GameLoop を GameEvents にリネーム](#7-step-46-gameloop-を-gameevents-にリネーム)
-8. [Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）](#8-step-47-spec-未実装コンテンツskeleton--ghost--garlic--壁すり抜け)
+1. [全体ロードマップ（詳細）](#1-全体ロードマップ)
+2. [1.5.1 ゲームループの Rust 移行](#2-151-ゲームループの-rust-移行高精度-60-hz)（優先度高）
+3. [1.5.2 マップ・障害物システム](#3-152-マップ障害物システム)
+4. [1.5.3 セーブ・ロード](#4-153-セーブロード)
+5. [1.5.4 マルチプレイ](#5-154-マルチプレイ基盤ルーム管理)
+6. [1.5.5 デバッグ支援](#6-155-デバッグ支援nif)
+7. [1.5.6 GameLoop を GameEvents にリネーム](#7-156-gameloop-を-gameevents-にリネーム)
+8. [1.5.7 SPEC 未実装コンテンツ](#8-157-spec-未実装コンテンツskeleton--ghost--garlic--壁すり抜け)
 9. [推奨実施順序と依存関係](#9-推奨実施順序と依存関係)
 10. [関連ドキュメント](#10-関連ドキュメント)
 
@@ -25,38 +43,38 @@
 ## 1. 全体ロードマップ
 
 ```
-Step 41: ゲームループの Rust 移行（高精度 60 Hz）
+1.5.1: ゲームループの Rust 移行（高精度 60 Hz）
   └ tick 主導権を Rust に、Elixir はイベント駆動
 
-Step 42: マップ・障害物システム
+1.5.2: マップ・障害物システム
   └ 障害物・壁・Ghost 対応
 
-Step 43: セーブ・ロード
+1.5.3: セーブ・ロード
   └ セッション永続化・ハイスコア
 
-Step 44: マルチプレイ基盤（ルーム管理）
+1.5.4: マルチプレイ基盤（ルーム管理）
   └ Phoenix Channels 連携の土台
 
-Step 45: デバッグ支援（NIF）
+1.5.5: デバッグ支援（NIF）
   └ パニックトレース・NifResult 統一
 
-Step 46: GameLoop を GameEvents にリネーム
+1.5.6: GameLoop を GameEvents にリネーム
   └ Elixir 側の役割（frame_events 受信・フェーズ管理）に合わせたモジュール名へ変更
 
-Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
+1.5.7: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
   └ PROJECT_EVALUATION §1.2 の未実装項目を実装。敵 Skeleton・Ghost、武器 Garlic、Ghost の障害物すり抜け。
 ```
 
 **実施順序の推奨**:
-1. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先。他ステップの土台になる
-2. **Step 45（デバッグ）** — 他ステップの開発効率を上げるため早期に
-3. **Step 42（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
-4. **Step 43（セーブ）** — 独立した機能。マップの影響を受けない
-5. **Step 44（マルチプレイ）** — 設計変更が大きいため最後に
+1. **1.5.1（ゲームループの Rust 移行）** — 精度確保のため最優先。他項の土台になる
+2. **1.5.5（デバッグ）** — 他項の開発効率を上げるため早期に
+3. **1.5.2（マップ）** — ゲーム性に直結。SPEC に障害物・壁の記載あり
+4. **1.5.3（セーブ）** — 独立した機能。マップの影響を受けない
+5. **1.5.4（マルチプレイ）** — 設計変更が大きいため最後に
 
 ---
 
-## 2. Step 41: ゲームループの Rust 移行（高精度 60 Hz）
+## 2. 1.5.1 ゲームループの Rust 移行（高精度 60 Hz）
 
 ### 2.1 目標
 
@@ -111,7 +129,7 @@ Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり�
 
 ---
 
-## 3. Step 42: マップ・障害物システム
+## 3. 1.5.2 マップ・障害物システム
 
 ### 3.1 目標
 
@@ -215,7 +233,7 @@ end
 
 ---
 
-## 4. Step 43: セーブ・ロード
+## 4. 1.5.3 セーブ・ロード
 
 ### 4.1 目標
 
@@ -289,7 +307,7 @@ Engine.best_score()
 
 ---
 
-## 5. Step 44: マルチプレイ基盤（ルーム管理）
+## 5. 1.5.4 マルチプレイ基盤（ルーム管理）
 
 ### 5.1 目標
 
@@ -318,7 +336,7 @@ Engine.best_score()
 
 **推奨**: まず **A（複数 GameWorld）** で「並列ゲームセッション」を実現し、必要に応じて B/C へ移行。
 
-#### 44.2 Step 44a: 複数 GameWorld の並列管理（最小実装）✅
+#### 44.2 1.5.4a: 複数 GameWorld の並列管理（最小実装）✅
 
 **実装済み**:
 
@@ -327,7 +345,7 @@ Engine.best_score()
 - **Engine.GameEvents**: `room_id` オプションに対応。`:main` は従来どおり `Engine.GameEvents` の名前で起動し、SceneManager・FrameCache を駆動。それ以外は headless（physics のみ）
 - **Engine**: `start_room/1`, `stop_room/1`, `list_rooms/0`, `get_loop_for_room/1` を公開
 
-#### 44.3 Step 44b: Phoenix Channels 連携（将来）
+#### 44.3 1.5.4b: Phoenix Channels 連携（将来）
 
 - `RoomChannel` で `join("room:123")` 時に `Engine.start_room("123")` を呼ぶ
 - 入力イベントを Channel でブロードキャストし、各クライアントの GameEvents が受信
@@ -347,7 +365,7 @@ Engine.best_score()
 
 ---
 
-## 6. Step 45: デバッグ支援（NIF）
+## 6. 1.5.5 デバッグ支援（NIF）
 
 ### 6.1 目標
 
@@ -442,11 +460,11 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 ---
 
-## 7. Step 46: GameLoop を GameEvents にリネーム
+## 7. 1.5.6 GameLoop を GameEvents にリネーム
 
 ### 7.1 目標
 
-- **Elixir 側の GenServer 名を役割に合わせて変更する**: Step 41 以降、tick 駆動は Rust に移り、Elixir の当該プロセスは「Rust からの `{:frame_events, events}` を受信し、フェーズ管理・NIF 呼び出しを行う」役割になっている。そのため **GameLoop** という名前は誤解を招くので、**GameEvent** または **GameEvents** にリネームする（本実装では **GameEvents** を採用）。
+- **Elixir 側の GenServer 名を役割に合わせて変更する**: 1.5.1 以降、tick 駆動は Rust に移り、Elixir の当該プロセスは「Rust からの `{:frame_events, events}` を受信し、フェーズ管理・NIF 呼び出しを行う」役割になっている。そのため **GameLoop** という名前は誤解を招くので、**GameEvent** または **GameEvents** にリネームする（本実装では **GameEvents** を採用）。
 
 ### 7.2 なぜ重要か
 
@@ -511,7 +529,7 @@ end
 
 ---
 
-## 8. Step 47: SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
+## 8. 1.5.7 SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け）
 
 ### 8.1 目標
 
@@ -526,7 +544,7 @@ end
 
 - 敵 ID を拡張: `0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost`。
 - `ENEMY_TABLE` を 5 要素にし、Skeleton（HP 60, 速度 60, ダメージ 15/秒, render_kind 5）、Ghost（HP 40, 速度 100, 壁すり抜け, render_kind 4）を追加。
-- `passes_through_obstacles(id)` は `id == ENEMY_ID_GHOST`（4）のとき `true`。Step 42 の `resolve_obstacles_enemy` で既に参照済み。
+- `passes_through_obstacles(id)` は `id == ENEMY_ID_GHOST`（4）のとき `true`。1.5.2 の `resolve_obstacles_enemy` で既に参照済み。
 
 #### 47.2 Rust: 武器 Garlic（entity_params + lib）
 
@@ -557,14 +575,14 @@ end
 
 ```mermaid
 flowchart TB
-    S40[Step 40\n2つ目のゲーム]
-    S41[Step 41\nゲームループの Rust 移行]
-    S42[Step 42\nマップ・障害物]
-    S43[Step 43\nセーブ・ロード]
-    S44[Step 44\nマルチプレイ]
-    S45[Step 45\nデバッグ支援]
-    S46[Step 46\nGameEvents リネーム]
-    S47[Step 47\nSkeleton/Ghost/Garlic]
+    S40[1.4.9\n2つ目のゲーム]
+    S41[1.5.1\nゲームループの Rust 移行]
+    S42[1.5.2\nマップ・障害物]
+    S43[1.5.3\nセーブ・ロード]
+    S44[1.5.4\nマルチプレイ]
+    S45[1.5.5\nデバッグ支援]
+    S46[1.5.6\nGameEvents リネーム]
+    S47[1.5.7\nSkeleton/Ghost/Garlic]
 
     S40 --> S41
     S41 --> S45
@@ -579,14 +597,14 @@ flowchart TB
 ```
 
 **推奨順序**:
-1. **Step 41（ゲームループの Rust 移行）** — 精度確保のため最優先
-2. **Step 45（デバッグ支援）** — 他ステップの開発を効率化
-3. **Step 42（マップ）** — ゲーム性に直結
-4. **Step 43（セーブ）** — 独立。マップ完了後でも可
-5. **Step 44（マルチプレイ）** — 設計変更が大きいため最後
-6. **Step 46（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（Step 44 以降で実施可）
+1. **1.5.1（ゲームループの Rust 移行）** — 精度確保のため最優先
+2. **1.5.5（デバッグ支援）** — 他項の開発を効率化
+3. **1.5.2（マップ）** — ゲーム性に直結
+4. **1.5.3（セーブ）** — 独立。マップ完了後でも可
+5. **1.5.4（マルチプレイ）** — 設計変更が大きいため最後
+6. **1.5.6（GameLoop → GameEvents リネーム）** — 命名を役割に合わせて整理（1.5.4 以降で実施可）
 
-**並行可能**: Step 42 と Step 43 は互いに依存しないため並行実施可能。Step 46 は 41 完了後であればいつでも実施可能（44 のドキュメント更新とまとめてもよい）。
+**並行可能**: 1.5.2 と 1.5.3 は互いに依存しないため並行実施可能。1.5.6 は 1.5.1 完了後であればいつでも実施可能（1.5.4 のドキュメント更新とまとめてもよい）。
 
 ---
 
@@ -594,10 +612,11 @@ flowchart TB
 
 | ドキュメント | 用途 |
 |-------------|------|
+| [STEPS_ALL.md](./STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
 | [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 本ステップの根拠（残存課題の一覧） |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 責務分離・スコープ外の判断 |
-| [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44 Phoenix Channels 連携の設計指針 |
+| [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | 1.5.4 Phoenix Channels 連携の設計指針 |
 | [SPEC.md](../01_setup/SPEC.md) | 障害物・マップの仕様 |
 | [STEPS_QUALITY.md](./STEPS_QUALITY.md) | 背景タイル・マップサイズの既存記載 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | マップアセットのロード方針 |
-| [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | Step 32〜40 の汎用化ロードマップ |
+| [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | 1.4 汎用化ロードマップ |

@@ -1,43 +1,28 @@
-# パフォーマンス改善 ステップガイド
+# 1.3 パフォーマンス（全6項）
+
+**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.3 節。
 
 **「Elixir の真価を引き出す — 並行性・耐障害性・観測可能性」**
 
-Step 25 までで完成したゲームをベースに、**Elixir/OTP の強みを最大限に引き出す**改善を  
+1.2（クオリティ）までで完成したゲームをベースに、**Elixir/OTP の強みを最大限に引き出す**改善を  
 ひとつずつ丁寧に実装するためのステップガイドです。  
-各ステップは独立して動作確認できる単位に分割されています。
-
-> **実装順序の優先度**  
-> パフォーマンス最優先・汎用化重視の観点で整理したロードマップは  
-> [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) を参照してください。
+各項は独立して動作確認できる単位に分割されています。
 
 ---
 
-## 全体ロードマップ
+## 1.3 節 全体ロードマップ（1.3.1〜1.3.6）
 
-**推奨実施順序**（[PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) 準拠）:
+| 項 | 目標 | 備考 |
+|----|------|------|
+| 1.3.1 | イベントバス | フレームイベントを Elixir に配信 |
+| 1.3.2 | ETS キャッシュ・入力ポーリング | プロセス間通信の最適化 |
+| 1.3.3 | フリーリスト（スポーン O(1)） | P3 |
+| 1.3.4 | Spatial Hash 最近接・RwLock | AI 高速化（P1, P2） |
+| 1.3.5 | Telemetry 計測基盤 | 観測可能性（P7） |
+| 1.3.6 | SIMD AI 高速化（オプション） | P4 |
 
-```
-【フェーズ1: Rust コア — パフォーマンス即効】
-  Step 29  Spatial Hash 最近接・RwLock（P1, P2）  ← 最優先ボトルネック解消
-  Step 28  フリーリスト（スポーン O(1)）（P3）
-  Step 31  SIMD AI 高速化（オプション）（P4）
-
-【フェーズ2: Elixir レイヤー】
-  Step 26  イベントバス（P5）                      ← 拡張の基盤
-  Step 27  ETS キャッシュ・入力ポーリング（P6）
-  Step 30  Telemetry 計測基盤（P7）
-```
-
-**Step 番号順**:
-
-```
-Step 26: イベントバス
-Step 27: ETS キャッシュ・入力ポーリング
-Step 28: フリーリスト（スポーン O(1)）
-Step 29: Spatial Hash 最近接・RwLock
-Step 30: Telemetry 計測基盤
-Step 31: SIMD AI 高速化（オプション）
-```
+**推奨順（パフォーマンス優先）**: 4. → 3. → 1. → 2. → 5. → 6.  
+**詳細**: [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md)、[PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md)
 
 ---
 
@@ -46,32 +31,32 @@ Step 31: SIMD AI 高速化（オプション）
 **パフォーマンス最優先**の場合:
 
 ```
-Step 29 ─── find_nearest_enemy + Lightning の O(n) を解消
+1.3.4 ─── find_nearest_enemy + Lightning の O(n) を解消
               ↓ 敵数 1000 体以上で最大のボトルネック
-Step 28 ─── スポーン O(n) → O(1) 化
+1.3.3 ─── スポーン O(n) → O(1) 化
               ↓ 大量エンティティ時の体感改善
-Step 26 ─── イベントバスで Stats を有効化・拡張基盤を整備
+1.3.1 ─── イベントバスで Stats を有効化・拡張基盤を整備
               ↓ 以降「ゲームループを触らずに」機能追加可能
-Step 27 ─── ETS でプロセス間通信をロックフリー化
-Step 30 ─── Telemetry で計測基盤を整備
-Step 31 ─── SIMD（オプション）
+1.3.2 ─── ETS でプロセス間通信をロックフリー化
+1.3.5 ─── Telemetry で計測基盤を整備
+1.3.6 ─── SIMD（オプション）
 ```
 
 **EventBus ファースト**（拡張性を最優先する場合）:
 
 ```
-Step 26 ─── イベントバスを先に作る
+1.3.1 ─── イベントバスを先に作る
               ↓ EventBus があれば、以降の全ステップで
               ↓ 「ゲームループを変更せずに機能追加」できる
-Step 27 ─── ETS でプロセス間通信をロックフリー化
-Step 28/29 ─ Rust 側の計算量削減
-Step 30 ─── 改善効果を数値で確認する計測基盤
-Step 31 ─── さらなる高速化（オプション）
+1.3.2 ─── ETS でプロセス間通信をロックフリー化
+1.3.3/1.3.4 ─ Rust 側の計算量削減
+1.3.5 ─── 改善効果を数値で確認する計測基盤
+1.3.6 ─── さらなる高速化（オプション）
 ```
 
 ---
 
-## Step 26: イベントバス
+## 1.3.1 イベントバス
 
 **PRIORITY_STEPS**: P5
 
@@ -339,7 +324,7 @@ children = [
 
 ---
 
-## Step 27: ETS キャッシュ・入力ポーリング
+## 1.3.2 ETS キャッシュ・入力ポーリング
 
 **PRIORITY_STEPS**: P6
 
@@ -582,7 +567,7 @@ end
 
 ---
 
-## Step 28: フリーリスト（スポーン O(1)）
+## 1.3.3 フリーリスト（スポーン O(1)）
 
 **PRIORITY_STEPS**: P3
 
@@ -779,7 +764,7 @@ impl EnemyWorld {
 
 ---
 
-## Step 29: Spatial Hash 最近接・RwLock
+## 1.3.4 Spatial Hash 最近接・RwLock
 
 **PRIORITY_STEPS**: P1（空間ハッシュ化）, P2（RwLock）
 
@@ -900,7 +885,7 @@ let w = world.0.read().unwrap();
 
 ---
 
-## Step 30: Telemetry 計測基盤
+## 1.3.5 Telemetry 計測基盤
 
 **PRIORITY_STEPS**: P7
 
@@ -1065,7 +1050,7 @@ children = [
 
 ---
 
-## Step 31: SIMD AI 高速化（オプション）
+## 1.3.6 SIMD AI 高速化（オプション）
 
 **PRIORITY_STEPS**: P4（オプション）
 
@@ -1234,12 +1219,12 @@ cargo bench --bench ai_bench
 
 | ステップ | 改善内容 | 期待効果 | Elixir の真価 |
 |---|---|---|---|
-| **Step 29** | Spatial Hash 最近接 + RwLock | AI 探索 O(N) → O(数十)・ロック競合解消 | — Rust 側改善 |
-| **Step 28** | フリーリスト | スポーン O(N) → O(1) | — Rust 側改善 |
-| **Step 26** | イベントバス | Stats が機能する・拡張性向上 | ◎ OTP の関心分離 |
-| **Step 27** | ETS キャッシュ + 入力ポーリング | NIF 呼び出し削減・メッセージキュー軽減 | ◎ ETS 活用 |
-| **Step 30** | Telemetry | 標準的な計測基盤・LiveDashboard 対応 | ◎ 観測可能性 |
-| **Step 31** | SIMD | Chase AI 2〜4 倍高速化 | — Rust 上級 |
+| **1.3.4** | Spatial Hash 最近接 + RwLock | AI 探索 O(N) → O(数十)・ロック競合解消 | — Rust 側改善 |
+| **1.3.3** | フリーリスト | スポーン O(N) → O(1) | — Rust 側改善 |
+| **1.3.1** | イベントバス | Stats が機能する・拡張性向上 | ◎ OTP の関心分離 |
+| **1.3.2** | ETS キャッシュ + 入力ポーリング | NIF 呼び出し削減・メッセージキュー軽減 | ◎ ETS 活用 |
+| **1.3.5** | Telemetry | 標準的な計測基盤・LiveDashboard 対応 | ◎ 観測可能性 |
+| **1.3.6** | SIMD | Chase AI 2〜4 倍高速化 | — Rust 上級 |
 
 ---
 
@@ -1266,9 +1251,17 @@ cargo bench --bench ai_bench
          ↕ RwLock<GameWorldInner>（読み取り競合なし）
 ┌─────────────────────────────────────────────────────────┐
 │  Rust NIF (game_native)                                 │
-│  - physics_step: rayon 並列 AI + SIMD（Step 31）        │
+│  - physics_step: rayon 並列 AI + SIMD（1.3.6）        │
 │  - SoA + フリーリスト（O(1) スポーン）                   │
 │  - Spatial Hash（衝突判定 + 最近接探索）                 │
 │  - frame_events バッファ（毎フレーム drain）             │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 関連ドキュメント
+
+- [STEPS_ALL.md](./STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
+- [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md) — パフォーマンス課題の分析・提案
+- [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) — 実施優先度（P1〜P7）
