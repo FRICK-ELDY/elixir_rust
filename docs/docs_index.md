@@ -66,39 +66,42 @@
 
 | ドキュメント | 内容 | 想定読者 |
 |-------------|------|----------|
-| [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) | **「何から手をつけるか」の優先度ロードマップ**。パフォーマンス最優先 → 汎用化 → 品質の順。P1〜P7、G1〜G3、Q1〜Q2 の全体マップ。詳細手順は [STEPS_PERF.md](./05_steps/STEPS_PERF.md) を参照 | 実装計画立案時 |
-| [STEPS_GENERALIZATION.md](./05_steps/STEPS_GENERALIZATION.md) | **次の Step 提案**（Step 32〜40）。ヴァンサバ以外のゲームでも使える汎用エンジン化。Game インターフェース、ゲーム分離、プラグイン化 | 汎用化計画立案時 |
+| [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) | **「何から手をつけるか」の優先度ロードマップ**。パフォーマンス最優先 → 汎用化 → 品質の順。P1〜P7、G1〜G3、Q1〜Q2 の全体マップ。詳細手順は [STEPS_PERF.md](./05_steps/01_engine/STEPS_PERF.md) を参照 | 実装計画立案時 |
+| [STEPS_GENERALIZATION.md](./05_steps/01_engine/STEPS_GENERALIZATION.md) | **次の Step 提案**（1.4）。ヴァンサバ以外のゲームでも使える汎用エンジン化。Game インターフェース、ゲーム分離、プラグイン化 | 汎用化計画立案時 |
 
 ---
 
 ## 5. ステップガイド（実装手順）`05_steps/`
 
-ゲームは **Step 1** から順に実装していく構成。段階ごとに別ドキュメントで詳細を記述。一覧は [STEPS_ALL.md](./05_steps/STEPS_ALL.md)。
+ゲームは **1章 エンジン構築** から順に実装していく構成。章・節・項の一覧は [STEPS_ALL.md](./05_steps/STEPS_ALL.md)。
 
-### 5.1 基礎実装（Step 1〜15）
+**構成**: 1. エンジン構築 / 2. エディタ構築 / 3. サーバー構築
 
-| ドキュメント | 内容 | ステップ範囲 |
-|-------------|------|--------------|
-| [STEPS_BASE.md](./05_steps/STEPS_BASE.md) | 環境構築からゲームオーバー・リスタートまで。Rust クレート、NIF 連携、ゲームループ、プレイヤー・敵・武器・UI・レベルアップ | Step 1 〜 Step 15 |
+### 5.1 1章 エンジン構築 `01_engine/`
 
-### 5.2 クオリティアップ（Step 16〜25）
+| ドキュメント | 内容 | 節 |
+|-------------|------|-----|
+| [STEPS_BASE.md](./05_steps/01_engine/STEPS_BASE.md) | 環境構築からゲームオーバー・リスタートまで。Rust クレート、NIF 連携、ゲームループ、プレイヤー・敵・武器・UI・レベルアップ | 1.1 基礎 |
+| [STEPS_QUALITY.md](./05_steps/01_engine/STEPS_QUALITY.md) | ヒットエフェクト、武器強化、敵タイプ追加、アイテムドロップ、カメラ、BGM/SE、スプライトアニメ、ボス、バランス調整 | 1.2 クオリティ |
+| [STEPS_PERF.md](./05_steps/01_engine/STEPS_PERF.md) | **詳細な実装手順**。イベントバス、ETS キャッシュ、フリーリスト、Spatial Hash 最近接、RwLock、Telemetry、SIMD AI | 1.3 パフォーマンス |
+| [STEPS_PERFORMANCE_ANALYSIS.md](./05_steps/01_engine/STEPS_PERFORMANCE_ANALYSIS.md) | **現状分析と改善提案**。ボトルネックの洗い出し、課題一覧、具体的な改善手法の解説 | 1.3 分析 |
+| [STEPS_GENERALIZATION.md](./05_steps/01_engine/STEPS_GENERALIZATION.md) | Game インターフェース・シーン汎用化・ゲーム分離 | 1.4 汎用化 |
+| [STEPS_EXTENSION.md](./05_steps/01_engine/STEPS_EXTENSION.md) | **マップ・セーブ・マルチプレイ・デバッグ支援**。障害物・壁・タイル、ゲーム状態永続化、NIF デバッグ容易化 | 1.5 拡張 |
+| [STEPS_RUST_LIB.md](./05_steps/01_engine/STEPS_RUST_LIB.md) | Rust lib 分割・フォルダ構成 | 1.6 |
+| [STEPS_3D.md](./05_steps/01_engine/STEPS_3D.md) | 3D・三人称 FPS（据え置き） | 1.9 |
+| [STEPS_SLOT_COMPONENT.md](./05_steps/01_engine/STEPS_SLOT_COMPONENT.md) | Slot・コンポーネント（据え置き） | 1.10 |
 
-| ドキュメント | 内容 | ステップ範囲 |
-|-------------|------|--------------|
-| [STEPS_QUALITY.md](./05_steps/STEPS_QUALITY.md) | ヒットエフェクト、武器強化、敵タイプ追加、アイテムドロップ、カメラ、BGM/SE、スプライトアニメ、ボス、バランス調整 | Step 16 〜 Step 25 |
+### 5.2 2章 エディタ構築 `02_editor/`
 
-### 5.3 パフォーマンス改善（Step 26〜31）
+| ドキュメント | 内容 |
+|-------------|------|
+| [README.md](./05_steps/02_editor/README.md) | ビジュアルエディタの実装。節・項は今後決める |
 
-| ドキュメント | 内容 | ステップ範囲 |
-|-------------|------|--------------|
-| [STEPS_PERF.md](./05_steps/STEPS_PERF.md) | **詳細な実装手順**。イベントバス、ETS キャッシュ、フリーリスト、Spatial Hash 最近接、RwLock、Telemetry、SIMD AI。[PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) 準拠の推奨順序あり | Step 26 〜 Step 31 |
-| [STEPS_PERFORMANCE_ANALYSIS.md](./05_steps/STEPS_PERFORMANCE_ANALYSIS.md) | **現状分析と改善提案**。ボトルネックの洗い出し、課題一覧、具体的な改善手法の解説。実装手順よりも「なぜ」「何を」に焦点 | 分析・設計参考 |
+### 5.3 3章 サーバー構築 `03_server/`
 
-### 5.4 機能拡張（Step 41〜44）
-
-| ドキュメント | 内容 | ステップ範囲 |
-|-------------|------|--------------|
-| [STEPS_EXTENSION.md](./05_steps/STEPS_EXTENSION.md) | **マップ・セーブ・マルチプレイ・デバッグ支援**。障害物・壁・タイル、ゲーム状態永続化、マルチプレイ基盤、NIF デバッグ容易化 | Step 41 〜 Step 44 |
+| ドキュメント | 内容 |
+|-------------|------|
+| [README.md](./05_steps/03_server/README.md) | Elixir/Phoenix バックエンド・オンライン化。節・項は今後決める |
 
 ---
 
@@ -163,12 +166,20 @@ docs/
 │   └── PRIORITY_STEPS.md
 ├── 05_steps/              ステップガイド
 │   ├── STEPS_ALL.md
-│   ├── STEPS_BASE.md
-│   ├── STEPS_QUALITY.md
-│   ├── STEPS_PERF.md
-│   ├── STEPS_PERFORMANCE_ANALYSIS.md
-│   ├── STEPS_EXTENSION.md
-│   └── STEPS_GENERALIZATION.md
+│   ├── 01_engine/         1章 エンジン構築
+│   │   ├── STEPS_BASE.md
+│   │   ├── STEPS_QUALITY.md
+│   │   ├── STEPS_PERF.md
+│   │   ├── STEPS_PERFORMANCE_ANALYSIS.md
+│   │   ├── STEPS_GENERALIZATION.md
+│   │   ├── STEPS_EXTENSION.md
+│   │   ├── STEPS_RUST_LIB.md
+│   │   ├── STEPS_3D.md
+│   │   └── STEPS_SLOT_COMPONENT.md
+│   ├── 02_editor/         2章 エディタ構築
+│   │   └── README.md
+│   └── 03_server/         3章 サーバー構築
+│       └── README.md
 ├── 06_system_design/      システム設計・提案
 │   ├── ARCHITECTURE.md
 │   ├── ASSET_MANAGEMENT.md
@@ -187,15 +198,15 @@ docs/
 ```
 01_setup/SPEC.md（仕様）
     ↓
-05_steps/STEPS_BASE.md（Step 1-15）
+05_steps/01_engine/STEPS_BASE.md（1.1 基礎）
     ↓
-05_steps/STEPS_QUALITY.md（Step 16-25）
+05_steps/01_engine/STEPS_QUALITY.md（1.2 クオリティ）
      ↓
 02_spec_design/ENGINE_ANALYSIS_REVISED.md（再評価）← ENGINE_ANALYSIS.md（アーカイブ）
     ↓
 04_roadmap/PRIORITY_STEPS.md（優先度マップ）
-    ├── 05_steps/STEPS_PERF.md（Step 26-31 詳細手順）
-    ├── 05_steps/STEPS_PERFORMANCE_ANALYSIS.md（分析・提案）
+    ├── 05_steps/01_engine/STEPS_PERF.md（1.3 パフォーマンス 詳細手順）
+    ├── 05_steps/01_engine/STEPS_PERFORMANCE_ANALYSIS.md（分析・提案）
     └── 06_system_design/ASSET_MANAGEMENT.md（G3 設計）
 ```
 
@@ -207,14 +218,14 @@ docs/
 |-------------|--------|
 | 環境を整えたい | [SETUP_ELIXIR.md](./01_setup/SETUP_ELIXIR.md) |
 | 仕様を把握したい | [SPEC.md](./01_setup/SPEC.md) |
-| ゼロから実装したい | [STEPS_BASE.md](./05_steps/STEPS_BASE.md) → [STEPS_QUALITY.md](./05_steps/STEPS_QUALITY.md) |
+| ゼロから実装したい | [STEPS_BASE.md](./05_steps/01_engine/STEPS_BASE.md) → [STEPS_QUALITY.md](./05_steps/01_engine/STEPS_QUALITY.md) |
 | 改善の優先度を知りたい | [PRIORITY_STEPS.md](./04_roadmap/PRIORITY_STEPS.md) |
-| 汎用ゲームエンジン化の次の Step を知りたい | [STEPS_GENERALIZATION.md](./05_steps/STEPS_GENERALIZATION.md) |
-| マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_EXTENSION.md](./05_steps/STEPS_EXTENSION.md) |
+| 汎用ゲームエンジン化の次の Step を知りたい | [STEPS_GENERALIZATION.md](./05_steps/01_engine/STEPS_GENERALIZATION.md) |
+| マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_EXTENSION.md](./05_steps/01_engine/STEPS_EXTENSION.md) |
 | システム全体のアーキテクチャを把握したい | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) |
 | Phoenix Channels でマルチプレイ連携したい | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) |
 | サーバー設計（認証・フレンド・メッセージ）を検討したい | [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) |
-| パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/STEPS_PERF.md) |
+| パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/01_engine/STEPS_PERF.md) |
 | なぜこの構成なのか理解したい | [WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md), [WHY_RUST.md](./03_tech_decisions/WHY_RUST/WHY_RUST.md), [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md), [WHY_RAYON.md](./03_tech_decisions/WHY_RUST/WHY_RAYON.md) |
 | エンジンの評価・比較を知りたい | [ENGINE_ANALYSIS_REVISED.md](./02_spec_design/ENGINE_ANALYSIS_REVISED.md) |
 | プロジェクト全体の評価・振り返りをしたい | [PROJECT_EVALUATION.md](./02_spec_design/PROJECT_EVALUATION.md) |

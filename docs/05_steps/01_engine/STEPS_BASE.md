@@ -1,6 +1,6 @@
 # 1.1 基礎（全15項）
 
-**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.1 節。
+**所属**: [STEPS_ALL.md](../STEPS_ALL.md) 1章 エンジン構築 の 1.1 節。
 
 このドキュメントは、Elixir x Rust ヴァンパイアサバイバーライクゲームを**ひとつずつ丁寧に**実装するためのステップガイドです。  
 各項は独立して動作確認できる単位に分割されています。**章・節・項**表記は STEPS_ALL に準拠（1.1.1 = 1章 1節 1項）。
@@ -1527,7 +1527,7 @@ flowchart LR
 
 ## 参考ドキュメント
 
-- [STEPS_ALL.md](./STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
+- [STEPS_ALL.md](../STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
 - [ゲーム仕様書](../01_setup/SPEC.md) — 各ステップの詳細な技術仕様
 - [Elixir 採用理由](../03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) — アーキテクチャの設計思想
 - [Rustler ドキュメント](https://docs.rs/rustler) — NIF 実装の詳細

@@ -2,7 +2,7 @@
 
 **友達とつなぐの第一選択**: 自前サーバーの維持コストを避けるため、**まずは [Epic Online Services（EOS）](./EPIC_ONLINE_SERVICES.md) を採用**する。**EOS と自前サーバーは設定で切り替え可能**とする方針（[EPIC_ONLINE_SERVICES.md §1.3](./EPIC_ONLINE_SERVICES.md#13-eos-と自前サーバーの切り替え)）。本ドキュメントは、自前サーバーを選んだ場合の Phoenix 設計、または EOS と併用するゲームルーム専用サーバーの指針として参照する。
 
-**根拠**: [STEPS_EXTENSION.md § Step 44](../05_steps/STEPS_EXTENSION.md#6-step-44-マルチプレイ)、[MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md)
+**根拠**: [STEPS_EXTENSION.md § Step 44](../05_steps/01_engine/STEPS_EXTENSION.md#6-step-44-マルチプレイ)、[MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md)
 
 Phoenix Channels で「友達とつなぐ」サーバーを導入する際の、サーバー全体設計の指針。ゲームルーム（RoomChannel）の手前にある、認証・フレンド・メッセージ・プレゼンスなどのレイヤーを扱う。
 
@@ -169,6 +169,6 @@ end
 |-------------|------|
 | [EPIC_ONLINE_SERVICES.md](./EPIC_ONLINE_SERVICES.md) | EOS 採用方針（友達とつなぐの第一選択）。マッチング・ロビー・フレンド・ボイスを EOS で賄う設計 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) | ゲームルーム（RoomChannel）・Engine 連携・入力・状態同期 |
-| [STEPS_EXTENSION.md § Step 44](../05_steps/STEPS_EXTENSION.md#6-step-44-マルチプレイ) | Step 44 の目標・44a/44b の区別 |
+| [STEPS_EXTENSION.md § Step 44](../05_steps/01_engine/STEPS_EXTENSION.md#6-step-44-マルチプレイ) | Step 44 の目標・44a/44b の区別 |
 | [ENGINE_API.md](./ENGINE_API.md) | Engine の API（start_room, get_loop_for_room 等） |
 | [ELIXIR_RUST_DIVISION.md § 4.2](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 競技マルチプレイ・determinism の考え方 |

@@ -1,8 +1,8 @@
 # 1.5 拡張（全7項）
 
-**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.5 節。
+**所属**: [STEPS_ALL.md](../STEPS_ALL.md) 1章 エンジン構築 の 1.5 節。
 
-**根拠**: [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
+**根拠**: [ENGINE_STRENGTHS_WEAKNESSES.md](../../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md)、[ELIXIR_RUST_DIVISION.md](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
 **前提**: 1.4（汎用化）まで完了。1.5.1（ゲームループの Rust 移行）は本ドキュメントで優先実施。
 
 このドキュメントは、エンジン分析で挙がっていた残存課題を実装するためのステップガイドです。
@@ -86,7 +86,7 @@
 
 - **現状**: Elixir の `Process.send_after` は Erlang スケジューラ依存で ±数 ms のジッター
 - **リズムゲー・競技FPS**: ヒット判定 20〜50 ms、ロールバック/TAS の determinism に厳密な精度が必要
-- **設計方針**: [ELIXIR_RUST_DIVISION.md § 3.3](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) の「タイミングクリティカルなパスを Rust に移す」を実施
+- **設計方針**: [ELIXIR_RUST_DIVISION.md § 3.3](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md) の「タイミングクリティカルなパスを Rust に移す」を実施
 
 ### 2.3 責務分離（移行後）
 
@@ -134,7 +134,7 @@
 ### 3.1 目標
 
 - 無限平面から**障害物・壁・タイルマップ**に対応する
-- [SPEC.md § 1.5](../01_setup/SPEC.md) の「障害物: 木・岩（Ghost 以外は回避）」を実現
+- [SPEC.md § 1.5](../../01_setup/SPEC.md) の「障害物: 木・岩（Ghost 以外は回避）」を実現
 - Ghost（壁すり抜け）の実装を可能にする
 
 ### 3.2 なぜ重要か
@@ -322,7 +322,7 @@ Engine.best_score()
 
 ### 5.3 設計上の注意
 
-[ELIXIR_RUST_DIVISION.md § 5.2](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) ではマルチプレイは「現在のスコープ外」とある。本ステップは**将来的な拡張のための設計検討と最小実装**とする。
+[ELIXIR_RUST_DIVISION.md § 5.2](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md) ではマルチプレイは「現在のスコープ外」とある。本ステップは**将来的な拡張のための設計検討と最小実装**とする。
 
 ### 5.4 実装内容
 
@@ -351,11 +351,11 @@ Engine.best_score()
 - 入力イベントを Channel でブロードキャストし、各クライアントの GameEvents が受信
 - 状態同期は「入力のブロードキャスト」または「定期的なスナップショット配信」で行う
 
-詳細: [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md)
+詳細: [MULTIPLAYER_PHOENIX_CHANNELS.md](../../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md)
 
 #### 44.4 競技マルチプレイ（ロールバック等）について
 
-[ELIXIR_RUST_DIVISION.md § 4.2](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) 参照。determinism が必要な場合は Rust 内でシミュレーションを一本化する設計が必要。
+[ELIXIR_RUST_DIVISION.md § 4.2](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md) 参照。determinism が必要な場合は Rust 内でシミュレーションを一本化する設計が必要。
 
 ### 5.5 確認ポイント
 
@@ -468,7 +468,7 @@ log::debug!("physics_step: delta={}ms", delta_ms);
 
 ### 7.2 なぜ重要か
 
-- **一貫性**: [ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md) や [PRESENTATION.md](../07_presentation/PRESENTATION.md) では「frame_events 受信・フェーズ管理」と説明しており、ループを回しているのは Rust 側である。
+- **一貫性**: [ARCHITECTURE.md](../../06_system_design/ARCHITECTURE.md) や [PRESENTATION.md](../../07_presentation/PRESENTATION.md) では「frame_events 受信・フェーズ管理」と説明しており、ループを回しているのは Rust 側である。
 - **可読性**: 新規参加者やドキュメント読者が「GameLoop = 60Hz を回しているプロセス」と勘違いしにくくなる。
 
 ### 7.3 名前の候補
@@ -518,7 +518,7 @@ end
 #### 46.4 ドキュメント・コメントの更新
 
 - `@moduledoc` の「60 Hz game loop」などの表現を「Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer」に合わせて修正
-- [ENGINE_API.md](../06_system_design/ENGINE_API.md)、[ARCHITECTURE.md](../06_system_design/ARCHITECTURE.md)、[MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) 等で「GameLoop」と書いている箇所を「GameEvents」に統一（文脈に応じて「ルームごとの GameEvents」等に変更）
+- [ENGINE_API.md](../../06_system_design/ENGINE_API.md)、[ARCHITECTURE.md](../../06_system_design/ARCHITECTURE.md)、[MULTIPLAYER_PHOENIX_CHANNELS.md](../../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) 等で「GameLoop」と書いている箇所を「GameEvents」に統一（文脈に応じて「ルームごとの GameEvents」等に変更）
 
 ### 7.5 確認ポイント
 
@@ -612,11 +612,11 @@ flowchart TB
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_ALL.md](./STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
-| [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 本ステップの根拠（残存課題の一覧） |
-| [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 責務分離・スコープ外の判断 |
-| [MULTIPLAYER_PHOENIX_CHANNELS.md](../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | 1.5.4 Phoenix Channels 連携の設計指針 |
-| [SPEC.md](../01_setup/SPEC.md) | 障害物・マップの仕様 |
+| [STEPS_ALL.md](../STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
+| [ENGINE_STRENGTHS_WEAKNESSES.md](../../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) | 本ステップの根拠（残存課題の一覧） |
+| [ELIXIR_RUST_DIVISION.md](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 責務分離・スコープ外の判断 |
+| [MULTIPLAYER_PHOENIX_CHANNELS.md](../../06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) | 1.5.4 Phoenix Channels 連携の設計指針 |
+| [SPEC.md](../../01_setup/SPEC.md) | 障害物・マップの仕様 |
 | [STEPS_QUALITY.md](./STEPS_QUALITY.md) | 背景タイル・マップサイズの既存記載 |
-| [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | マップアセットのロード方針 |
+| [ASSET_MANAGEMENT.md](../../06_system_design/ASSET_MANAGEMENT.md) | マップアセットのロード方針 |
 | [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | 1.4 汎用化ロードマップ |

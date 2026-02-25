@@ -1,6 +1,6 @@
 # 1.3 パフォーマンス（全6項）
 
-**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.3 節。
+**所属**: [STEPS_ALL.md](../STEPS_ALL.md) 1章 エンジン構築 の 1.3 節。
 
 **「Elixir の真価を引き出す — 並行性・耐障害性・観測可能性」**
 
@@ -22,7 +22,7 @@
 | 1.3.6 | SIMD AI 高速化（オプション） | P4 |
 
 **推奨順（パフォーマンス優先）**: 4. → 3. → 1. → 2. → 5. → 6.  
-**詳細**: [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md)、[PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md)
+**詳細**: [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md)、[PRIORITY_STEPS.md](../../04_roadmap/PRIORITY_STEPS.md)
 
 ---
 
@@ -1215,7 +1215,7 @@ cargo bench --bench ai_bench
 
 ## 改善効果まとめ
 
-推奨実施順序は [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) を参照。
+推奨実施順序は [PRIORITY_STEPS.md](../../04_roadmap/PRIORITY_STEPS.md) を参照。
 
 | ステップ | 改善内容 | 期待効果 | Elixir の真価 |
 |---|---|---|---|
@@ -1262,6 +1262,6 @@ cargo bench --bench ai_bench
 
 ## 関連ドキュメント
 
-- [STEPS_ALL.md](./STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
+- [STEPS_ALL.md](../STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
 - [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md) — パフォーマンス課題の分析・提案
-- [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) — 実施優先度（P1〜P7）
+- [PRIORITY_STEPS.md](../../04_roadmap/PRIORITY_STEPS.md) — 実施優先度（P1〜P7）

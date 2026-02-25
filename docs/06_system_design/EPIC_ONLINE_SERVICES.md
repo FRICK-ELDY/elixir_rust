@@ -101,5 +101,5 @@ EOS を「エンジン用プラグイン」として組み込む場合の指針�
 |-------------|------|
 | [SERVER_DESIGN.md](./SERVER_DESIGN.md) | 自前 Phoenix サーバー設計。EOS を使わない場合、またはゲームルーム専用サーバーとして参照 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) | ゲームルーム（RoomChannel）・Engine 連携 |
-| [STEPS_EXTENSION.md § Step 44](../05_steps/STEPS_EXTENSION.md#6-step-44-マルチプレイ) | Step 44 の目標・44a/44b の区別 |
+| [STEPS_EXTENSION.md § Step 44](../05_steps/01_engine/STEPS_EXTENSION.md#6-step-44-マルチプレイ) | Step 44 の目標・44a/44b の区別 |
 | [Epic Online Services - マルチプレイヤー](https://onlineservices.epicgames.com/ja/multiplayer) | EOS の機能概要・ドキュメントへのリンク |
