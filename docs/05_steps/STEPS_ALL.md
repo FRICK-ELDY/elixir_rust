@@ -21,7 +21,7 @@
 |  | 3. パフォーマンス | 全6項 | イベントバス・ETS・フリーリスト・Spatial Hash・Telemetry・SIMD |
 |  | 4. 汎用化 | 全9項 | Game インターフェース・シーン汎用化・ゲーム分離・2 つ目のゲーム土台 |
 |  | 5. 拡張 | 全7項 | ゲームループ Rust 移行・マップ・セーブ・マルチ・デバッグ・リネーム・SPEC コンテンツ |
-|  | 6. Rust lib 分割・整理 | 全6項 | lib.rs の分割・フォルダ構成。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
+|  | 6. Rust lib 分割・整理 | 全9項 | Workspace Layout ツール(xtask)＋3クレート構成＋lib.rs分割。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
 |  | 7. 2Dゲームの固め | — | 2D サバイバーを仕様・バランス・品質として固める |
 |  | 8. EOS 実装 | — | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)） |
 |  | 9. 3D・三人称FPS | 全7項 | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)） |
@@ -132,16 +132,19 @@
 
 ---
 
-### 1.6  Rust lib 分割・整理（全6項）
+### 1.6  Rust lib 分割・整理（全9項）
 
 | 項 | 目標 |
 |-----|------|
-| 1. | ブロック切り出し順序の決定 |
-| 2. | `world/` の作成と型定義の移動 |
-| 3. | `game_logic/` の作成とロジックの移動 |
-| 4. | `nif/` の作成と NIF 関数の移動 |
-| 5. | `lib.rs` のスリム化と動作確認 |
-| 6. | ドキュメント更新 |
+| 1.6.1 | Workspace Layout ツール: xtask による WorkspaceLayout.md 自動生成とファイルヘッダー規約 |
+| 1.6.2 | Workspace 化: game_core / game_native / game_window の 3 クレート構成に分割 |
+| 1.6.3 | ブロック切り出し順序の決定 |
+| 1.6.4 | `world/` の作成と型定義の移動 |
+| 1.6.5 | `game_logic/` の作成とロジックの移動 |
+| 1.6.6 | `nif/` の作成と NIF 関数の移動 |
+| 1.6.7 | `lib.rs` のスリム化と動作確認 |
+| 1.6.8 | Elixir・Mix のビルドパス確認 |
+| 1.6.9 | ドキュメント更新 |
 
 > 3D・Slot の**前**に実施。1.1〜1.5 完了後に着手する。
 
