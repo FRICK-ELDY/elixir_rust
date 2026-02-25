@@ -43,7 +43,7 @@ fn workspace_layout() {
     // Sort by path for stable output
     entries.sort_by(|a, b| a.path.cmp(&b.path));
 
-    let md = format_output(&entries, root);
+    let md = format_output(&entries);
     let out_path = root.join("WorkspaceLayout.md");
     fs::write(&out_path, md).expect("Failed to write WorkspaceLayout.md");
     println!("Generated {}", out_path.display());
@@ -122,7 +122,7 @@ fn count_effective_lines(content: &str, ext: &str) -> u32 {
             continue;
         }
         if ext == "rs" {
-            if t.starts_with("//") || t.starts_with("/*") || t == "*" || t.starts_with("*/") {
+            if t.starts_with("//") || t.starts_with("/*") || t.starts_with("*/") {
                 continue;
             }
         } else if ext == "ex" || ext == "exs" {
@@ -154,23 +154,23 @@ fn extract_summary(content: &str, ext: &str) -> String {
     "(未設定)".to_string()
 }
 
-fn status_for_lines(lines: u32) -> (&'static str, &'static str) {
+fn status_for_lines(lines: u32) -> &'static str {
     match lines {
-        0..=4 => ("0", "⚪"),
-        5..=50 => ("1", "🟢"),
-        51..=100 => ("2", "🟡"),
-        101..=200 => ("3", "🟠"),
-        _ => ("4", "🔴"),
+        0..=4 => "⚪",
+        5..=50 => "🟢",
+        51..=100 => "🟡",
+        101..=200 => "🟠",
+        _ => "🔴",
     }
 }
 
-fn format_output(entries: &[FileEntry], _root: &Path) -> String {
+fn format_output(entries: &[FileEntry]) -> String {
     let mut md = String::from("# Workspace Layout（自動生成）\n\n");
     md.push_str("| Path | Lines | Status | Summary |\n");
     md.push_str("|------|-------|--------|--------|\n");
 
     for e in entries {
-        let (_status_num, status_icon) = status_for_lines(e.lines);
+        let status_icon = status_for_lines(e.lines);
         let summary_escaped = e.summary.replace('|', "\\|").replace('\n', " ");
         let path_link = format!("[{}]({}/{})", e.path, GITHUB_BASE, e.path);
         md.push_str(&format!(
