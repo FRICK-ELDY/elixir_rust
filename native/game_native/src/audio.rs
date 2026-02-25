@@ -19,7 +19,7 @@ impl AudioManager {
         Some(Self { _stream: stream, bgm_sink })
     }
 
-    pub fn play_bgm(&self, bytes: &[u8]) {
+    pub fn play_bgm(&self, bytes: Vec<u8>) {
         if !self.bgm_sink.empty() {
             return;
         }
