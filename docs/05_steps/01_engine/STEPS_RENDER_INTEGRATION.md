@@ -70,7 +70,11 @@
 pub fn start_render_thread(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
     let world_clone = world.clone();
     thread::spawn(move || {
-        run_render_thread(world_clone);  // winit EventLoop::run がブロック
+        if let Err(e) = std::panic::catch_unwind(move || {
+            run_render_thread(world_clone);  // winit EventLoop::run がブロック
+        }) {
+            eprintln!("Render thread panicked: {:?}", e);
+        }
     });
     Ok(ok())
 }
@@ -84,7 +88,11 @@ pub fn start_render_thread(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
 | **引数** | `world_ref: ResourceArc<GameWorld>` のみ。Elixir 側の `world_ref` をそのまま渡す。 |
 | **戻り値** | `:ok` を返す。スレッドはバックグラウンドで動作し、BEAM はブロックしない。 |
 
-#### 1.3 winit EventLoop の配置
+#### 1.3 パニックハンドリング
+
+`thread::spawn` で起動したスレッドがパニックすると、NIF 呼び出し元（Elixir 側）には通知されず、デフォルトではパニックが握りつぶされる。デバッグと堅牢性のため、`std::panic::catch_unwind` でパニックを捕捉し、ログ出力する（上記コード例参照）。コンパイル時に `UnwindSafe` 関連のエラーが出る場合は `AssertUnwindSafe` でラップする。
+
+#### 1.4 winit EventLoop の配置
 
 - `EventLoop::run()` はブロッキングであるため、spawn したスレッド内でのみ呼ぶ。
 - BEAM スレッドやゲームループスレッドからは呼ばない。
