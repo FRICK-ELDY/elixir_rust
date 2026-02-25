@@ -124,7 +124,7 @@ impl ApplicationHandler for RenderApp {
                         let guard = match self.world.0.read() {
                             Ok(g) => g,
                             Err(e) => {
-                                eprintln!("Render thread: Failed to acquire read lock for snapshot: {:?}", e);
+                                log::error!("Render thread: Failed to acquire read lock for snapshot: {e:?}");
                                 return;
                             }
                         };
@@ -142,7 +142,7 @@ impl ApplicationHandler for RenderApp {
                         let guard = match self.world.0.read() {
                             Ok(g) => g,
                             Err(e) => {
-                                eprintln!("Render thread: Failed to acquire read lock on world: {:?}", e);
+                                log::error!("Render thread: Failed to acquire read lock on world: {e:?}");
                                 return;
                             }
                         };

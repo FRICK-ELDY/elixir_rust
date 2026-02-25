@@ -193,7 +193,8 @@ defmodule Engine.GameEvents do
             atom = String.to_existing_atom(weapon)
             GenServer.cast(self(), {:select_weapon, atom})
           rescue
-            ArgumentError -> :ok
+            ArgumentError ->
+              Logger.warning("[UI ACTION] Unknown weapon from renderer: #{inspect(weapon)}")
           end
           state
       end
