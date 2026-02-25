@@ -1,5 +1,7 @@
 # フォルダ単位 接続関係図解
 
+**注意**: このドキュメントは、[STEPS_ALL.md](../05_steps/STEPS_ALL.md) の 1.7 節「描画統合（game_window → game_native）」が実施される**前**のアーキテクチャを記述しています。1.7 完了後は game_window が廃止され、描画は game_native に統合されるため、内容の更新が必要です。
+
 **根拠**: [ARCHITECTURE.md](./ARCHITECTURE.md)、[ENGINE_API.md](./ENGINE_API.md)、[WorkspaceLayout.md](../../WorkspaceLayout.md)
 
 `lib/app`、`lib/engine`、`lib/games`、`native/game_native`（nif, game_logic, world, lib.rs）、`native/game_window`（main.rs, renderer）のフォルダ単位での接続関係を可視化する。
