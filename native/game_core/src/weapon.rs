@@ -2,7 +2,9 @@
 //! Summary: 武器種類・クールダウン・発射ロジックの共通定義
 
 use crate::constants::{BULLET_DAMAGE, WEAPON_COOLDOWN};
-use crate::entity_params::WeaponParams;
+use crate::entity_params::{lightning_chain_count, whip_range, WeaponParams, WEAPON_ID_AXE,
+                          WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_LIGHTNING,
+                          WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP};
 
 pub const MAX_WEAPON_LEVEL: u32 = 8;
 pub const MAX_WEAPON_SLOTS: usize = 6;
@@ -110,6 +112,78 @@ impl WeaponSlot {
     pub fn bullet_count(&self) -> usize {
         let params = WeaponParams::get(self.kind_id);
         params.bullet_count(self.level)
+    }
+}
+
+// ─── UI 用アップグレード説明（レベルアップカード表示）───────────────
+
+/// 武器名と現在レベルから、アップグレード説明行を返す。HUD のレベルアップカード用。
+pub fn weapon_upgrade_desc(name: &str, current_lv: u32) -> Vec<String> {
+    let next = current_lv + 1;
+    let slot_now = |id: u8, lv: u32| WeaponSlot { kind_id: id, level: lv.max(1), cooldown_timer: 0.0 };
+    let dmg = |id: u8, lv: u32| slot_now(id, lv).effective_damage();
+    let cd = |id: u8, lv: u32| slot_now(id, lv).effective_cooldown();
+    let bullets = |id: u8, lv: u32| WeaponParams::get(id).bullet_count(lv.max(1));
+
+    match name {
+        "magic_wand" => {
+            let mut lines = vec![
+                format!("DMG: {} -> {}", dmg(WEAPON_ID_MAGIC_WAND, current_lv), dmg(WEAPON_ID_MAGIC_WAND, next)),
+                format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_MAGIC_WAND, current_lv), cd(WEAPON_ID_MAGIC_WAND, next)),
+            ];
+            let bullets_now = bullets(WEAPON_ID_MAGIC_WAND, current_lv);
+            let bullets_next = bullets(WEAPON_ID_MAGIC_WAND, next);
+            if bullets_next > bullets_now {
+                lines.push(format!("Shots: {} -> {} (+)", bullets_now, bullets_next));
+            } else {
+                lines.push(format!("Shots: {}", bullets_now));
+            }
+            lines
+        }
+        "axe" => vec![
+            format!("DMG: {} -> {}", dmg(WEAPON_ID_AXE, current_lv), dmg(WEAPON_ID_AXE, next)),
+            format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_AXE, current_lv), cd(WEAPON_ID_AXE, next)),
+            "Throws upward".to_string(),
+        ],
+        "cross" => {
+            let dirs_now = if current_lv == 0 || current_lv <= 3 { 4 } else { 8 };
+            let dirs_next = if next <= 3 { 4 } else { 8 };
+            let mut lines = vec![
+                format!("DMG: {} -> {}", dmg(WEAPON_ID_CROSS, current_lv), dmg(WEAPON_ID_CROSS, next)),
+                format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_CROSS, current_lv), cd(WEAPON_ID_CROSS, next)),
+            ];
+            if dirs_next > dirs_now {
+                lines.push(format!("Dirs: {} -> {} (+)", dirs_now, dirs_next));
+            } else {
+                lines.push(format!("{}-way fire", dirs_now));
+            }
+            lines
+        }
+        "whip" => vec![
+            format!("DMG: {} -> {}", dmg(WEAPON_ID_WHIP, current_lv), dmg(WEAPON_ID_WHIP, next)),
+            format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_WHIP, current_lv), cd(WEAPON_ID_WHIP, next)),
+            format!(
+                "Range: {}px -> {}px",
+                whip_range(WEAPON_ID_WHIP, current_lv.max(1)) as u32,
+                whip_range(WEAPON_ID_WHIP, next) as u32,
+            ),
+            "Fan sweep (108°)".to_string(),
+        ],
+        "fireball" => vec![
+            format!("DMG: {} -> {}", dmg(WEAPON_ID_FIREBALL, current_lv), dmg(WEAPON_ID_FIREBALL, next)),
+            format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_FIREBALL, current_lv), cd(WEAPON_ID_FIREBALL, next)),
+            "Piercing shot".to_string(),
+        ],
+        "lightning" => vec![
+            format!("DMG: {} -> {}", dmg(WEAPON_ID_LIGHTNING, current_lv), dmg(WEAPON_ID_LIGHTNING, next)),
+            format!("CD:  {:.1}s -> {:.1}s", cd(WEAPON_ID_LIGHTNING, current_lv), cd(WEAPON_ID_LIGHTNING, next)),
+            format!(
+                "Chain: {} -> {} targets",
+                lightning_chain_count(WEAPON_ID_LIGHTNING, current_lv.max(1)),
+                lightning_chain_count(WEAPON_ID_LIGHTNING, next),
+            ),
+        ],
+        _ => vec!["Upgrade weapon".to_string()],
     }
 }
 

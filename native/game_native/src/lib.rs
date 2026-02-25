@@ -39,6 +39,7 @@ rustler::atoms! {
 
 mod game_logic;
 mod nif;
+mod renderer;
 mod world;
 
 pub use game_logic::{
@@ -46,6 +47,7 @@ pub use game_logic::{
     find_nearest_enemy_spatial_excluding, update_chase_ai, update_chase_ai_simd,
 };
 pub use nif::{SaveSnapshot, WeaponSlotSave};
+pub use renderer::{BossHudInfo, GamePhase, GameUiState, HudData, Renderer};
 pub use world::{
     BossState, BulletWorld, EnemyWorld, FrameEvent, GameLoopControl, GameWorld, GameWorldInner,
     ParticleWorld, PlayerState,
