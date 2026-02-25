@@ -29,6 +29,7 @@ pub struct SaveSnapshot {
     pub score:            u32,
     pub elapsed_seconds:  f32,
     pub weapon_slots:     Vec<WeaponSlotSave>,
+    pub kill_count:       u32,
 }
 
 #[rustler::nif]
@@ -48,6 +49,7 @@ pub fn get_save_snapshot(world: ResourceArc<GameWorld>) -> NifResult<SaveSnapsho
         score:           w.score,
         elapsed_seconds: w.elapsed_seconds,
         weapon_slots,
+        kill_count:      w.kill_count,
     })
 }
 
@@ -85,6 +87,9 @@ pub fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot)
     w.boss     = None;
     w.frame_events.clear();
     w.magnet_timer = 0.0;
+    w.kill_count   = snapshot.kill_count;
+    w.score_popups.clear();
+    w.weapon_choices.clear();
 
     w.collision.dynamic.clear();
 

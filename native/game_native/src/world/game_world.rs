@@ -6,7 +6,7 @@ use game_core::item::ItemWorld;
 use game_core::physics::rng::SimpleRng;
 use game_core::physics::spatial_hash::CollisionWorld;
 use game_core::weapon::WeaponSlot;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 use super::FrameEvent;
 
@@ -45,6 +45,15 @@ pub struct GameWorldInner {
     pub boss:               Option<BossState>,
     /// 1.3.1: このフレームで発生したイベント（毎フレーム drain される）
     pub frame_events:       Vec<FrameEvent>,
+    /// 1.7.5: 描画スレッドからの UI アクション（Start/Retry/武器選択/Save/Load 等）
+    /// ゲームループが取得して Elixir に送信する
+    pub pending_ui_action:  Mutex<Option<String>>,
+    /// 1.7.5: レベルアップ時の武器選択肢（level_up_pending が true のとき HUD に表示）
+    pub weapon_choices:     Vec<String>,
+    /// 1.7.5: スコアポップアップ [(world_x, world_y, value, lifetime)]
+    pub score_popups:       Vec<(f32, f32, u32, f32)>,
+    /// 1.7.5: 撃破数（ゲームオーバー画面等に表示）
+    pub kill_count:         u32,
 }
 
 impl GameWorldInner {
@@ -52,6 +61,7 @@ impl GameWorldInner {
     pub(crate) fn complete_level_up(&mut self) {
         self.level += 1;
         self.level_up_pending = false;
+        self.weapon_choices.clear();
     }
 
     /// 衝突判定用の Spatial Hash を再構築する（clone 不要）

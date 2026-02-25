@@ -11,6 +11,27 @@ use game_core::physics::obstacle_resolve;
 use game_core::physics::separation::apply_separation;
 use game_core::util::{exp_required_for_next, spawn_position_around_player};
 
+/// 1.7.5: レベルアップ時の武器選択肢を計算（未所持優先 → 低レベル順、Lv8 除外）
+fn compute_weapon_choices(w: &GameWorldInner) -> Vec<String> {
+    const ALL: &[(&str, u8)] = &[
+        ("magic_wand", 0), ("axe", 1), ("cross", 2),
+        ("whip", 3), ("fireball", 4), ("lightning", 5),
+    ];
+    let mut choices: Vec<(i32, String)> = ALL.iter()
+        .filter_map(|(name, wid)| {
+            let lv = w.weapon_slots.iter()
+                .find(|s| s.kind_id == *wid)
+                .map(|s| s.level)
+                .unwrap_or(0);
+            if lv >= 8 { return None; }
+            let sort_key = if lv == 0 { -1i32 } else { lv as i32 };
+            Some((sort_key, (*name).to_string()))
+        })
+        .collect();
+    choices.sort_by_key(|(k, _)| *k);
+    choices.into_iter().take(3).map(|(_, n)| n).collect()
+}
+
 /// プレイヤー周囲 800〜1200px の円周上にスポーン位置を生成（spawn_enemies / spawn_elite_enemy 共通）
 pub(crate) fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Vec<(f32, f32)> {
     let px = w.player.x + PLAYER_RADIUS;
@@ -56,6 +77,12 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     w.frame_id += 1;
 
     let dt = delta_ms as f32 / 1000.0;
+
+    // ── 1.7.5: スコアポップアップの lifetime を減衰 ──────────────
+    for (_, _, _, lt) in w.score_popups.iter_mut() {
+        *lt -= dt;
+    }
+    w.score_popups.retain(|(_, _, _, lt)| *lt > 0.0);
 
     // ── 1.1.13: 経過時間を更新 ──────────────────────────────────
     w.elapsed_seconds += dt;
@@ -243,6 +270,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                                 let kind_e = w.enemies.kind_ids[ei];
                                 let ep_hit = EnemyParams::get(kind_e);
                                 w.enemies.kill(ei);
+                                w.kill_count += 1;
+                                w.score_popups.push((hit_x, hit_y - 20.0, ep_hit.exp_reward * 2, 0.8));
                                 w.frame_events.push(FrameEvent::EnemyKilled {
                                     enemy_kind:  kind_e,
                                     weapon_kind: wp.as_u8,
@@ -254,6 +283,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                                     if w.exp >= required {
                                         let new_lv = w.level + 1;
                                         w.level_up_pending = true;
+                                        w.weapon_choices = compute_weapon_choices(w);
                                         w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                                     }
                                 }
@@ -335,6 +365,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                                 let kind_e = w.enemies.kind_ids[ei];
                                 let ep_chain = EnemyParams::get(kind_e);
                                 w.enemies.kill(ei);
+                                w.kill_count += 1;
+                                w.score_popups.push((hit_x, hit_y - 20.0, ep_chain.exp_reward * 2, 0.8));
                                 w.frame_events.push(FrameEvent::EnemyKilled {
                                     enemy_kind:  kind_e,
                                     weapon_kind: wp.as_u8,
@@ -346,6 +378,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                                     if w.exp >= required {
                                         let new_lv = w.level + 1;
                                         w.level_up_pending = true;
+                                        w.weapon_choices = compute_weapon_choices(w);
                                         w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                                     }
                                 }
@@ -409,6 +442,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                         let hit_y = ey + ep.radius;
                         if w.enemies.hp[ei] <= 0.0 {
                             w.enemies.kill(ei);
+                            w.kill_count += 1;
+                            w.score_popups.push((hit_x, hit_y - 20.0, ep.exp_reward * 2, 0.8));
                             w.frame_events.push(FrameEvent::EnemyKilled {
                                 enemy_kind: kind_e,
                                 weapon_kind: wp.as_u8,
@@ -419,6 +454,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                                 let required = exp_required_for_next(w.level);
                                 if w.exp >= required {
                                     w.level_up_pending = true;
+                                    w.weapon_choices = compute_weapon_choices(w);
                                     w.frame_events.push(FrameEvent::LevelUp { new_level: w.level + 1 });
                                 }
                             }
@@ -574,6 +610,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                 if w.enemies.hp[ei] <= 0.0 {
                     let weapon_k = w.bullets.weapon_kind[bi];
                     w.enemies.kill(ei);
+                    w.kill_count += 1;
+                    w.score_popups.push((ex, ey - 20.0, ep.exp_reward * 2, 0.8));
                     w.frame_events.push(FrameEvent::EnemyKilled {
                         enemy_kind:  kind_id,
                         weapon_kind: weapon_k,
@@ -588,6 +626,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                         if w.exp >= required {
                             let new_lv = w.level + 1;
                             w.level_up_pending = true;
+                            w.weapon_choices = compute_weapon_choices(w);
                             w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                         }
                     }
@@ -834,6 +873,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
         if eff.boss_killed {
             let boss_k = w.boss.as_ref().map(|b| b.kind_id).unwrap_or(0);
+            w.kill_count += 1;
+            w.score_popups.push((eff.kill_x, eff.kill_y - 20.0, eff.exp_reward * 2, 0.8));
             w.frame_events.push(FrameEvent::BossDefeated { boss_kind: boss_k });
             w.score += eff.exp_reward * 2;
             w.exp   += eff.exp_reward;
@@ -842,6 +883,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                 if w.exp >= required {
                     let new_lv = w.level + 1;
                     w.level_up_pending = true;
+                    w.weapon_choices = compute_weapon_choices(w);
                     w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                 }
             }
