@@ -228,6 +228,84 @@ native/
 
 ---
 
+## 1.6.3 ブロック切り出し順序（決定）
+
+現行 `lib.rs`（約 2267 行）を 1.6.4〜1.6.6 で分割するにあたり、**依存関係の少ないものから順**に切り出す。順序は **型 → ヘルパー/AI → physics_step → NIF**。
+
+### 切り出し順序（4 フェーズ）
+
+| フェーズ | ブロック | 行範囲（概算） | 移動先 | 依存 |
+|----------|----------|----------------|--------|------|
+| **1** | 型定義・定数・atoms | 37〜766 行 | `world/` ほか | game_core の型 |
+| **2** | ヘルパー・AI | 423〜666 行 | `game_logic/` | world 型 |
+| **3** | physics_step 関連 | 823〜1733 行 | `game_logic/` | world, chase_ai, game_core |
+| **4** | NIF 群 | 768〜2243 行 | `nif/` | world, game_logic |
+
+### Phase 1: 型定義（world/ へ）
+
+| 対象 | 行範囲 | 移動先ファイル |
+|------|--------|----------------|
+| `init_panic_hook` | 42〜47 | `lib.rs` に残す（load で使用） |
+| `GameLoopControl` | 50〜68 | `world/game_loop_control.rs` または lib.rs に残す |
+| `rustler::atoms!` | 70〜101 | `lib.rs` に残す |
+| `FrameEvent` | 104〜112 | `game_logic/events.rs` |
+| `PlayerState` | 116〜125 | `world/player.rs` |
+| `EnemyWorld` + `impl EnemySeparation` | 127〜234 | `world/enemy.rs` |
+| `BULLET_KIND_*` 定数 | 227〜233 | `world/bullet.rs` |
+| `BulletWorld` | 236〜326 | `world/bullet.rs` |
+| `ParticleWorld` | 329〜421 | `world/particle.rs` |
+| `BossState` | 668〜701 | `world/boss.rs` |
+| `GameWorldInner` + `impl` | 703〜763 | `world/game_world.rs` |
+| `GameWorld` | 765〜766 | `world/game_world.rs` |
+| `WeaponSlotSave`, `SaveSnapshot` | 2157〜2176 | `nif/save_nif.rs` または `world/` |
+
+※ `FrameEvent` は game_logic/events の責務のため、1.6.5 で game_logic に含めることも可。1.6.4 では world の依存として lib.rs に残し、1.6.5 で events.rs へ移動でもよい。
+
+### Phase 2: ヘルパー・AI（game_logic/ へ）
+
+| 対象 | 行範囲 | 移動先ファイル |
+|------|--------|----------------|
+| `find_nearest_enemy` | 423〜436 | `game_logic/chase_ai.rs` |
+| `find_nearest_enemy_excluding` | 442〜462 | `game_logic/chase_ai.rs` |
+| `dist_sq` | 467〜472 | `game_logic/chase_ai.rs`（pub(crate) または非 pub） |
+| `find_nearest_enemy_spatial` | 475〜493 | `game_logic/chase_ai.rs` |
+| `find_nearest_enemy_spatial_excluding` | 497〜520 | `game_logic/chase_ai.rs` |
+| `scalar_chase_one` | 524〜537 | `game_logic/chase_ai.rs` |
+| `update_chase_ai_simd` | 544〜629 | `game_logic/chase_ai.rs` |
+| `update_chase_ai` | 632〜663 | `game_logic/chase_ai.rs` |
+
+### Phase 3: physics_step 関連（game_logic/ へ）
+
+| 対象 | 行範囲 | 移動先ファイル |
+|------|--------|----------------|
+| `get_spawn_positions_around_player` | 823〜829 | `game_logic/physics_step.rs` |
+| `resolve_obstacles_enemy` | 861〜885 | `game_logic/physics_step.rs` |
+| `physics_step_inner` | 888〜1705 | `game_logic/physics_step.rs` |
+| `drain_frame_events_inner` | 1717〜1733 | `game_logic/events.rs` |
+
+※ physics_step_inner 内に武器発射・衝突判定・ボスロジック等が含まれる。巨大なため 1.6.5 で必要ならさらに分割を検討。
+
+### Phase 4: NIF 群（nif/ へ）
+
+| 分類 | NIF 関数 | 移動先ファイル |
+|------|----------|----------------|
+| **world_nif** | add, create_world, set_player_input, spawn_enemies, set_map_obstacles | `nif/world_nif.rs` |
+| **read_nif** | get_player_pos, get_player_hp, get_render_data, get_particle_data, get_bullet_count, get_frame_time_ms, debug_dump_world, get_enemy_count, get_hud_data, get_frame_metadata, get_level_up_data, get_weapon_levels, get_item_data, get_magnet_timer, get_boss_info, is_player_dead | `nif/read_nif.rs` |
+| **action_nif** | add_weapon, skip_level_up, spawn_boss, spawn_elite_enemy | `nif/action_nif.rs` |
+| **game_loop_nif** | create_game_loop_control, start_rust_game_loop, run_rust_game_loop, pause_physics, resume_physics, physics_step, drain_frame_events | `nif/game_loop_nif.rs` |
+| **save_nif** | get_save_snapshot, load_save_snapshot | `nif/save_nif.rs` |
+
+※ `lock_poisoned_err` は各 nif モジュールで共通利用するため、`nif/mod.rs` か `nif/util.rs` に配置。
+
+### 実施時の注意
+
+1. **依存順**: Phase 1 完了後に Phase 2、Phase 2 完了後に Phase 3、Phase 3 完了後に Phase 4 を実施する。
+2. **pub / pub(crate)**: NIF から呼ぶ関数は `pub(crate)`、モジュール内のみのものは非 pub にする。
+3. **rustler::init!**: 1.6.6 で NIF を nif モジュールに移した後も、lib.rs の `rustler::init!` で全 NIF 名を一覧する（サブモジュール経由で参照）。
+4. **ItemWorld**: game_core の ItemWorld を使用。world/ に ItemWorld は不要（GameWorldInner が game_core::item::ItemWorld を保持）。
+
+---
+
 ## 5. 実施ステップ（検討項目）
 
 本フェーズは **Workspace Layout ツールの整備** → **3 クレート構成への移行** → **game_native 内のモジュール分割** を順に実施する。
