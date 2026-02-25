@@ -3,6 +3,7 @@
 
 use super::util::lock_poisoned_err;
 use crate::world::{BulletWorld, GameWorld};
+use game_core::constants::PARTICLE_RNG_SEED;
 use game_core::item::ItemWorld;
 use game_core::weapon::WeaponSlot;
 use rustler::{Atom, NifResult, ResourceArc};
@@ -79,7 +80,7 @@ pub fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot)
 
     w.enemies  = crate::EnemyWorld::new();
     w.bullets  = BulletWorld::new();
-    w.particles = ParticleWorld::new(67890);
+    w.particles = ParticleWorld::new(PARTICLE_RNG_SEED);
     w.items    = ItemWorld::new();
     w.boss     = None;
     w.frame_events.clear();

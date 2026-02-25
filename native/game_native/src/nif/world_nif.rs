@@ -4,7 +4,7 @@
 use super::util::lock_poisoned_err;
 use crate::game_logic::get_spawn_positions_around_player;
 use crate::world::{GameWorld, GameWorldInner, PlayerState};
-use game_core::constants::{CELL_SIZE, PLAYER_RADIUS, PLAYER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
+use game_core::constants::{CELL_SIZE, PARTICLE_RNG_SEED, PLAYER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
 use game_core::item::ItemWorld;
 use game_core::physics::rng::SimpleRng;
 use game_core::physics::spatial_hash::CollisionWorld;
@@ -34,7 +34,7 @@ pub fn create_world() -> ResourceArc<GameWorld> {
         },
         enemies:            EnemyWorld::new(),
         bullets:            BulletWorld::new(),
-        particles:          ParticleWorld::new(67890),
+        particles:          ParticleWorld::new(PARTICLE_RNG_SEED),
         items:              ItemWorld::new(),
         magnet_timer:       0.0,
         rng:                SimpleRng::new(12345),
