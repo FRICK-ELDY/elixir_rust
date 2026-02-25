@@ -44,6 +44,7 @@
 |-------------|------|----------|
 | [WHY_ELIXIR/WHY_ELIXIR.md](./03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) | ゲームロジック層に Elixir（BEAM VM）を採用した理由。BEAM の設計思想、ゲームループ適合性、並行性、耐障害性、Rust との役割分担。依存関係一覧あり | アーキテクチャ理解時 |
 | [WHY_Rustler.md](./03_tech_decisions/WHY_Rustler.md) | Rustler（NIF 連携）の選定理由 | アーキテクチャ理解時 |
+| [WHY_xtask.md](./03_tech_decisions/WHY_xtask.md) | xtask（ビルド・ツール実行）の採用理由。Workspace Layout ツールの仕様と実行方法 | アーキテクチャ理解時 |
 | [WHY_ELIXIR/WHY_Telemetry.md](./03_tech_decisions/WHY_ELIXIR/WHY_Telemetry.md) | Telemetry の選定理由 | アーキテクチャ理解時 |
 | [WHY_ELIXIR/WHY_BEAM.md](./03_tech_decisions/WHY_ELIXIR/WHY_BEAM.md) | BEAM 組み込み機能の活用 | アーキテクチャ理解時 |
 | [WHY_RUST/WHY_RUST.md](./03_tech_decisions/WHY_RUST/WHY_RUST.md) | 物理演算・描画・音声層に Rust を採用した理由。ゼロコスト抽象化、SoA、wgpu、Elixir との役割分担。依存関係一覧あり | アーキテクチャ理解時 |
@@ -161,6 +162,7 @@ docs/
 │   │   │   └── WHY_rustc_hash.md
 │   │   └── WHY_RAYON.md
 │   ├── WHY_Rustler.md
+│   ├── WHY_xtask.md
 │   └── ELIXIR_RUST_DIVISION.md
 ├── 04_roadmap/            実装ロードマップ
 │   └── PRIORITY_STEPS.md
