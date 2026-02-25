@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/renderer/mod.rs
+//! Summary: wgpu によるスプライト描画・パイプライン・テクスチャ管理
+
 use crate::core::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
 use crate::core::item::{RENDER_KIND_GEM, RENDER_KIND_MAGNET, RENDER_KIND_POTION};
 use crate::{GamePhase, ELITE_RENDER_KIND_OFFSET, ELITE_SIZE_MULTIPLIER};

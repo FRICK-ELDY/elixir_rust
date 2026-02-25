@@ -1,3 +1,5 @@
+# Path: lib/engine/scene_behaviour.ex
+# Summary: シーンコールバック（init/update/render_type）の behaviour 定義
 defmodule Engine.SceneBehaviour do
   @moduledoc """
   シーンコールバックの動作定義。

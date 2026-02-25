@@ -1,3 +1,5 @@
+# Path: lib/engine/room_supervisor.ex
+# Summary: ルーム単位で GameEvents を管理する DynamicSupervisor
 defmodule Engine.RoomSupervisor do
   @moduledoc """
   1.5.4: ルーム単位で GameEvents を管理する DynamicSupervisor。

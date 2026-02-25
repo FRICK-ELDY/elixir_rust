@@ -1,4 +1,5 @@
-//! 共通ユーティリティ（main.rs / lib.rs で共有）
+//! Path: native/game_native/src/core/util.rs
+//! Summary: 経験値計算・ウェーブ設定・スポーン位置などの共通ユーティリティ
 
 use super::constants::WAVES;
 use super::physics::rng::SimpleRng;

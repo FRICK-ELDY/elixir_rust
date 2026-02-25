@@ -1,5 +1,6 @@
-/// Simple LCG (Linear Congruential Generator) random number generator.
-/// Lightweight, no-std compatible, deterministic — suitable for game simulations.
+//! Path: native/game_native/src/core/physics/rng.rs
+//! Summary: 決定論的 LCG 乱数ジェネレータ（no-std 互換）
+
 pub struct SimpleRng(u64);
 
 impl SimpleRng {

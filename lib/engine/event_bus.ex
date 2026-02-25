@@ -1,3 +1,5 @@
+# Path: lib/engine/event_bus.ex
+# Summary: フレームイベントをサブスクライバーに配信する GenServer
 defmodule Engine.EventBus do
   @moduledoc """
   1.3.1: フレームイベントを受け取り、複数のサブスクライバーに配信する。

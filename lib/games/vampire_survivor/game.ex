@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/game.ex
+# Summary: ヴァンサバの Engine.Game 実装（初期シーン・物理対象の提供）
 defmodule Game.VampireSurvivor do
   @moduledoc """
   1.4.4–1.4.5: ヴァンサバを Game 実装として分離し、Engine.Game behaviour を実装。

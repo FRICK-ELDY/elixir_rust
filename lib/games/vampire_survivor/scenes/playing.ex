@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/scenes/playing.ex
+# Summary: ヴァンサバのプレイ中シーン（物理・スポーン・ボス/レベルアップチェック）
 defmodule Game.VampireSurvivor.Scenes.Playing do
   @moduledoc """
   プレイ中シーン。物理演算・スポーン・ボス/レベルアップチェックを行う。

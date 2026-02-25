@@ -1,3 +1,5 @@
+# Path: lib/games/mini_shooter/scenes/playing.ex
+# Summary: MiniShooter のプレイ中シーン
 defmodule Game.MiniShooter.Scenes.Playing do
   @moduledoc """
   プレイ中シーン。敵スポーンのみ。ゲームオーバーで終了。

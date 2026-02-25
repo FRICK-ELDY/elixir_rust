@@ -1,3 +1,5 @@
+# Path: lib/app/application.ex
+# Summary: OTP Application 起動・子プロセススーパービジョン
 defmodule App.Application do
   use Application
 

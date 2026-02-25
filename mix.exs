@@ -1,3 +1,5 @@
+# Path: mix.exs
+# Summary: Mix プロジェクト定義（依存関係・アプリケーション設定）
 defmodule Game.MixProject do
   use Mix.Project
 

@@ -1,3 +1,5 @@
+# Path: lib/engine/stats.ex
+# Summary: ゲームセッション統計を収集する GenServer
 defmodule Engine.Stats do
   @moduledoc """
   1.2.10: ゲームセッション統計をリアルタイム収集する GenServer。

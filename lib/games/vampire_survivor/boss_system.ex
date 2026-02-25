@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/boss_system.ex
+# Summary: ボス出現スケジュール管理の純粋関数モジュール（ヴァンサバ固有）
 defmodule Game.VampireSurvivor.BossSystem do
   @moduledoc """
   ボスエネミーの出現スケジュールを管理する純粋関数モジュール（ヴァンサバ固有）。

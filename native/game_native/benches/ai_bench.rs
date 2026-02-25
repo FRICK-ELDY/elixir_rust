@@ -1,4 +1,5 @@
-//! Chase AI ベンチマーク: rayon スカラー版 vs SIMD 版
+//! Path: native/game_native/benches/ai_bench.rs
+//! Summary: Chase AI ベンチマーク（rayon スカラー版 vs SIMD 版）
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use game_native::{update_chase_ai, EnemyKind, EnemyWorld};

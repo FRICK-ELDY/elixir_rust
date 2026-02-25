@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/core/physics/separation.rs
+//! Summary: 敵同士の重なり解消（Separation）トレイトと適用ロジック
+
 use super::spatial_hash::SpatialHash;
 
 // ─── 分離トレイト ──────────────────────────────────────────────

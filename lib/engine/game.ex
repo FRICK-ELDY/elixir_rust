@@ -1,3 +1,5 @@
+# Path: lib/engine/game.ex
+# Summary: ゲームがエンジンに提供すべき behaviour インターフェース
 defmodule Engine.Game do
   @moduledoc """
   ゲームがエンジンに提供すべきインターフェース（1.4.1 設計）。

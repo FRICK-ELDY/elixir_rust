@@ -1,3 +1,5 @@
+# Path: lib/engine/save_manager.ex
+# Summary: セーブ・ロード・ハイスコア永続化
 defmodule Engine.SaveManager do
   require Logger
 

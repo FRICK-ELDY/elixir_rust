@@ -1,3 +1,5 @@
+# Path: lib/games/mini_shooter/game.ex
+# Summary: ミニマルゲームの Engine.Game 実装（汎用化検証用）
 defmodule Game.MiniShooter do
   @moduledoc """
   1.4.9: 2 つ目のゲーム（ミニマル実装）。

@@ -1,3 +1,5 @@
+# Path: lib/engine/input_handler.ex
+# Summary: キー入力を ETS に書き込む GenServer
 defmodule Engine.InputHandler do
   @moduledoc """
   キー入力状態を ETS に書き込む。
