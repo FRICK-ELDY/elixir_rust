@@ -1,3 +1,5 @@
+# Path: lib/engine/game_events.ex
+# Summary: フレームイベント受信・フェーズ管理・NIF 呼び出しの GenServer
 defmodule Engine.GameEvents do
   @moduledoc """
   Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer。

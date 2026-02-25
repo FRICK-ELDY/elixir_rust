@@ -1,3 +1,5 @@
+# Path: lib/engine.ex
+# Summary: ゲームエンジンの安定化された公開 API
 defmodule Engine do
   @moduledoc """
   ゲームエンジンの安定化された公開 API（1.4.6）。

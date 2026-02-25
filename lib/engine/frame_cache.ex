@@ -1,3 +1,5 @@
+# Path: lib/engine/frame_cache.ex
+# Summary: フレームごとのゲーム状態を ETS に書き込む
 defmodule Engine.FrameCache do
   @moduledoc """
   フレームごとのゲーム状態スナップショットを ETS に書き込む。

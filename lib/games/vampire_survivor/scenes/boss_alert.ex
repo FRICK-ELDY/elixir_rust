@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/scenes/boss_alert.ex
+# Summary: ボス出現警告シーン
 defmodule Game.VampireSurvivor.Scenes.BossAlert do
   @moduledoc """
   ボス出現警告シーン。一定時間後にボスをスポーンして Playing に戻る。

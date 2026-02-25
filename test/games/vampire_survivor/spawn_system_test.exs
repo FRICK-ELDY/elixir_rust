@@ -1,3 +1,5 @@
+# Path: test/games/vampire_survivor/spawn_system_test.exs
+# Summary: SpawnSystem の純粋関数単体テスト
 defmodule Game.VampireSurvivor.SpawnSystemTest do
   @moduledoc """
   SpawnSystem の純粋関数の単体テスト。

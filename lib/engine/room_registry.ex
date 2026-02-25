@@ -1,3 +1,5 @@
+# Path: lib/engine/room_registry.ex
+# Summary: ルーム ID → GameEvents pid の Registry
 defmodule Engine.RoomRegistry do
   @moduledoc """
   1.5.4: ルーム ID → GameEvents pid のマッピング用 Registry。

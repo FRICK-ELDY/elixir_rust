@@ -1,3 +1,5 @@
+# Path: lib/games/mini_shooter/spawn_system.ex
+# Summary: ミニマル敵スポーンシステム（スライム固定間隔）
 defmodule Game.MiniShooter.SpawnSystem do
   @moduledoc """
   ミニマルスポーンシステム。スライムのみを固定間隔でスポーン。

@@ -1,3 +1,5 @@
+# Path: lib/engine/map_loader.ex
+# Summary: マップ ID に応じた障害物リストの提供
 defmodule Engine.MapLoader do
   @moduledoc """
   1.5.2: マップ障害物の定義。

@@ -1,3 +1,5 @@
+# Path: config/config.exs
+# Summary: アプリケーション設定（ゲーム選択・マップ・Telemetry 等）
 # This file is responsible for configuring your application
 # and its dependencies with the aid of the Config module.
 #

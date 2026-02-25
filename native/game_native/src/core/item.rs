@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/core/item.rs
+//! Summary: アイテム種類・レンダー kind の定義と ItemWorld
+
 /// アイテムの種類
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 #[repr(u8)]

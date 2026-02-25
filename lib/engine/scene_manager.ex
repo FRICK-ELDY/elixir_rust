@@ -1,3 +1,5 @@
+# Path: lib/engine/scene_manager.ex
+# Summary: シーンスタック管理の GenServer
 defmodule Engine.SceneManager do
   @moduledoc """
   シーンスタックを管理する GenServer。

@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/core/weapon.rs
+//! Summary: 武器種類・クールダウン・発射ロジックの共通定義
+
 use super::constants::{BULLET_DAMAGE, WEAPON_COOLDOWN};
 use super::entity_params::WeaponParams;
 

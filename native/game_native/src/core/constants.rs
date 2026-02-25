@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/core/constants.rs
+//! Summary: 画面解像度・マップサイズ・物理定数などの定数定義
+
 // Background clear color (dark purple)
 #[allow(dead_code)]
 pub const BG_R: f64 = 0.05;

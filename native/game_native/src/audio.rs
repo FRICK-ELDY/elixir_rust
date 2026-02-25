@@ -1,17 +1,5 @@
-/// 1.2.7: BGM・SE 管理モジュール（rodio 0.21 クレート使用）
-///
-/// # rodio 0.21 API の変更点
-/// - `OutputStream::try_default()` → `OutputStreamBuilder::open_default_stream()`
-/// - `Sink::try_new(&handle)` → `Sink::connect_new(&stream.mixer())`
-/// - `OutputStreamHandle` は廃止。`OutputStream` が直接 `mixer()` を持つ
-/// - `playback` フィーチャーが必要（Cargo.toml に追加済み）
-///
-/// # 設計方針
-/// - BGM はループ再生（`repeat_infinite`）
-/// - SE は fire-and-forget（`Sink::detach()`）で自動解放
-/// - `_stream` フィールドは Drop 防止のためオーナーシップを保持する
-/// - 音声ファイルは `include_bytes!` でバイナリに埋め込む
-/// - 音声デバイスが存在しない環境（CI 等）では `AudioManager::new()` が `None` を返す
+//! Path: native/game_native/src/audio.rs
+//! Summary: BGM・SE 管理（rodio、ループ再生・fire-and-forget）
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 
 #[allow(dead_code)]

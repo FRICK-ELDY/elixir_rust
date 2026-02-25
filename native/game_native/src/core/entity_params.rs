@@ -1,7 +1,5 @@
-//! 1.4.7: エンティティ・武器の ID ベース参照
-//!
-//! EnemyKind / WeaponKind / BossKind の enum を増やさずに、
-//! u8 ID でパラメータを参照するテーブルを提供する。
+//! Path: native/game_native/src/core/entity_params.rs
+//! Summary: 敵・武器・ボスの ID ベースパラメータテーブル
 
 /// 敵のパラメータ（ID で参照）
 #[derive(Clone, Copy, Debug)]

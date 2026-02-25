@@ -1,3 +1,5 @@
+# Path: lib/engine/telemetry.ex
+# Summary: Telemetry イベントハンドラーと Metrics の Supervisor
 defmodule Engine.Telemetry do
   @moduledoc """
   Telemetry イベントのハンドラーと Metrics を定義する Supervisor。

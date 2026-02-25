@@ -1,7 +1,5 @@
-//! G3: アセット管理システム
-//!
-//! アセット ID → パス のマッピング、実行時ロード、埋め込みフォールバックを提供。
-//! 設計: [docs/ASSET_MANAGEMENT.md](https://github.com/...)
+//! Path: native/game_native/src/asset/mod.rs
+//! Summary: アセット ID マッピング・実行時ロード・埋め込みフォールバック
 
 use std::path::Path;
 

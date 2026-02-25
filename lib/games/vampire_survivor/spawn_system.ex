@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/spawn_system.ex
+# Summary: ウェーブベース敵スポーンシステム（ヴァンサバ固有）
 defmodule Game.VampireSurvivor.SpawnSystem do
   @moduledoc """
   Wave-based enemy spawn system（ヴァンサバ固有）。

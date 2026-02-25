@@ -1,3 +1,5 @@
+# Path: test/games/vampire_survivor/boss_system_test.exs
+# Summary: BossSystem の単体テスト
 defmodule Game.VampireSurvivor.BossSystemTest do
   use ExUnit.Case, async: true
 

@@ -1,3 +1,5 @@
+# Path: test/games/vampire_survivor/level_system_test.exs
+# Summary: LevelSystem の単体テスト
 defmodule Game.VampireSurvivor.LevelSystemTest do
   use ExUnit.Case, async: true
 

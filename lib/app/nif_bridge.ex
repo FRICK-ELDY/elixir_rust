@@ -1,3 +1,5 @@
+# Path: lib/app/nif_bridge.ex
+# Summary: Rust NIF のラッパーモジュール（Rustler 経由で game_native をロード）
 defmodule App.NifBridge do
   @moduledoc """
   Rust NIF のラッパーモジュール。

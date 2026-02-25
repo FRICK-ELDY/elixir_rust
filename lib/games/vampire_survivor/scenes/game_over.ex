@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/scenes/game_over.ex
+# Summary: ヴァンサバのゲームオーバーシーン
 defmodule Game.VampireSurvivor.Scenes.GameOver do
   @moduledoc """
   ゲームオーバーシーン。スコア表示・リトライ待機。

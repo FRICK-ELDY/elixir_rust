@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/level_system.ex
+# Summary: レベルアップ・武器選択生成の純粋関数モジュール（ヴァンサバ固有）
 defmodule Game.VampireSurvivor.LevelSystem do
   @moduledoc """
   Level-up management system（ヴァンサバ固有）。

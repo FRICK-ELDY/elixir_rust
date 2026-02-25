@@ -1,4 +1,5 @@
-//! 敵タイプの共通定義（main.rs / lib.rs で共有）
+//! Path: native/game_native/src/core/enemy.rs
+//! Summary: 敵種類・HP・速度・スポーンロジックの共通定義
 
 use super::physics::rng::SimpleRng;
 

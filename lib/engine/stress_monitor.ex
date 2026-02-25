@@ -1,3 +1,5 @@
+# Path: lib/engine/stress_monitor.ex
+# Summary: パフォーマンスモニタリング・フレーム超過検出の GenServer
 defmodule Engine.StressMonitor do
   @moduledoc """
   Independent performance monitoring process.

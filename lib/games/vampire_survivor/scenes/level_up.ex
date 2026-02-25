@@ -1,3 +1,5 @@
+# Path: lib/games/vampire_survivor/scenes/level_up.ex
+# Summary: レベルアップ武器選択シーン
 defmodule Game.VampireSurvivor.Scenes.LevelUp do
   @moduledoc """
   レベルアップ武器選択シーン。物理演算は一時停止。

@@ -1,3 +1,5 @@
+# Path: lib/games/mini_shooter/scenes/game_over.ex
+# Summary: ミニ shooter のゲームオーバーシーン
 defmodule Game.MiniShooter.Scenes.GameOver do
   @moduledoc """
   ゲームオーバーシーン。
