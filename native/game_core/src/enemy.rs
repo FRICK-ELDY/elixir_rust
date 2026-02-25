@@ -1,7 +1,7 @@
-//! Path: native/game_native/src/core/enemy.rs
+//! Path: native/game_core/src/enemy.rs
 //! Summary: 敵種類・HP・速度・スポーンロジックの共通定義
 
-use super::physics::rng::SimpleRng;
+use crate::physics::rng::SimpleRng;
 
 /// 敵の種類
 #[derive(Clone, Copy, PartialEq, Debug, Default)]

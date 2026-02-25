@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/core/entity_params.rs
+//! Path: native/game_core/src/entity_params.rs
 //! Summary: 敵・武器・ボスの ID ベースパラメータテーブル
 //!
 //! 1.4.7: EnemyKind / WeaponKind / BossKind の enum を増やさずに、
@@ -28,8 +28,8 @@ static ENEMY_TABLE: [EnemyParams; 5] = [
     EnemyParams { max_hp: 30.0,   speed: 80.0,  radius: 20.0, exp_reward: 5,  damage_per_sec: 20.0, render_kind: 1, particle_color: [1.0, 0.5, 0.1, 1.0] },   // Slime
     EnemyParams { max_hp: 15.0,   speed: 160.0, radius: 12.0, exp_reward: 3,  damage_per_sec: 10.0, render_kind: 2, particle_color: [0.7, 0.2, 0.9, 1.0] },   // Bat
     EnemyParams { max_hp: 150.0,  speed: 40.0,  radius: 32.0, exp_reward: 20, damage_per_sec: 40.0, render_kind: 3, particle_color: [0.6, 0.6, 0.6, 1.0] },   // Golem
-    EnemyParams { max_hp: 60.0,   speed: 60.0,  radius: 22.0, exp_reward: 10, damage_per_sec: 15.0, render_kind: 5, particle_color: [0.9, 0.85, 0.7, 1.0] },  // Skeleton（高HP）
-    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] },   // Ghost（壁すり抜け）
+    EnemyParams { max_hp: 60.0,   speed: 60.0,  radius: 22.0, exp_reward: 10, damage_per_sec: 15.0, render_kind: 5, particle_color: [0.9, 0.85, 0.7, 1.0] },  // Skeleton
+    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] },   // Ghost
 ];
 
 impl EnemyParams {
@@ -89,7 +89,7 @@ static WEAPON_TABLE: [WeaponParams; 7] = [
     WeaponParams { cooldown: 1.0,  damage: 30, as_u8: 3, name: "whip",       bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 20, as_u8: 4, name: "fireball",   bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 15, as_u8: 5, name: "lightning",  bullet_table: None },
-    WeaponParams { cooldown: 0.2,  damage: 1,  as_u8: 6, name: "garlic",    bullet_table: None },  // 1 dmg/0.2s = 5 dmg/sec オーラ
+    WeaponParams { cooldown: 0.2,  damage: 1,  as_u8: 6, name: "garlic",     bullet_table: None },
 ];
 
 impl WeaponParams {
