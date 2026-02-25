@@ -1197,26 +1197,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game_window"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "bytemuck",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "env_logger",
- "game_core",
- "image",
- "log",
- "pollster",
- "rodio",
- "serde",
- "wgpu",
- "winit",
-]
-
-[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

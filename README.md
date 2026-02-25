@@ -39,7 +39,7 @@ cd your-repository-name
 
 mix deps.get
 mix compile
-mix run --no-halt
+iex -S mix
 ```
 
 > 初回の `mix compile` 時に Rust クレートがビルドされます。数分かかる場合があります。
@@ -142,7 +142,7 @@ elixir_rust/
 ├── native/game_native/            # Rust クレート
 │   └── src/
 │       ├── lib.rs                 # NIF エントリポイント
-│       ├── main.rs                # スタンドアロン描画用
+│       ├── render_thread.rs       # 描画スレッド（winit/wgpu）
 │       ├── core/                  # 共通ロジック
 │       │   ├── enemy.rs, boss.rs, item.rs, weapon.rs
 │       │   ├── constants.rs, util.rs

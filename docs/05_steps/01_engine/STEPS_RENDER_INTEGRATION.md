@@ -164,6 +164,23 @@ pub fn start_render_thread(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
 
 ---
 
+## 1.7.7 game_window クレートの廃止（実施）
+
+**実施日**: 2026-02-25
+
+### 実施内容
+
+- `native/Cargo.toml` の workspace members から `game_window` を削除。
+- `native/game_window/` 配下のクレート本体（`Cargo.toml`, `src/main.rs`, `renderer`, `asset`, `audio`）を削除。
+- `bin/start.bat` を `cargo run -p game_window` から `iex -S mix` 起動へ変更（統合起動）。
+- `README.md` の起動手順を `iex -S mix` に更新。
+
+### 補足
+
+- このリポジトリには現時点で `.github/workflows/` が存在しないため、CI 設定の更新対象はなし。
+
+---
+
 ## 最終アーキテクチャ（1.7 完了後）
 
 ### プロセス・スレッド構成

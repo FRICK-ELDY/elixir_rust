@@ -7,7 +7,7 @@
 
 import Config
 
-# 1.6.8: Rustler NIF ビルドパス（3 クレート構成で game_native を明示）
+# 1.6.8: Rustler NIF ビルドパス（1.7.7 で game_window 廃止後も game_native を明示）
 # プロジェクトルートからの相対パス。workspace 化後も Mix が native/game_native を正しくビルドするよう path を指定する。
 config :game, App.NifBridge,
   path: "native/game_native"
@@ -23,5 +23,5 @@ config :game, map: :plain
 
 # 1.4.8: ゲーム別アセットパス
 # ゲームの assets_path/0 で上書き可能。未指定時は current ゲームの assets_path を使用。
-# GAME_ASSETS_ID 環境変数として game_window 等に渡され、assets/{id}/ を参照する。
+# GAME_ASSETS_ID 環境変数として game_native 等に渡され、assets/{id}/ を参照する。
 # config :game, assets_path: "vampire_survivor"
