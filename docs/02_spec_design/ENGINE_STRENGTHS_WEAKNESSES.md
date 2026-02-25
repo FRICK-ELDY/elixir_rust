@@ -63,7 +63,7 @@
 
 | 項目 | 説明 |
 |------|------|
-| **言語特性の役割分担** | Elixir: イベント駆動の司令塔・ウェーブ制御・シーン管理・EventBus。Rust: tick 駆動・物理演算・描画・音声。GameEvents は [Step 41](../05_steps/STEPS_EXTENSION.md#3-step-41-gameloop-rust-移行) で Rust 移行予定。 |
+| **言語特性の役割分担** | Elixir: イベント駆動の司令塔・ウェーブ制御・シーン管理・EventBus。Rust: tick 駆動・物理演算・描画・音声。GameEvents は [Step 41](../05_steps/01_engine/STEPS_EXTENSION.md#3-step-41-gameloop-rust-移行) で Rust 移行予定。 |
 | **シーン管理** | Playing, LevelUp, BossAlert, GameOver を独立シーンとして分離。`SceneBehaviour` で init/update を定義。 |
 | **core モジュール統合** | `main.rs` と `lib.rs` の重複を解消。定数・武器・敵・物理を `native/game_native/src/core/` に集約。 |
 | **ホットリロードの可能性** | Elixir コードは BEAM VM 上で動的更新が可能。ゲームロジックの変更を実行中に反映できる潜在能力。 |
@@ -87,7 +87,7 @@
 
 | 課題 | 説明 | 対応状況 |
 |------|------|----------|
-| **60Hz ゲームループのジッター** | `Process.send_after/3` は Erlang スケジューラ依存で ±数 ms のジッターが発生。高精度タイマーが必要なゲーム（リズムゲーム等）には不向き。 | **対応予定**: [Step 41](../05_steps/STEPS_EXTENSION.md#3-step-41-gameloop-rust-移行) で GameEvents を Rust に移行し、高精度タイマー（`std::time::Instant`）で固定間隔 tick を実現 |
+| **60Hz ゲームループのジッター** | `Process.send_after/3` は Erlang スケジューラ依存で ±数 ms のジッターが発生。高精度タイマーが必要なゲーム（リズムゲーム等）には不向き。 | **対応予定**: [Step 41](../05_steps/01_engine/STEPS_EXTENSION.md#3-step-41-gameloop-rust-移行) で GameEvents を Rust に移行し、高精度タイマー（`std::time::Instant`）で固定間隔 tick を実現 |
 | **NIF 呼び出しオーバーヘッド** | Elixir → Rust の NIF 呼び出しごとに Erlang Term ↔ Rust 型変換コストが発生。`get_frame_metadata` で対策済みだが、依然として NIF 境界でのコピーは存在。 | 軽減済み |
 
 ### 3.2 開発体験・保守性面
@@ -103,7 +103,7 @@
 | 課題 | 説明 |
 |------|------|
 | **完全な ECS フレームワークではない** | SoA を手動実装。bevy_ecs や hecs のような汎用 ECS ではない。エンティティ間の親子・グループ関係やコンポーネントの動的追加はない。 |
-| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし。Ghost（壁すり抜け）は現状未実装（マップ・障害物システムが必要、[Step 42](../05_steps/STEPS_EXTENSION.md#4-step-42-マップ障害物システム) で対応予定）。 |
+| **マップ・タイル管理がない** | 無限平面のみ。障害物・壁・タイルマップの概念なし。Ghost（壁すり抜け）は現状未実装（マップ・障害物システムが必要、[Step 42](../05_steps/01_engine/STEPS_EXTENSION.md#4-step-42-マップ障害物システム) で対応予定）。 |
 | **セーブ・ロード機能がない** | ゲーム状態の永続化なし。ハイスコア・実績の保存ができない。 |
 | **未実装仕様** | Skeleton, Ghost, Garlic 等は仕様書にあれど未実装（ゲームコンテンツの追加としてスコープ外判断可能）。 |
 | **UI/UX の制限** | egui 即時モードは複雑なアニメーション付き UI に不向き。リッチテキスト・多言語対応は限定的。 |
@@ -173,7 +173,7 @@
 
 | 優先度 | 項目 | 備考 |
 |--------|------|------|
-| **高** | **ゲームループの Rust 移行** | [Step 41](../05_steps/STEPS_EXTENSION.md#2-step-41-ゲームループの-rust-移行高精度-60-hz) で実施。精度確保のため最優先 |
+| **高** | **ゲームループの Rust 移行** | [Step 41](../05_steps/01_engine/STEPS_EXTENSION.md#2-step-41-ゲームループの-rust-移行高精度-60-hz) で実施。精度確保のため最優先 |
 | 中 | マップ・障害物システム | ゲーム要件に応じて検討 |
 | 中 | セーブ・ロード | ハイスコア永続化が必要なら検討 |
 | 低 | マルチプレイ対応 | サバイバー系ではスコープ外 |
@@ -194,6 +194,6 @@
 | [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) | 元の詳細分析（アーカイブ） |
 | [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) | コードベース準拠の再評価版 |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外項目 |
-| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 41（ゲームループの Rust 移行）含む実装ロードマップ |
+| [STEPS_EXTENSION.md](../05_steps/01_engine/STEPS_EXTENSION.md) | Step 41（ゲームループの Rust 移行）含む実装ロードマップ |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様書 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計 |

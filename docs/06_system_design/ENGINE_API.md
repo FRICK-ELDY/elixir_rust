@@ -1,7 +1,7 @@
 # エンジン API 設計（安定化）
 
 **対象**: Step 37（エンジン API の安定化）  
-**根拠**: [STEPS_GENERALIZATION.md](../05_steps/STEPS_GENERALIZATION.md)、[GAME_INTERFACE.md](./GAME_INTERFACE.md)
+**根拠**: [STEPS_GENERALIZATION.md](../05_steps/01_engine/STEPS_GENERALIZATION.md)、[GAME_INTERFACE.md](./GAME_INTERFACE.md)
 
 ---
 
@@ -156,7 +156,7 @@ end
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_GENERALIZATION.md](../05_steps/STEPS_GENERALIZATION.md) | Step 37 の位置づけ |
+| [STEPS_GENERALIZATION.md](../05_steps/01_engine/STEPS_GENERALIZATION.md) | Step 37 の位置づけ |
 | [GAME_INTERFACE.md](./GAME_INTERFACE.md) | ゲームがエンジンに提供する behaviour |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担 |
 | [MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md) | Step 44 Phoenix Channels 連携 |

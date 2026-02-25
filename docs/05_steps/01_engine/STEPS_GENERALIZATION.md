@@ -1,8 +1,8 @@
 # 1.4 汎用化（全9項）
 
-**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.4 節。
+**所属**: [STEPS_ALL.md](../STEPS_ALL.md) 1章 エンジン構築 の 1.4 節。
 
-**根拠**: [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
+**根拠**: [ENGINE_ANALYSIS_REVISED.md](../../02_spec_design/ENGINE_ANALYSIS_REVISED.md)、[ELIXIR_RUST_DIVISION.md](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
 **方針**: 現状のヴァンサバ実装を活かしつつ、**他のゲームでも使える汎用エンジン**へ段階的に移行する
 
 ---
@@ -215,8 +215,8 @@
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_ALL.md](./STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
-| [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 既存の優先度ロードマップ（P1〜P7, G1〜G3, Q1〜Q2） |
-| [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) | エンジン現状の評価 |
-| [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外・サポートしない項目 |
-| [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計（1.4.8 で拡張） |
+| [STEPS_ALL.md](../STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
+| [PRIORITY_STEPS.md](../../04_roadmap/PRIORITY_STEPS.md) | 既存の優先度ロードマップ（P1〜P7, G1〜G3, Q1〜Q2） |
+| [ENGINE_ANALYSIS_REVISED.md](../../02_spec_design/ENGINE_ANALYSIS_REVISED.md) | エンジン現状の評価 |
+| [ELIXIR_RUST_DIVISION.md](../../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外・サポートしない項目 |
+| [ASSET_MANAGEMENT.md](../../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計（1.4.8 で拡張） |

@@ -12,7 +12,7 @@
 | rustc-hash | Spatial Hash（衝突判定） | [WHY_PHYSICS/WHY_rustc_hash.md](./WHY_PHYSICS/WHY_rustc_hash.md) |
 | rodio | 音声再生（BGM/SE） | [WHY_AUDIO/WHY_rodio.md](./WHY_AUDIO/WHY_rodio.md) |
 | serde, bincode | セーブ/ロード | [WHY_SERIALIZE/](./WHY_SERIALIZE/WHY_serde.md) |
-| log, env_logger | NIF デバッグ（RUST_LOG、パニック時のバックトレース） | [STEPS_EXTENSION.md §6 Step 45](../../05_steps/STEPS_EXTENSION.md#6-step-45-デバッグ支援nif) |
+| log, env_logger | NIF デバッグ（RUST_LOG、パニック時のバックトレース） | [STEPS_EXTENSION.md §6 Step 45](../../05_steps/01_engine/STEPS_EXTENSION.md#6-step-45-デバッグ支援nif) |
 
 ---
 
@@ -147,4 +147,4 @@ Elixir の生産性と Rust の性能を両立する、現時点での最良の�
 | [WHY_RAYON.md](./WHY_RAYON.md) | rayon |
 | [WHY_ELIXIR/WHY_ELIXIR.md](../WHY_ELIXIR/WHY_ELIXIR.md) | Elixir 採用の技術的根拠 |
 | [ELIXIR_RUST_DIVISION.md](../ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担方針 |
-| [STEPS_EXTENSION.md §6 Step 45](../../05_steps/STEPS_EXTENSION.md#6-step-45-デバッグ支援nif) | log / env_logger（NIF デバッグ支援） |
+| [STEPS_EXTENSION.md §6 Step 45](../../05_steps/01_engine/STEPS_EXTENSION.md#6-step-45-デバッグ支援nif) | log / env_logger（NIF デバッグ支援） |

@@ -219,7 +219,7 @@
 |-------------|------|
 | [ENGINE_STRENGTHS_WEAKNESSES.md](./ENGINE_STRENGTHS_WEAKNESSES.md) | 強み・弱みの詳細比較、他エンジンとの比較 |
 | [ENGINE_ANALYSIS_REVISED.md](./ENGINE_ANALYSIS_REVISED.md) | コードベース準拠の再評価 |
-| [STEPS_EXTENSION.md](../05_steps/STEPS_EXTENSION.md) | Step 40〜47 の元ドキュメント |
-| [STEPS_ALL.md](../05_steps/STEPS_ALL.md) | Step 1〜61 の一覧と依存関係 |
-| [STEPS_3D.md](../05_steps/STEPS_3D.md) | Step 48〜54 3D・三人称 FPS |
-| [STEPS_SLOT_COMPONENT.md](../05_steps/STEPS_SLOT_COMPONENT.md) | Step 55〜61 Slot・コンポーネント |
+| [STEPS_EXTENSION.md](../05_steps/01_engine/STEPS_EXTENSION.md) | 1.5 拡張の元ドキュメント |
+| [STEPS_ALL.md](../05_steps/STEPS_ALL.md) | 1章〜3章の一覧と依存関係 |
+| [STEPS_3D.md](../05_steps/01_engine/STEPS_3D.md) | 1.9 3D・三人称 FPS |
+| [STEPS_SLOT_COMPONENT.md](../05_steps/01_engine/STEPS_SLOT_COMPONENT.md) | 1.10 Slot・コンポーネント |

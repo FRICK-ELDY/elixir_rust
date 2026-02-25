@@ -4,8 +4,9 @@
 **詳細な手順・コード例**は各節の元ドキュメントを参照すること。
 
 **構成**:
-- **1. ゲームエンジン基礎**: 1.1.1〜1.5.7 を、1. 基礎〜5. 拡張の**項**として配置する。
-- **2. ゲームエンジン応用**: Rust lib 分割・2D 固め・EOS・3D・Slot など、今後の Step を**節・項**として決めていく。
+- **1. エンジン構築**: 1.1 基礎〜1.10 Slot・コンポーネントまで、ゲームエンジン本体の実装
+- **2. エディタ構築**: ビジュアルエディタの実装（詳細は今後決める）
+- **3. サーバー構築**: Elixir/Phoenix バックエンド・EOS 等のオンライン化（詳細は今後決める）
 
 **表記例**: **1.1.1** = 1章 1節 1項。各節の表では、文脈が明らかな場合に「○.」と略記する。
 
@@ -15,22 +16,24 @@
 
 | 章 | 節 | 項 | 内容 |
 |----|-----|-----|------|
-| **1. ゲームエンジン基礎** | 1. 基礎 | 全15項 | 環境構築〜ゲームオーバー・リスタートまで「動くゲーム」 |
+| **1. エンジン構築** | 1. 基礎 | 全15項 | 環境構築〜ゲームオーバー・リスタートまで「動くゲーム」 |
 |  | 2. クオリティ | 全10項 | ヒットエフェクト〜ボス・バランスで「楽しめるゲーム」 |
 |  | 3. パフォーマンス | 全6項 | イベントバス・ETS・フリーリスト・Spatial Hash・Telemetry・SIMD |
 |  | 4. 汎用化 | 全9項 | Game インターフェース・シーン汎用化・ゲーム分離・2 つ目のゲーム土台 |
 |  | 5. 拡張 | 全7項 | ゲームループ Rust 移行・マップ・セーブ・マルチ・デバッグ・リネーム・SPEC コンテンツ |
-| **2. ゲームエンジン応用** | 1. Rust lib 分割・整理 | 全6項 | lib.rs の分割・フォルダ構成。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./STEPS_RUST_LIB.md)） |
-|  | 2. 2Dゲームの固め | — | 2D サバイバーを仕様・バランス・品質として固める |
-|  | 3. EOS 実装 | — | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)） |
-|  | 4. 3D・三人称FPS | 全7項 | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./STEPS_3D.md)） |
-|  | 5. Slot・コンポーネント | 全7項 | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md)） |
+|  | 6. Rust lib 分割・整理 | 全6項 | lib.rs の分割・フォルダ構成。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
+|  | 7. 2Dゲームの固め | — | 2D サバイバーを仕様・バランス・品質として固める |
+|  | 8. EOS 実装 | — | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)） |
+|  | 9. 3D・三人称FPS | 全7項 | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)） |
+|  | 10. Slot・コンポーネント | 全7項 | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)） |
+| **2. エディタ構築** | — | — | ビジュアルエディタの実装。項は今後決める |
+| **3. サーバー構築** | — | — | Elixir/Phoenix バックエンド・オンライン化。項は今後決める |
 
 ---
 
-## 1. ゲームエンジン基礎
+## 1. エンジン構築
 
-1.1.1〜1.5.7 を、1. 基礎〜5. 拡張の**項**として配置する。
+1.1.1〜1.10.7 を、1. 基礎〜10. Slot・コンポーネントの**項**として配置する。
 
 ---
 
@@ -54,7 +57,7 @@
 | 14. | レベルアップ・武器選択 | |
 | 15. | ゲームオーバー・リスタート | |
 
-**詳細**: [STEPS_BASE.md](./STEPS_BASE.md)
+**詳細**: [STEPS_BASE.md](./01_engine/STEPS_BASE.md)
 
 ---
 
@@ -73,7 +76,7 @@
 | 9. | ボスエネミー |
 | 10. | バランス調整・ポリッシュ |
 
-**詳細**: [STEPS_QUALITY.md](./STEPS_QUALITY.md)
+**詳細**: [STEPS_QUALITY.md](./01_engine/STEPS_QUALITY.md)
 
 ---
 
@@ -89,8 +92,8 @@
 | 6. | SIMD AI 高速化（オプション） | P4 |
 
 **推奨順（パフォーマンス優先）**: 4. → 3. → 1. → 2. → 5. → 6.  
-**詳細**: [STEPS_PERF.md](./STEPS_PERF.md)  
-**分析・課題整理**: [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md)
+**詳細**: [STEPS_PERF.md](./01_engine/STEPS_PERF.md)  
+**分析・課題整理**: [STEPS_PERFORMANCE_ANALYSIS.md](./01_engine/STEPS_PERFORMANCE_ANALYSIS.md)
 
 ---
 
@@ -108,7 +111,7 @@
 | 8. | ゲーム別アセットパス |
 | 9. | 2 つ目のゲーム（ミニマル実装） |
 
-**詳細**: [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md)
+**詳細**: [STEPS_GENERALIZATION.md](./01_engine/STEPS_GENERALIZATION.md)
 
 ---
 
@@ -125,17 +128,11 @@
 | 7. | SPEC 未実装コンテンツ（Skeleton / Ghost / Garlic / 壁すり抜け） | 2.完了後が望ましい |
 
 **推奨順序**: 1. → 5. → 2. → 3. → 4. → 6.（2.と3.は並行可）。7.は 2.完了後が望ましい。  
-**詳細**: [STEPS_EXTENSION.md](./STEPS_EXTENSION.md)
+**詳細**: [STEPS_EXTENSION.md](./01_engine/STEPS_EXTENSION.md)
 
 ---
 
-## 2. ゲームエンジン応用
-
-1章（1.1.1〜1.5.7）完了後、Rust lib 分割・2D 固め・EOS・3D・Slot など、今後の**節・項**として決めていく。
-
----
-
-### 2.1  Rust lib 分割・整理（全6項）
+### 1.6  Rust lib 分割・整理（全6項）
 
 | 項 | 目標 |
 |-----|------|
@@ -146,29 +143,29 @@
 | 5. | `lib.rs` のスリム化と動作確認 |
 | 6. | ドキュメント更新 |
 
-> 3D・Slot の**前**に実施。1章完了後に着手する。
+> 3D・Slot の**前**に実施。1.1〜1.5 完了後に着手する。
 
-**詳細**: [STEPS_RUST_LIB.md](./STEPS_RUST_LIB.md)
-
----
-
-### 2.2  2Dゲームの固め
-
-2.1 完了後、2D サバイバーを仕様・バランス・品質として固める。項は今後決める。
+**詳細**: [STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)
 
 ---
 
-### 2.3 EOS 実装
+### 1.7  2Dゲームの固め
 
-2.2 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
+1.6 完了後、2D サバイバーを仕様・バランス・品質として固める。項は今後決める。
+
+---
+
+### 1.8 EOS 実装
+
+1.7 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
 
 **詳細**: [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)
 
 ---
 
-### 2.4  3D・三人称 FPS（全7項・据え置き）
+### 1.9  3D・三人称 FPS（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。2.1〜2.3 の後に再検討する。
+> **据え置き**: 本節は当面保留。1.6〜1.8 の後に再検討する。
 
 | 項 | 目標 | 備考 |
 |-----|------|------|
@@ -180,13 +177,13 @@
 | 6. | 敵の 3D スポーン・AI・衝突 | 敵配置・Chase AI・ダメージ・経験値 |
 | 7. | UI・アセット流用・ポリッシュ | HUD・BGM/SE 流用・ゲーム選択統合 |
 
-**詳細**: [STEPS_3D.md](./STEPS_3D.md)
+**詳細**: [STEPS_3D.md](./01_engine/STEPS_3D.md)
 
 ---
 
-### 2.5 Slot・コンポーネント（全7項・据え置き）
+### 1.10 Slot・コンポーネント（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。2.4 完了後に実施する。
+> **据え置き**: 本節は当面保留。1.9 完了後に実施する。
 
 | 項 | 目標 | 備考 |
 |-----|------|------|
@@ -198,7 +195,20 @@
 | 6. | Prefab とインスタンス | 再利用可能な Slot サブツリー・インスタンス化とオーバーライド |
 | 7. | ビジュアルエディタ向け基盤 | コンポーネントスキーマ公開・選択・Undo の検討と最小実装 |
 
-**詳細**: [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md)
+**詳細**: [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)
+
+---
+
+## 2. エディタ構築
+
+1章（エンジン構築）完了後、ビジュアルエディタの実装に着手する。節・項は今後決める。
+
+---
+
+## 3. サーバー構築
+
+1章完了後、Elixir/Phoenix バックエンド・オンライン化を実装する。節・項は今後決める。  
+**参照**: [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)、[SERVER_DESIGN.md](../06_system_design/SERVER_DESIGN.md)
 
 ---
 
@@ -209,27 +219,36 @@
 - **1.3（全6項）**: 1.2 完了後。4. / 3. を先にするとパフォーマンス効果が大きい
 - **1.4（全9項）**: 1.3 完了後。汎用化は 1.→…→9. の順が無難
 - **1.5（全7項）**: 1.4 完了後。1.を優先すると他項の土台ができる。6.は 1.完了後であればいつでも実施可。7.は 2.完了後が望ましい
-- **2.1**: 1章完了後。3D・Slot の**前**に実施
-- **2.2**: 2.1 完了後。2D の仕様・バランス・品質を固める
-- **2.3**: 2.2 完了後。EOS で友達・ロビー・セッションを実装
-- **2.4（据え置き）**: 上記が一区切りついた後に再検討
-- **2.5（据え置き）**: 2.4 完了後
+- **1.6**: 1.5 完了後。3D・Slot の**前**に実施
+- **1.7**: 1.6 完了後。2D の仕様・バランス・品質を固める
+- **1.8**: 1.7 完了後。EOS で友達・ロビー・セッションを実装
+- **1.9（据え置き）**: 上記が一区切りついた後に再検討
+- **1.10（据え置き）**: 1.9 完了後
+- **2. エディタ構築**: 1章完了後
+- **3. サーバー構築**: 1章完了後
 
 ---
 
 ## 関連ドキュメント
 
+### 1章 エンジン構築
+
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_BASE.md](./STEPS_BASE.md) | 1.1（全15項）の詳細手順・コード |
-| [STEPS_QUALITY.md](./STEPS_QUALITY.md) | 1.2（全10項）の詳細手順・コード |
-| [STEPS_PERF.md](./STEPS_PERF.md) | 1.3（全6項）の詳細手順・コード |
-| [STEPS_PERFORMANCE_ANALYSIS.md](./STEPS_PERFORMANCE_ANALYSIS.md) | パフォーマンス課題の分析・提案 |
-| [STEPS_EXTENSION.md](./STEPS_EXTENSION.md) | 1.5（全7項）の詳細 |
-| [STEPS_GENERALIZATION.md](./STEPS_GENERALIZATION.md) | 1.4（全9項）汎用化の詳細 |
-| [STEPS_RUST_LIB.md](./STEPS_RUST_LIB.md) | 2.1 Rust lib 分割・フォルダ構成検討 |
-| [STEPS_3D.md](./STEPS_3D.md) | 2.4（全7項）3D・三人称 FPS の詳細（**据え置き**） |
-| [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md) | 2.5（全7項）Slot・コンポーネントの詳細（**据え置き**） |
-| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 2.3 EOS 実装 |
+| [STEPS_BASE.md](./01_engine/STEPS_BASE.md) | 1.1（全15項）の詳細手順・コード |
+| [STEPS_QUALITY.md](./01_engine/STEPS_QUALITY.md) | 1.2（全10項）の詳細手順・コード |
+| [STEPS_PERF.md](./01_engine/STEPS_PERF.md) | 1.3（全6項）の詳細手順・コード |
+| [STEPS_PERFORMANCE_ANALYSIS.md](./01_engine/STEPS_PERFORMANCE_ANALYSIS.md) | パフォーマンス課題の分析・提案 |
+| [STEPS_EXTENSION.md](./01_engine/STEPS_EXTENSION.md) | 1.5（全7項）の詳細 |
+| [STEPS_GENERALIZATION.md](./01_engine/STEPS_GENERALIZATION.md) | 1.4（全9項）汎用化の詳細 |
+| [STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md) | 1.6 Rust lib 分割・フォルダ構成検討 |
+| [STEPS_3D.md](./01_engine/STEPS_3D.md) | 1.9（全7項）3D・三人称 FPS の詳細（**据え置き**） |
+| [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md) | 1.10（全7項）Slot・コンポーネントの詳細（**据え置き**） |
+
+### 他フォルダ
+
+| ドキュメント | 用途 |
+|-------------|------|
+| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.8 EOS 実装 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 実施優先度（P1〜P7, G1〜G3） |
 | [SPEC.md](../01_setup/SPEC.md) | ゲーム仕様・技術仕様 |

@@ -1,7 +1,7 @@
 # Game インターフェース設計
 
 **対象**: Step 32（汎用ゲームエンジン化）  
-**根拠**: [STEPS_GENERALIZATION.md](../05_steps/STEPS_GENERALIZATION.md)、[ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)
+**根拠**: [STEPS_GENERALIZATION.md](../05_steps/01_engine/STEPS_GENERALIZATION.md)、[ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)
 
 > **エンジン名前空間**: 本文では **Engine** を使用する。`Engine.Game` で「Game」の重複を避けつつ、エンジンとゲームの境界を明確にする。
 
@@ -196,6 +196,6 @@ end
 
 | ドキュメント | 用途 |
 |-------------|------|
-| [STEPS_GENERALIZATION.md](../05_steps/STEPS_GENERALIZATION.md) | Step 32〜40 のロードマップ |
+| [STEPS_GENERALIZATION.md](../05_steps/01_engine/STEPS_GENERALIZATION.md) | Step 32〜40 のロードマップ |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担 |
 | [ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md) | アセット管理（Step 39 でゲーム別パス） |

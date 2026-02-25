@@ -148,5 +148,5 @@
 | [ENGINE_ANALYSIS.md](./ENGINE_ANALYSIS.md) | 元の分析（アーカイブ） |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担方針、スコープ外・サポートしない項目 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 実装済み項目の参照 |
-| [STEPS_PERF.md](../05_steps/STEPS_PERF.md) | 実装の詳細手順 |
+| [STEPS_PERF.md](../05_steps/01_engine/STEPS_PERF.md) | 実装の詳細手順 |
 | [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計 |
