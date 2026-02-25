@@ -28,8 +28,8 @@ static ENEMY_TABLE: [EnemyParams; 5] = [
     EnemyParams { max_hp: 30.0,   speed: 80.0,  radius: 20.0, exp_reward: 5,  damage_per_sec: 20.0, render_kind: 1, particle_color: [1.0, 0.5, 0.1, 1.0] },   // Slime
     EnemyParams { max_hp: 15.0,   speed: 160.0, radius: 12.0, exp_reward: 3,  damage_per_sec: 10.0, render_kind: 2, particle_color: [0.7, 0.2, 0.9, 1.0] },   // Bat
     EnemyParams { max_hp: 150.0,  speed: 40.0,  radius: 32.0, exp_reward: 20, damage_per_sec: 40.0, render_kind: 3, particle_color: [0.6, 0.6, 0.6, 1.0] },   // Golem
-    EnemyParams { max_hp: 60.0,   speed: 60.0,  radius: 22.0, exp_reward: 10, damage_per_sec: 15.0, render_kind: 5, particle_color: [0.9, 0.85, 0.7, 1.0] },  // Skeleton
-    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] },   // Ghost
+    EnemyParams { max_hp: 60.0,   speed: 60.0,  radius: 22.0, exp_reward: 10, damage_per_sec: 15.0, render_kind: 5, particle_color: [0.9, 0.85, 0.7, 1.0] },  // Skeleton（高HP）
+    EnemyParams { max_hp: 40.0,   speed: 100.0, radius: 16.0, exp_reward: 8,  damage_per_sec: 12.0, render_kind: 4, particle_color: [0.5, 0.5, 1.0, 0.8] },   // Ghost（壁すり抜け）
 ];
 
 impl EnemyParams {

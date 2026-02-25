@@ -13,8 +13,11 @@ pub enum WeaponKind {
     MagicWand,
     Axe,
     Cross,
+    /// 近距離扇状薙ぎ払い（弾丸を生成しない直接判定）
     Whip,
+    /// 敵を貫通する炎弾
     Fireball,
+    /// 最近接から連鎖する電撃（最大 chain_count 体）
     Lightning,
 }
 

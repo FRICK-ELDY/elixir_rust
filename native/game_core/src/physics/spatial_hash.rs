@@ -32,6 +32,8 @@ impl SpatialHash {
         )
     }
 
+    /// 指定円の範囲内にあるエンティティ ID を `buf` に書き込む（アロケーションなし）。
+    /// 呼び出し前に `buf` をクリアする必要はない（内部で `clear()` する）。
     pub fn query_nearby_into(&self, x: f32, y: f32, radius: f32, buf: &mut Vec<usize>) {
         buf.clear();
         let r = (radius / self.cell_size).ceil() as i32;
@@ -46,6 +48,7 @@ impl SpatialHash {
         }
     }
 
+    /// 後方互換用（`query_nearby_into` への移行が完了したら削除可）
     pub fn query_nearby(&self, x: f32, y: f32, radius: f32) -> Vec<usize> {
         let mut buf = Vec::new();
         self.query_nearby_into(x, y, radius, &mut buf);
