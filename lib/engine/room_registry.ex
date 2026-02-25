@@ -1,6 +1,6 @@
 defmodule Engine.RoomRegistry do
   @moduledoc """
-  Step 44: ルーム ID → GameEvents pid のマッピング用 Registry。
+  1.5.4: ルーム ID → GameEvents pid のマッピング用 Registry。
 
   複数ルーム運用時、`Engine.RoomSupervisor` が起動した GameEvents を
   この Registry に登録する。Phoenix Channel 等からルーム指定で

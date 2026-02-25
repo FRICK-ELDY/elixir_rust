@@ -1,6 +1,6 @@
 defmodule Engine.Stats do
   @moduledoc """
-  Step 25: ゲームセッション統計をリアルタイム収集する GenServer。
+  1.2.10: ゲームセッション統計をリアルタイム収集する GenServer。
 
   Elixir の強みを活かし、ゲームロジック（Rust NIF）とは完全に分離した
   プロセスで統計を管理する。クラッシュしても Supervisor が再起動し、

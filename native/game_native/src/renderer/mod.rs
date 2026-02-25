@@ -34,7 +34,7 @@ pub struct SpriteInstance {
     pub color_tint: [f32; 4], // RGBA 乗算カラー
 }
 
-// ─── アトラス UV 定数（Step 24: 1600x64 px ボスエネミー対応アトラス）──
+// ─── アトラス UV 定数（1.2.9: 1600x64 px ボスエネミー対応アトラス）──
 // アニメーションキャラクター（各 64x64、複数フレーム）:
 //   [   0.. 255] プレイヤー歩行 4 フレーム
 //   [ 256.. 511] Slime バウンス 4 フレーム
@@ -49,7 +49,7 @@ pub struct SpriteInstance {
 //   [1088..1151] Fireball
 //   [1152..1215] Lightning
 //   [1216..1279] Whip
-// Step 24: ボスエネミー（各 64x64）:
+// 1.2.9: ボスエネミー（各 64x64）:
 //   [1280..1343] Slime King
 //   [1344..1407] Bat Lord
 //   [1408..1471] Stone Golem
@@ -101,7 +101,7 @@ pub fn lightning_bullet_uv() -> ([f32; 2], [f32; 2]) {
 pub fn whip_uv() -> ([f32; 2], [f32; 2]) {
     ([1216.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
-/// Step 24: ボス UV
+/// 1.2.9: ボス UV
 pub fn slime_king_uv() -> ([f32; 2], [f32; 2]) {
     ([1280.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
@@ -133,7 +133,7 @@ impl ScreenUniform {
     }
 }
 
-// ─── カメラ Uniform（Step 20: プレイヤー追従スクロール）──────
+// ─── カメラ Uniform（1.2.5: プレイヤー追従スクロール）──────
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -154,7 +154,7 @@ const MAX_INSTANCES: usize = 14502;
 
 // 敵タイプ別のスプライトサイズ（px）
 // kind: 1=slime(40px), 2=bat(24px), 3=golem(64px), 4=ghost(32px), 5=skeleton(40px)
-// Step 24: boss kind: 11=SlimeKing(96px), 12=BatLord(96px), 13=StoneGolem(128px)
+// 1.2.9: boss kind: 11=SlimeKing(96px), 12=BatLord(96px), 13=StoneGolem(128px)
 fn enemy_sprite_size(kind: u8) -> f32 {
     match kind {
         2  => 24.0,   // Bat: 小さい
@@ -177,7 +177,7 @@ fn ghost_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
     bat_anim_uv(frame)
 }
 
-/// Step 23/24: アニメーションフレームを考慮した敵 UV（ボスは静止スプライト）
+/// 1.2.8/1.2.9: アニメーションフレームを考慮した敵 UV（ボスは静止スプライト）
 fn enemy_anim_uv(kind: u8, frame: u8) -> ([f32; 2], [f32; 2]) {
     match kind {
         2  => bat_anim_uv(frame),
@@ -213,9 +213,9 @@ pub struct HudData {
     pub item_count:       usize,
     pub camera_x:         f32,
     pub camera_y:         f32,
-    /// Step 24: ボス情報（ボスが存在しない場合は None）
+    /// 1.2.9: ボス情報（ボスが存在しない場合は None）
     pub boss_info:        Option<BossHudInfo>,
-    // Step 25
+    // 1.2.10
     pub phase:            GamePhase,
     /// 画面フラッシュのアルファ値（0.0=なし, 0.5=最大）
     pub screen_flash_alpha: f32,
@@ -224,7 +224,7 @@ pub struct HudData {
     pub kill_count:       u32,
 }
 
-/// Step 24: HUD に表示するボス情報
+/// 1.2.9: HUD に表示するボス情報
 #[derive(Clone)]
 pub struct BossHudInfo {
     pub name:    String,
@@ -247,7 +247,7 @@ impl Default for HudData {
     }
 }
 
-/// Step 43: セーブ・ロード用 UI 状態
+/// 1.5.3: セーブ・ロード用 UI 状態
 #[derive(Default)]
 pub struct GameUiState {
     /// トースト表示 (メッセージ, 残り秒数)
@@ -274,7 +274,7 @@ pub struct Renderer {
     bind_group:           wgpu::BindGroup,
     screen_uniform_buf:   wgpu::Buffer,
     screen_bind_group:    wgpu::BindGroup,
-    // Step 20: カメラ Uniform
+    // 1.2.5: カメラ Uniform
     camera_uniform_buf:   wgpu::Buffer,
     camera_bind_group:    wgpu::BindGroup,
     // egui
@@ -431,7 +431,7 @@ impl Renderer {
             }],
         });
 
-        // ─── バインドグループ group(2): カメラ Uniform（Step 20）─
+        // ─── バインドグループ group(2): カメラ Uniform（1.2.5）─
         let camera_uniform = CameraUniform::new(0.0, 0.0);
         let camera_uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label:    Some("Camera Uniform Buffer"),
@@ -594,8 +594,8 @@ impl Renderer {
     /// render_data: [(x, y, kind, anim_frame)] kind: 0=player, 1=slime, 2=bat, 3=golem, 4=bullet
     /// particle_data: [(x, y, r, g, b, alpha, size)]
     /// item_data: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
-    /// obstacle_data: [(x, y, radius, kind)] kind: 0=木, 1=岩（Step 42）
-    /// camera_offset: (cam_x, cam_y) カメラのワールド座標オフセット（Step 20）
+    /// obstacle_data: [(x, y, radius, kind)] kind: 0=木, 1=岩（1.5.2）
+    /// camera_offset: (cam_x, cam_y) カメラのワールド座標オフセット（1.2.5）
     pub fn update_instances(
         &mut self,
         render_data: &[(f32, f32, u8, u8)],
@@ -604,7 +604,7 @@ impl Renderer {
         obstacle_data: &[(f32, f32, f32, u8)],
         camera_offset: (f32, f32),
     ) {
-        // Step 20: カメラ Uniform を更新
+        // 1.2.5: カメラ Uniform を更新
         let cam_uniform = CameraUniform::new(camera_offset.0, camera_offset.1);
         self.queue.write_buffer(&self.camera_uniform_buf, 0, bytemuck::bytes_of(&cam_uniform));
         let (bullet_uv_off, bullet_uv_sz)           = bullet_uv();
@@ -622,7 +622,7 @@ impl Renderer {
 
         for &(x, y, kind, anim_frame) in render_data {
             let inst = match kind {
-                // Step 23: プレイヤーはアニメーションフレームに応じた UV を使用
+                // 1.2.8: プレイヤーはアニメーションフレームに応じた UV を使用
                 0 => {
                     let (uv_off, uv_sz) = player_anim_uv(anim_frame);
                     SpriteInstance {
@@ -633,7 +633,7 @@ impl Renderer {
                         color_tint: [1.0, 1.0, 1.0, 1.0],
                     }
                 }
-                // Step 23: 敵タイプ: 1=slime, 2=bat, 3=golem（アニメーションフレーム対応）
+                // 1.2.8: 敵タイプ: 1=slime, 2=bat, 3=golem（アニメーションフレーム対応）
                 1 | 2 | 3 => {
                     let sz = enemy_sprite_size(kind);
                     let (uv_off, uv_sz) = enemy_anim_uv(kind, anim_frame);
@@ -645,7 +645,7 @@ impl Renderer {
                         color_tint: [1.0, 1.0, 1.0, 1.0],
                     }
                 }
-                // Step 25: エリート敵（kind = base_kind + ELITE_RENDER_KIND_OFFSET）: 赤みがかった色で描画
+                // 1.2.10: エリート敵（kind = base_kind + ELITE_RENDER_KIND_OFFSET）: 赤みがかった色で描画
                 21 | 22 | 23 => {
                     let base = kind - ELITE_RENDER_KIND_OFFSET;
                     let sz = enemy_sprite_size(base) * ELITE_SIZE_MULTIPLIER;
@@ -690,7 +690,7 @@ impl Renderer {
                     uv_size:    whip_uv_sz,
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
-                // Step 24: ボス本体（11=SlimeKing, 12=BatLord, 13=StoneGolem）
+                // 1.2.9: ボス本体（11=SlimeKing, 12=BatLord, 13=StoneGolem）
                 11 | 12 | 13 => {
                     let sz = enemy_sprite_size(kind);
                     let (uv_off, uv_sz) = enemy_anim_uv(kind, 0);
@@ -702,7 +702,7 @@ impl Renderer {
                         color_tint: [1.0, 1.0, 1.0, 1.0],
                     }
                 }
-                // Step 24: 岩弾（Stone Golem の範囲攻撃）: 灰色の岩 28px
+                // 1.2.9: 岩弾（Stone Golem の範囲攻撃）: 灰色の岩 28px
                 14 => SpriteInstance {
                     position:   [x - 14.0, y - 14.0],
                     size:       [28.0, 28.0],
@@ -730,7 +730,7 @@ impl Renderer {
             });
         }
 
-        // Step 42: 障害物を描画（木=緑褐色、岩=灰色の円）
+        // 1.5.2: 障害物を描画（木=緑褐色、岩=灰色の円）
         for &(x, y, radius, kind) in obstacle_data {
             if instances.len() >= MAX_INSTANCES { break; }
             let (r, g, b) = if kind == 0 {
@@ -748,7 +748,7 @@ impl Renderer {
             });
         }
 
-        // Step 19: アイテムを描画
+        // 1.2.4: アイテムを描画
         for &(x, y, kind) in item_data {
             if instances.len() >= MAX_INSTANCES { break; }
             let (uv_off, uv_sz, sz) = match kind {
@@ -794,7 +794,7 @@ impl Renderer {
     }
 
     /// HUD を描画し、レベルアップ画面でボタンが押された場合は選択された武器名を返す。
-    /// Step 43: ui_state でセーブ/ロードダイアログ・トーストを制御する。
+    /// 1.5.3: ui_state でセーブ/ロードダイアログ・トーストを制御する。
     pub fn render(&mut self, window: &Window, hud: &HudData, ui_state: &mut GameUiState) -> Option<String> {
         // ─── FPS 計測 ────────────────────────────────────────────
         self.frame_count += 1;
@@ -919,7 +919,7 @@ impl Renderer {
 /// - レベルアップ選択: 武器名
 /// - タイトル画面「Start」: "__start__"
 /// - ゲームオーバー「Retry」: "__retry__"
-/// - Step 43: セーブ「__save__」/ ロード「__load__」/ ロード確認「__load_confirm__」「__load_cancel__」
+/// - 1.5.3: セーブ「__save__」/ ロード「__load__」/ ロード確認「__load_confirm__」「__load_cancel__」
 fn build_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32, ui_state: &mut GameUiState) -> Option<String> {
     // トースト更新（毎フレーム減衰）
     if let Some((_, ref mut t)) = ui_state.save_toast {
@@ -1054,7 +1054,7 @@ fn build_game_over_ui(ctx: &egui::Context, hud: &HudData) -> Option<String> {
     chosen
 }
 
-/// Step 43: ロード確認ダイアログ
+/// 1.5.3: ロード確認ダイアログ
 fn build_load_dialog(ctx: &egui::Context, ui_state: &mut GameUiState) -> Option<String> {
     let dialog_type = ui_state.load_dialog?;
     let mut result = None;
@@ -1123,7 +1123,7 @@ fn build_load_dialog(ctx: &egui::Context, ui_state: &mut GameUiState) -> Option<
     result
 }
 
-/// Step 43: セーブトースト（画面上部中央に数秒表示）
+/// 1.5.3: セーブトースト（画面上部中央に数秒表示）
 fn build_save_toast(ctx: &egui::Context, msg: &str) {
     egui::Area::new(egui::Id::new("save_toast"))
         .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 80.0))
@@ -1302,7 +1302,7 @@ fn build_playing_hud_ui(ctx: &egui::Context, hud: &HudData, fps: f32, ui_state: 
                             }
                         }
 
-                        // Step 43: セーブ・ロードボタン
+                        // 1.5.3: セーブ・ロードボタン
                         ui.separator();
                         if ui.add(
                             egui::Button::new(egui::RichText::new("Save").color(egui::Color32::from_rgb(100, 220, 100)))

@@ -1,6 +1,6 @@
 defmodule Engine.RoomSupervisor do
   @moduledoc """
-  Step 44: ルーム単位で GameEvents を管理する DynamicSupervisor。
+  1.5.4: ルーム単位で GameEvents を管理する DynamicSupervisor。
 
   各ルームは独立した GameEvents + GameWorld を持ち、互いに影響しない
   （設計オプション A: 複数 GameWorld）。

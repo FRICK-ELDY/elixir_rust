@@ -1,6 +1,6 @@
 defmodule Engine.Game do
   @moduledoc """
-  ゲームがエンジンに提供すべきインターフェース（Step 32 設計）。
+  ゲームがエンジンに提供すべきインターフェース（1.4.1 設計）。
 
   エンジンは config で指定されたこの behaviour を実装したモジュールを
   起動時に取得し、初期シーン構築・物理演算対象の判定等に利用する。
@@ -43,7 +43,7 @@ defmodule Engine.Game do
   @callback context_defaults() :: map()
 
   @doc """
-  ゲーム別アセットのサブディレクトリ（Step 39）。
+  ゲーム別アセットのサブディレクトリ（1.4.8）。
   `assets/` 直下のサブディレクトリ名を返す。
   例: `"vampire_survivor"` → `assets/vampire_survivor/sprites/atlas.png` を参照
   空文字列の場合は `assets/sprites/atlas.png` を参照（従来どおり）。

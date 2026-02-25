@@ -1,6 +1,6 @@
 defmodule Engine.MapLoader do
   @moduledoc """
-  Step 42: マップ障害物の定義。
+  1.5.2: マップ障害物の定義。
 
   マップ ID に応じて障害物リストを返す。
   各要素は `{x, y, radius, kind}` のタプル。

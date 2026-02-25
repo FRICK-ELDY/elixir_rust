@@ -91,7 +91,7 @@ impl WeaponKind {
 }
 
 // ─── WeaponSlot ───────────────────────────────────────────────
-/// Step 38: kind_id ベース（u8 ID で WeaponParams を参照）
+/// 1.4.7: kind_id ベース（u8 ID で WeaponParams を参照）
 pub struct WeaponSlot {
     pub kind_id:        u8,
     pub level:          u32,   // 1〜8

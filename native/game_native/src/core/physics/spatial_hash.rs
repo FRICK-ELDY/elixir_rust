@@ -54,7 +54,7 @@ impl SpatialHash {
     }
 }
 
-// ─── Static Obstacle（Step 42: マップ・障害物システム）───────────────
+// ─── Static Obstacle（1.5.2: マップ・障害物システム）───────────────
 /// 円形障害物（木・岩など）。kind: 0=木, 1=岩（将来: Ghost のすり抜け判定用）
 #[derive(Clone, Copy, Debug)]
 pub struct StaticObstacle {

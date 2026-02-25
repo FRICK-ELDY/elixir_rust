@@ -2,7 +2,7 @@ defmodule Engine.SaveManager do
   require Logger
 
   @moduledoc """
-  Step 43: セーブ・ロード管理。
+  1.5.3: セーブ・ロード管理。
 
   ゲーム状態の永続化（セッション中断・再開）とハイスコアの保存を行う。
   Rust の get_save_snapshot / load_save_snapshot を呼び出し、
