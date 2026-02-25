@@ -8,6 +8,7 @@ erl_crash.dump
 
 # Rust / Cargo
 native/game_native/target/
+native/target/
 
 # ビルド成果物（バイナリ・中間ファイル）を除外
 # ただし _build ディレクトリ自体は .gitkeep で保持

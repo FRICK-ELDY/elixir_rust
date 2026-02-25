@@ -1,9 +1,16 @@
 # Workspace Layout（自動生成）
 
+## elixir:app
+
 | Path | Lines | Status | Summary |
 |------|-------|--------|--------|
 | [lib/app/application.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/app/application.ex) | 29 | 🟢 | (未設定) |
 | [lib/app/nif_bridge.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/app/nif_bridge.ex) | 43 | 🟢 | (未設定) |
+| [lib/game.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/game.ex) | 5 | 🟢 | (未設定) |
+## elixir:engine
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
 | [lib/engine.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine.ex) | 260 | 🔴 | (未設定) |
 | [lib/engine/event_bus.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine/event_bus.ex) | 44 | 🟢 | (未設定) |
 | [lib/engine/frame_cache.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine/frame_cache.ex) | 40 | 🟢 | (未設定) |
@@ -19,11 +26,18 @@
 | [lib/engine/stats.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine/stats.ex) | 107 | 🟠 | (未設定) |
 | [lib/engine/stress_monitor.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine/stress_monitor.ex) | 94 | 🟡 | (未設定) |
 | [lib/engine/telemetry.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/engine/telemetry.ex) | 43 | 🟢 | (未設定) |
-| [lib/game.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/game.ex) | 5 | 🟢 | (未設定) |
+## elixir:games:mini_shooter
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
 | [lib/games/mini_shooter/game.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/mini_shooter/game.ex) | 40 | 🟢 | (未設定) |
 | [lib/games/mini_shooter/scenes/game_over.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/mini_shooter/scenes/game_over.ex) | 14 | 🟢 | (未設定) |
 | [lib/games/mini_shooter/scenes/playing.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/mini_shooter/scenes/playing.ex) | 23 | 🟢 | (未設定) |
 | [lib/games/mini_shooter/spawn_system.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/mini_shooter/spawn_system.ex) | 19 | 🟢 | (未設定) |
+## elixir:games:vampire_survivor
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
 | [lib/games/vampire_survivor/boss_system.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/boss_system.ex) | 29 | 🟢 | (未設定) |
 | [lib/games/vampire_survivor/game.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/game.ex) | 48 | 🟢 | (未設定) |
 | [lib/games/vampire_survivor/level_system.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/level_system.ex) | 34 | 🟢 | (未設定) |
@@ -32,9 +46,24 @@
 | [lib/games/vampire_survivor/scenes/level_up.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/scenes/level_up.ex) | 24 | 🟢 | (未設定) |
 | [lib/games/vampire_survivor/scenes/playing.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/scenes/playing.ex) | 76 | 🟡 | (未設定) |
 | [lib/games/vampire_survivor/spawn_system.ex](https://github.com/FRICK-ELDY/elixir_rust/blob/main/lib/games/vampire_survivor/spawn_system.ex) | 72 | 🟡 | (未設定) |
+## rust:native
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
 | [native/game_native/benches/ai_bench.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/benches/ai_bench.rs) | 45 | 🟢 | (未設定) |
 | [native/game_native/src/asset/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/asset/mod.rs) | 119 | 🟠 | (未設定) |
 | [native/game_native/src/audio.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/audio.rs) | 43 | 🟢 | (未設定) |
+| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 1841 | 🔴 | NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ |
+| [native/game_native/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/renderer/mod.rs) | 1443 | 🔴 | (未設定) |
+## rust:game
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
+| [native/game_native/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/main.rs) | 1608 | 🔴 | スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ |
+## rust:core
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
 | [native/game_native/src/core/boss.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/boss.rs) | 75 | 🟡 | (未設定) |
 | [native/game_native/src/core/constants.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/constants.rs) | 44 | 🟢 | (未設定) |
 | [native/game_native/src/core/enemy.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/enemy.rs) | 132 | 🟠 | (未設定) |
@@ -48,7 +77,8 @@
 | [native/game_native/src/core/physics/spatial_hash.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/spatial_hash.rs) | 94 | 🟡 | (未設定) |
 | [native/game_native/src/core/util.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/util.rs) | 73 | 🟡 | (未設定) |
 | [native/game_native/src/core/weapon.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/weapon.rs) | 160 | 🟠 | (未設定) |
-| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 1844 | 🔴 | NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ |
-| [native/game_native/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/main.rs) | 1611 | 🔴 | スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ |
-| [native/game_native/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/renderer/mod.rs) | 1443 | 🔴 | (未設定) |
-| [native/xtask/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/xtask/src/main.rs) | 155 | 🟠 | workspace-layout サブコマンドで WorkspaceLayout.md を生成する xtask バイナリ |
+## rust:xtask
+
+| Path | Lines | Status | Summary |
+|------|-------|--------|--------|
+| [native/xtask/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/xtask/src/main.rs) | 196 | 🟠 | workspace-layout サブコマンドで WorkspaceLayout.md を生成する xtask バイナリ |
