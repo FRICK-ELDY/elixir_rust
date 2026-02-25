@@ -1,6 +1,5 @@
 //! Path: native/xtask/src/main.rs
 //! Summary: workspace-layout サブコマンドで WorkspaceLayout.md を生成する xtask バイナリ
-//! xtask:rust:xtask
 
 use std::env;
 use std::fs;
@@ -129,12 +128,12 @@ fn analyze_file(path: &Path, ext: &str, path_str: &str) -> (u32, String, String)
 
     let raw_lines = count_effective_lines(&content, ext);
     let summary = extract_summary(&content, ext);
-    let classification = extract_classification(&content, ext).unwrap_or_else(|| derive_classification_from_path(path_str));
+    let classification = derive_classification_from_path(path_str);
 
-    // 識別用コメント（Path, Summary, xtask:）が揃っている場合は Lines から 4 を引く
-    let has_header = content.contains("Path:") && content.contains("Summary:") && content.contains("xtask:");
-    let lines = if has_header && raw_lines >= 4 {
-        raw_lines - 4
+    // 識別用コメント（Path, Summary）が揃っている場合は Lines から 3 を引く
+    let has_header = content.contains("Path:") && content.contains("Summary:");
+    let lines = if has_header && raw_lines >= 3 {
+        raw_lines - 3
     } else {
         raw_lines
     };
@@ -163,49 +162,20 @@ fn count_effective_lines(content: &str, ext: &str) -> u32 {
     n
 }
 
-fn extract_classification(content: &str, ext: &str) -> Option<String> {
-    for line in content.lines() {
-        let t = line.trim();
-        if ext == "rs" {
-            if let Some(rest) = t.strip_prefix("//!") {
-                let rest = rest.trim();
-                if rest.starts_with("xtask:") {
-                    return Some(rest.to_string());
-                }
-            }
-        } else if ext == "ex" || ext == "exs" {
-            if let Some(rest) = t.strip_prefix("#") {
-                let rest = rest.trim();
-                if rest.starts_with("xtask:") {
-                    return Some(rest.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
 fn derive_classification_from_path(path_str: &str) -> String {
-    let path_str = path_str.replace('\\', "/");
-    if path_str.starts_with("lib/app/") {
-        "xtask:elixir:app".to_string()
-    } else if path_str.starts_with("lib/engine") {
-        "xtask:elixir:engine".to_string()
-    } else if path_str.starts_with("lib/games/mini_shooter/") {
-        "xtask:elixir:games:mini_shooter".to_string()
-    } else if path_str.starts_with("lib/games/vampire_survivor/") {
-        "xtask:elixir:games:vampire_survivor".to_string()
-    } else if path_str.starts_with("native/game_native/src/core/") {
-        "xtask:rust:core".to_string()
-    } else if path_str.starts_with("native/xtask/") {
-        "xtask:rust:xtask".to_string()
-    } else if path_str.starts_with("native/") {
-        "xtask:rust:native".to_string()
-    } else if path_str.starts_with("lib/") {
-        "xtask:elixir:app".to_string()
-    } else {
-        "xtask:other".to_string()
-    }
+    let classification = match path_str {
+        s if s.starts_with("lib/app/") => "xtask:elixir:app",
+        s if s.starts_with("lib/engine") => "xtask:elixir:engine",
+        s if s.starts_with("lib/games/mini_shooter/") => "xtask:elixir:games:mini_shooter",
+        s if s.starts_with("lib/games/vampire_survivor/") => "xtask:elixir:games:vampire_survivor",
+        s if s.starts_with("native/game_native/src/core/") => "xtask:rust:core",
+        s if s.starts_with("native/game_native/src/main.rs") => "xtask:rust:game",
+        s if s.starts_with("native/xtask/") => "xtask:rust:xtask",
+        s if s.starts_with("native/") => "xtask:rust:native",
+        s if s.starts_with("lib/") => "xtask:elixir:app",
+        _ => "xtask:other",
+    };
+    classification.to_string()
 }
 
 fn extract_summary(content: &str, ext: &str) -> String {
@@ -244,7 +214,8 @@ fn format_output(entries: &[FileEntry]) -> String {
     for e in entries {
         if e.classification != current_class {
             current_class = &e.classification;
-            md.push_str(&format!("## {}\n\n", current_class));
+            let display = e.classification.strip_prefix("xtask:").unwrap_or(&e.classification);
+            md.push_str(&format!("## {}\n\n", display));
             md.push_str("| Path | Lines | Status | Summary |\n");
             md.push_str("|------|-------|--------|--------|\n");
         }

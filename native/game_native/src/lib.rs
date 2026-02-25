@@ -1,6 +1,5 @@
 //! Path: native/game_native/src/lib.rs
 //! Summary: NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ
-//! xtask:rust:native
 
 mod core;
 
