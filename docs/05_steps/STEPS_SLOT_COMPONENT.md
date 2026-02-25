@@ -1,5 +1,7 @@
 # Slot・コンポーネント設計ステップガイド（Step 55〜61）
 
+> **据え置き**: 本ステップは当面保留とする。実施順序は **Rust lib 分割・整理**（[STEPS_RUST_LIB.md](./STEPS_RUST_LIB.md)）→ **2D ゲームの固め** → **EOS 実装**（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）の後に再検討し、Step 48〜54 完了後に実施する。詳細は [STEPS_ALL.md](./STEPS_ALL.md) の全体ロードマップを参照。
+
 **目的**: [STEPS_3D.md](./STEPS_3D.md)（Step 48〜54）完了後、**Slot（transform 階層）＋ Component（カメラ・プレイヤー・敵・メッシュ等）を Elixir 側で管理**する設計に移行する。将来的なビジュアルエディタを見据え、シーングラフ・コンポーネント型・シリアライズ・Prefab の概念を実装に落とす。  
 **前提**: Step 48〜54 まで完了（3D レンダリング・三人称 FPS が動作）。本ステップで「正本を Elixir の Slot/Component に移し、Rust はシーンスナップショットを受け取って描画する」形にリファクタする。
 
