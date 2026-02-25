@@ -1178,13 +1178,21 @@ name = "game_native"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bytemuck",
  "criterion",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
  "env_logger",
  "game_core",
+ "image",
  "log",
+ "pollster",
  "rayon",
  "rustler",
  "serde",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]
