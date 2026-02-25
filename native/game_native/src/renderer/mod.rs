@@ -4,6 +4,7 @@
 
 use game_core::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
 use game_core::item::{RENDER_KIND_GEM, RENDER_KIND_MAGNET, RENDER_KIND_POTION};
+use game_core::weapon::weapon_upgrade_desc;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -69,64 +70,82 @@ pub struct SpriteInstance {
 //   [1408..1471] Stone Golem
 //   [1472..1535] 岩弾
 const ATLAS_W: f32 = 1600.0;
-const FRAME_W: f32 = 64.0;  // 1 フレームの幅（px）
+const FRAME_W: f32 = 64.0; // 1 フレームの幅（px）
+
+// アトラス X オフセット（px）— レイアウト変更時はここだけ修正
+const PLAYER_ATLAS_OFFSET_X: f32 = 0.0;
+const SLIME_ATLAS_OFFSET_X: f32 = 256.0;
+const BAT_ATLAS_OFFSET_X: f32 = 512.0;
+const GOLEM_ATLAS_OFFSET_X: f32 = 640.0;
+const BULLET_ATLAS_OFFSET_X: f32 = 768.0;
+const PARTICLE_ATLAS_OFFSET_X: f32 = 832.0;
+const GEM_ATLAS_OFFSET_X: f32 = 896.0;
+const POTION_ATLAS_OFFSET_X: f32 = 960.0;
+const MAGNET_ATLAS_OFFSET_X: f32 = 1024.0;
+const FIREBALL_ATLAS_OFFSET_X: f32 = 1088.0;
+const LIGHTNING_ATLAS_OFFSET_X: f32 = 1152.0;
+const WHIP_ATLAS_OFFSET_X: f32 = 1216.0;
+const SLIME_KING_ATLAS_OFFSET_X: f32 = 1280.0;
+const BAT_LORD_ATLAS_OFFSET_X: f32 = 1344.0;
+const STONE_GOLEM_ATLAS_OFFSET_X: f32 = 1408.0;
+const ROCK_BULLET_ATLAS_OFFSET_X: f32 = 1472.0;
 
 /// プレイヤーのアニメーション UV（フレーム番号 0〜3）
 pub fn player_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = (frame as f32) * FRAME_W;
+    let x = PLAYER_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 /// Slime のアニメーション UV（フレーム番号 0〜3）
 pub fn slime_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = 256.0 + (frame as f32) * FRAME_W;
+    let x = SLIME_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 /// Bat のアニメーション UV（フレーム番号 0〜1）
 pub fn bat_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = 512.0 + (frame as f32) * FRAME_W;
+    let x = BAT_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 /// Golem のアニメーション UV（フレーム番号 0〜1）
 pub fn golem_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = 640.0 + (frame as f32) * FRAME_W;
+    let x = GOLEM_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
-    ([768.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([BULLET_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn particle_uv() -> ([f32; 2], [f32; 2]) {
-    ([832.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([PARTICLE_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn gem_uv() -> ([f32; 2], [f32; 2]) {
-    ([896.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([GEM_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn potion_uv() -> ([f32; 2], [f32; 2]) {
-    ([960.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([POTION_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn magnet_uv() -> ([f32; 2], [f32; 2]) {
-    ([1024.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([MAGNET_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn fireball_uv() -> ([f32; 2], [f32; 2]) {
-    ([1088.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([FIREBALL_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn lightning_bullet_uv() -> ([f32; 2], [f32; 2]) {
-    ([1152.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([LIGHTNING_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn whip_uv() -> ([f32; 2], [f32; 2]) {
-    ([1216.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([WHIP_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 /// 1.2.9: ボス UV
 pub fn slime_king_uv() -> ([f32; 2], [f32; 2]) {
-    ([1280.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([SLIME_KING_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn bat_lord_uv() -> ([f32; 2], [f32; 2]) {
-    ([1344.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([BAT_LORD_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn stone_golem_uv() -> ([f32; 2], [f32; 2]) {
-    ([1408.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([STONE_GOLEM_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn rock_bullet_uv() -> ([f32; 2], [f32; 2]) {
-    ([1472.0 / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
+    ([ROCK_BULLET_ATLAS_OFFSET_X / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 
 // ─── 画面サイズ Uniform ────────────────────────────────────────
@@ -673,7 +692,7 @@ impl Renderer {
                     }
                 }
                 // 通常弾（MagicWand / Axe / Cross）: 黄色い円 16px
-                4 => SpriteInstance {
+                crate::BULLET_KIND_NORMAL => SpriteInstance {
                     position:   [x - 8.0, y - 8.0],
                     size:       [16.0, 16.0],
                     uv_offset:  bullet_uv_off,
@@ -681,7 +700,7 @@ impl Renderer {
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
                 // Fireball: 赤橙の炎球 22px（通常弾より大きめ）
-                8 => SpriteInstance {
+                crate::BULLET_KIND_FIREBALL => SpriteInstance {
                     position:   [x - 11.0, y - 11.0],
                     size:       [22.0, 22.0],
                     uv_offset:  fireball_uv_off,
@@ -689,7 +708,7 @@ impl Renderer {
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
                 // Lightning 弾丸: 水色の電撃球 18px
-                9 => SpriteInstance {
+                crate::BULLET_KIND_LIGHTNING => SpriteInstance {
                     position:   [x - 9.0, y - 9.0],
                     size:       [18.0, 18.0],
                     uv_offset:  lightning_uv_off,
@@ -697,7 +716,7 @@ impl Renderer {
                     color_tint: [1.0, 1.0, 1.0, 1.0],
                 },
                 // Whip エフェクト弾: 黄緑の横長楕円 40x20px
-                10 => SpriteInstance {
+                crate::BULLET_KIND_WHIP => SpriteInstance {
                     position:   [x - 20.0, y - 10.0],
                     size:       [40.0, 20.0],
                     uv_offset:  whip_uv_off,
@@ -717,7 +736,7 @@ impl Renderer {
                     }
                 }
                 // 1.2.9: 岩弾（Stone Golem の範囲攻撃）: 灰色の岩 28px
-                14 => SpriteInstance {
+                crate::BULLET_KIND_ROCK => SpriteInstance {
                     position:   [x - 14.0, y - 14.0],
                     size:       [28.0, 28.0],
                     uv_offset:  rock_uv_off,
@@ -1615,80 +1634,3 @@ fn weapon_short_name(name: &str) -> &str {
     }
 }
 
-/// Returns upgrade description lines for the level-up card
-fn weapon_upgrade_desc(name: &str, current_lv: u32) -> Vec<String> {
-    let next = current_lv + 1;
-    match name {
-        "magic_wand" => {
-            let mut lines = vec![
-                format!("DMG: {} -> {}", magic_wand_dmg(current_lv), magic_wand_dmg(next)),
-                format!("CD:  {:.1}s -> {:.1}s", magic_wand_cd(current_lv), magic_wand_cd(next)),
-            ];
-            let bullets_now  = magic_wand_bullets(current_lv);
-            let bullets_next = magic_wand_bullets(next);
-            if bullets_next > bullets_now {
-                lines.push(format!("Shots: {} -> {} (+)", bullets_now, bullets_next));
-            } else {
-                lines.push(format!("Shots: {}", bullets_now));
-            }
-            lines
-        }
-        "axe" => vec![
-            format!("DMG: {} -> {}", axe_dmg(current_lv), axe_dmg(next)),
-            format!("CD:  {:.1}s -> {:.1}s", axe_cd(current_lv), axe_cd(next)),
-            "Throws upward".to_string(),
-        ],
-        "cross" => {
-            let dirs_now  = if current_lv == 0 || current_lv <= 3 { 4 } else { 8 };
-            let dirs_next = if next <= 3 { 4 } else { 8 };
-            let mut lines = vec![
-                format!("DMG: {} -> {}", cross_dmg(current_lv), cross_dmg(next)),
-                format!("CD:  {:.1}s -> {:.1}s", cross_cd(current_lv), cross_cd(next)),
-            ];
-            if dirs_next > dirs_now {
-                lines.push(format!("Dirs: {} -> {} (+)", dirs_now, dirs_next));
-            } else {
-                lines.push(format!("{}-way fire", dirs_now));
-            }
-            lines
-        }
-        "whip" => vec![
-            format!("DMG: {} -> {}", whip_dmg(current_lv), whip_dmg(next)),
-            format!("CD:  {:.1}s -> {:.1}s", whip_cd(current_lv), whip_cd(next)),
-            format!("Range: {}px -> {}px", whip_range(current_lv), whip_range(next)),
-            "Fan sweep (108°)".to_string(),
-        ],
-        "fireball" => vec![
-            format!("DMG: {} -> {}", fireball_dmg(current_lv), fireball_dmg(next)),
-            format!("CD:  {:.1}s -> {:.1}s", fireball_cd(current_lv), fireball_cd(next)),
-            "Piercing shot".to_string(),
-        ],
-        "lightning" => vec![
-            format!("DMG: {} -> {}", lightning_dmg(current_lv), lightning_dmg(next)),
-            format!("CD:  {:.1}s -> {:.1}s", lightning_cd(current_lv), lightning_cd(next)),
-            format!("Chain: {} -> {} targets", lightning_chain(current_lv), lightning_chain(next)),
-        ],
-        _ => vec!["Upgrade weapon".to_string()],
-    }
-}
-
-fn magic_wand_dmg(lv: u32) -> i32 { let b = 10i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn magic_wand_cd(lv: u32) -> f32  { let b = 0.8f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-fn magic_wand_bullets(lv: u32) -> u32 { match lv { 0..=2 => 1, 3..=4 => 2, 5..=6 => 3, _ => 4 } }
-
-fn axe_dmg(lv: u32) -> i32 { let b = 25i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn axe_cd(lv: u32) -> f32  { let b = 1.5f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-
-fn cross_dmg(lv: u32) -> i32 { let b = 15i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn cross_cd(lv: u32) -> f32  { let b = 2.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-
-fn whip_dmg(lv: u32) -> i32   { let b = 30i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn whip_cd(lv: u32) -> f32    { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-fn whip_range(lv: u32) -> u32 { 120 + lv.saturating_sub(1) * 20 }
-
-fn fireball_dmg(lv: u32) -> i32 { let b = 20i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn fireball_cd(lv: u32) -> f32  { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-
-fn lightning_dmg(lv: u32) -> i32   { let b = 15i32; b + (lv as i32).saturating_sub(1) * (b / 4).max(1) }
-fn lightning_cd(lv: u32) -> f32    { let b = 1.0f32; (b * (1.0 - (lv as f32 - 1.0).max(0.0) * 0.07)).max(b * 0.5) }
-fn lightning_chain(lv: u32) -> u32 { 2 + lv / 2 }
