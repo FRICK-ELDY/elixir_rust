@@ -930,7 +930,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     // 1.5.2: 敵 vs 障害物（Ghost 以外は押し出し）
     resolve_obstacles_enemy(w);
 
-            // ── 1.1.10: 衝突判定（Spatial Hash）────────────────────────
+    // ── 1.1.10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築
     w.rebuild_collision();
 
@@ -974,7 +974,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
     }
 
-            // ── 1.1.11/1.1.14/1.2.2/1.2.6: 武器スロット発射処理 ──────────────────
+    // ── 1.1.11/1.1.14/1.2.2/1.2.6: 武器スロット発射処理 ──────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
         // プレイヤーの移動方向（Whip の向き計算用）
