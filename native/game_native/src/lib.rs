@@ -35,6 +35,7 @@ rustler::atoms! {
     boss_defeated,
     // Rust ゲームループ → Elixir 送信用
     frame_events,
+    ui_action,
 }
 
 mod asset;

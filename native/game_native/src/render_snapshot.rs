@@ -28,27 +28,20 @@ pub struct RenderSnapshot {
     pub hud:           HudData,
 }
 
-fn boss_name_from_kind_id(kind_id: u8) -> String {
-    match kind_id {
-        0 => "Slime King".to_string(),
-        1 => "Bat Lord".to_string(),
-        2 => "Stone Golem".to_string(),
-        _ => format!("Boss {}", kind_id),
-    }
-}
-
 /// GameWorldInner から RenderSnapshot を構築する。
 /// get_render_data / get_particle_data / get_item_data / get_frame_metadata 相当のロジックを集約。
 pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
     // 1. スプライト（player, boss, enemies, bullets）
     let anim_frame = ((w.frame_id / 4) % 4) as u8;
-    let mut render_data = Vec::with_capacity(2 + w.enemies.len() + w.bullets.len());
+    let mut render_data = Vec::with_capacity(
+        1 + w.boss.is_some() as usize + w.enemies.count + w.bullets.count,
+    );
 
     render_data.push((w.player.x, w.player.y, 0, anim_frame));
 
     if let Some(ref boss) = w.boss {
         let bp = BossParams::get(boss.kind_id);
-        let boss_sprite_size = if boss.kind_id == 2 { 128.0 } else { 96.0 };
+        let boss_sprite_size = bp.radius * 2.0;
         render_data.push((
             boss.x - boss_sprite_size / 2.0,
             boss.y - boss_sprite_size / 2.0,
@@ -124,7 +117,7 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
     // 6. HUD メタデータ（get_frame_metadata 相当）
     let exp_to_next = exp_required_for_next(w.level).saturating_sub(w.exp);
     let boss_info = w.boss.as_ref().map(|b| BossHudInfo {
-        name:   boss_name_from_kind_id(b.kind_id),
+        name:   BossParams::get(b.kind_id).name.to_string(),
         hp:     b.hp,
         max_hp: b.max_hp,
     });
@@ -146,7 +139,7 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
         bullet_count:     w.bullets.count,
         fps:              0.0,
         level_up_pending: w.level_up_pending,
-        weapon_choices:   Vec::new(),
+        weapon_choices:   w.weapon_choices.clone(),
         weapon_levels,
         magnet_timer:     w.magnet_timer,
         item_count:       w.items.count,
@@ -155,8 +148,8 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
         boss_info,
         phase:            GamePhase::Playing,
         screen_flash_alpha: 0.0,
-        score_popups:     Vec::new(),
-        kill_count:       0,
+        score_popups:     w.score_popups.clone(),
+        kill_count:       w.kill_count,
     };
 
     RenderSnapshot {

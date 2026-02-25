@@ -159,6 +159,78 @@ defmodule Engine.GameEvents do
     end
   end
 
+  # ── 1.7.5: 描画スレッドからの UI アクションを受信 ────────────────
+
+  @impl true
+  def handle_info({:ui_action, action}, state) when is_binary(action) do
+    new_state =
+      case action do
+        "__skip__" ->
+          GenServer.cast(self(), {:select_weapon, :__skip__})
+          state
+
+        "__save__" ->
+          GenServer.cast(self(), :save_session)
+          state
+
+        "__load__" ->
+          handle_ui_action_load(state)
+
+        "__load_confirm__" ->
+          handle_ui_action_load_confirm(state)
+
+        "__load_cancel__" ->
+          state
+
+        "__start__" ->
+          state
+
+        "__retry__" ->
+          state
+
+        weapon when is_binary(weapon) ->
+          try do
+            atom = String.to_existing_atom(weapon)
+            GenServer.cast(self(), {:select_weapon, atom})
+          rescue
+            ArgumentError ->
+              Logger.warning("[UI ACTION] Unknown weapon from renderer: #{inspect(weapon)}")
+          end
+          state
+      end
+    {:noreply, new_state}
+  end
+
+  defp handle_ui_action_load(state) do
+    if Engine.has_save?() do
+      do_load_session(state)
+    else
+      Logger.info("[LOAD] No save file")
+      state
+    end
+  end
+
+  defp handle_ui_action_load_confirm(state) do
+    do_load_session(state)
+  end
+
+  defp do_load_session(state) do
+    case Engine.load_session(state.world_ref) do
+      :ok ->
+        game = Application.get_env(:game, :current, Game.VampireSurvivor)
+        Engine.SceneManager.replace_scene(game.physics_scenes() |> List.first(), %{})
+        %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}
+
+      :no_save ->
+        Logger.info("[LOAD] No save data")
+        state
+
+      {:error, reason} ->
+        Logger.warning("[LOAD] Failed: #{inspect(reason)}")
+        state
+    end
+  end
+
   # ── 1.5.1: Rust からの frame_events を受信してシーン更新 ─────────
 
   @impl true

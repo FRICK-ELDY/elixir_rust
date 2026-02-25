@@ -11,7 +11,7 @@ use game_core::physics::spatial_hash::CollisionWorld;
 use game_core::weapon::WeaponSlot;
 use rustler::types::list::ListIterator;
 use rustler::{Atom, NifResult, ResourceArc, Term};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 use crate::{ok, BulletWorld, EnemyWorld, ParticleWorld};
 
@@ -50,6 +50,10 @@ pub fn create_world() -> ResourceArc<GameWorld> {
         weapon_slots:       vec![WeaponSlot::new(0)], // MagicWand
         boss:               None,
         frame_events:       Vec::new(),
+        pending_ui_action:  Mutex::new(None),
+        weapon_choices:     Vec::new(),
+        score_popups:       Vec::new(),
+        kill_count:         0,
     })))
 }
 

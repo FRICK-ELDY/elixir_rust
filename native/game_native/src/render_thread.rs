@@ -123,7 +123,10 @@ impl ApplicationHandler for RenderApp {
                     let snapshot = {
                         let guard = match self.world.0.read() {
                             Ok(g) => g,
-                            Err(_) => return,
+                            Err(e) => {
+                                log::error!("Render thread: Failed to acquire read lock for snapshot: {e:?}");
+                                return;
+                            }
                         };
                         build_render_snapshot(&guard)
                     };
@@ -135,7 +138,18 @@ impl ApplicationHandler for RenderApp {
                         &snapshot.obstacle_data,
                         snapshot.camera_offset,
                     );
-                    let _ = renderer.render(window, &snapshot.hud, &mut self.ui_state);
+                    if let Some(action) = renderer.render(window, &snapshot.hud, &mut self.ui_state) {
+                        let guard = match self.world.0.read() {
+                            Ok(g) => g,
+                            Err(e) => {
+                                log::error!("Render thread: Failed to acquire read lock on world: {e:?}");
+                                return;
+                            }
+                        };
+                        if let Ok(mut pending) = guard.pending_ui_action.lock() {
+                            *pending = Some(action);
+                        };
+                    }
 
                     window.request_redraw();
                 }

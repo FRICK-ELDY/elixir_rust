@@ -116,6 +116,8 @@ pub struct BossParams {
     pub damage_per_sec:   f32,
     pub render_kind:      u8,
     pub special_interval: f32,
+    /// HUD 表示用のボス名
+    pub name:             &'static str,
 }
 
 pub const BOSS_ID_SLIME_KING:  u8 = 0;
@@ -123,9 +125,9 @@ pub const BOSS_ID_BAT_LORD:    u8 = 1;
 pub const BOSS_ID_STONE_GOLEM: u8 = 2;
 
 static BOSS_TABLE: [BossParams; 3] = [
-    BossParams { max_hp: 1000.0, speed: 60.0,  radius: 48.0, exp_reward: 200, damage_per_sec: 30.0, render_kind: 11, special_interval: 5.0 },
-    BossParams { max_hp: 2000.0, speed: 200.0, radius: 48.0, exp_reward: 400, damage_per_sec: 50.0, render_kind: 12, special_interval: 4.0 },
-    BossParams { max_hp: 5000.0, speed: 30.0,  radius: 64.0, exp_reward: 800, damage_per_sec: 80.0, render_kind: 13, special_interval: 6.0 },
+    BossParams { max_hp: 1000.0, speed: 60.0,  radius: 48.0, exp_reward: 200, damage_per_sec: 30.0, render_kind: 11, special_interval: 5.0, name: "Slime King" },
+    BossParams { max_hp: 2000.0, speed: 200.0, radius: 48.0, exp_reward: 400, damage_per_sec: 50.0, render_kind: 12, special_interval: 4.0, name: "Bat Lord" },
+    BossParams { max_hp: 5000.0, speed: 30.0,  radius: 64.0, exp_reward: 800, damage_per_sec: 80.0, render_kind: 13, special_interval: 6.0, name: "Stone Golem" },
 ];
 
 impl BossParams {

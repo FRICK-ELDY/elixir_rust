@@ -10,7 +10,7 @@ use rustler::{Atom, Encoder, LocalPid, NifResult, ResourceArc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{frame_events, ok};
+use crate::{frame_events, ok, ui_action};
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
@@ -61,21 +61,30 @@ fn run_rust_game_loop(
             thread::sleep(next_tick - now);
         }
 
-        let events: Vec<(Atom, u32, u32)> = if control.is_paused() {
-            Vec::new()
-        } else {
+        let (events, ui_action_opt): (Vec<(Atom, u32, u32)>, Option<String>) = {
             let mut w = match world.0.write() {
                 Ok(guard) => guard,
                 Err(_) => break,
             };
-            physics_step_inner(&mut w, TICK_MS);
-            drain_frame_events_inner(&mut w)
+            let ui_action_opt = w.pending_ui_action.lock().ok().and_then(|mut g| g.take());
+            let events = if control.is_paused() {
+                Vec::new()
+            } else {
+                physics_step_inner(&mut w, TICK_MS);
+                drain_frame_events_inner(&mut w)
+            };
+            (events, ui_action_opt)
         };
 
         let mut env = OwnedEnv::new();
         let _ = env.send_and_clear(&pid, |env| {
             (frame_events(), events).encode(env)
         });
+        if let Some(action) = ui_action_opt {
+            let _ = env.send_and_clear(&pid, |env| {
+                (ui_action(), action).encode(env)
+            });
+        }
     }
 }
 

@@ -63,6 +63,8 @@ defmodule Engine.SaveManager do
       {:ok, binary} ->
         try do
           snapshot = :erlang.binary_to_term(binary)
+          # 1.7.5: 旧セーブとの互換性（kill_count が無い場合は 0 で補う）
+          snapshot = Map.put_new(snapshot, :kill_count, 0)
           App.NifBridge.load_save_snapshot(world_ref, snapshot)
           :ok
         rescue
