@@ -42,6 +42,7 @@ mod audio;
 mod game_logic;
 mod nif;
 mod renderer;
+mod render_snapshot;
 mod render_thread;
 mod world;
 

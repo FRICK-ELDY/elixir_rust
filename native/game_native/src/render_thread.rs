@@ -1,10 +1,10 @@
 //! Path: native/game_native/src/render_thread.rs
-//! Summary: 描画スレッドのエントリ（1.7.4）
+//! Summary: 描画スレッドのエントリ（1.7.4 / 1.7.5）
 //!
-//! winit の EventLoop・ウィンドウ作成・wgpu 初期化の骨組みを実装。
-//! 1.7.5 で GameWorld から描画データ取得、RenderSnapshot 接続を行う。
+//! winit の EventLoop・ウィンドウ作成・wgpu 初期化。
+//! 1.7.5: GameWorld を read して RenderSnapshot を構築し、renderer に渡す。
 
-use game_core::constants::{BG_B, BG_G, BG_R, SCREEN_HEIGHT, SCREEN_WIDTH};
+use game_core::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -16,6 +16,9 @@ use winit::{
 #[cfg(target_os = "windows")]
 use winit::platform::windows::EventLoopBuilderExtWindows;
 
+use crate::asset::{AssetId, AssetLoader};
+use crate::render_snapshot::build_render_snapshot;
+use crate::renderer::{Renderer, GameUiState};
 use crate::world::GameWorld;
 use rustler::ResourceArc;
 
@@ -42,15 +45,13 @@ pub fn run_render_thread(world: ResourceArc<GameWorld>) {
 
 /// 描画スレッド用の ApplicationHandler
 struct RenderApp {
-    /// 1.7.5 で read してスナップショット取得する。1.7.4 では未使用。
-    #[allow(dead_code)]
-    world:        ResourceArc<GameWorld>,
-    window:       Option<Arc<Window>>,
-    /// wgpu 初期化の骨組み（surface, device, queue, config）
-    wgpu_surface: Option<wgpu::Surface<'static>>,
-    wgpu_device:  Option<wgpu::Device>,
-    wgpu_queue:   Option<wgpu::Queue>,
-    wgpu_config:  Option<wgpu::SurfaceConfiguration>,
+    /// 1.7.5: read してスナップショット取得
+    world:           ResourceArc<GameWorld>,
+    window:          Option<Arc<Window>>,
+    /// 1.7.5: Renderer（wgpu + egui HUD）
+    renderer:        Option<Renderer>,
+    /// egui 用 UI 状態（セーブ/ロード等）
+    ui_state:        GameUiState,
 }
 
 impl RenderApp {
@@ -58,10 +59,8 @@ impl RenderApp {
         Self {
             world,
             window:       None,
-            wgpu_surface: None,
-            wgpu_device:  None,
-            wgpu_queue:   None,
-            wgpu_config:  None,
+            renderer:     None,
+            ui_state:     GameUiState::default(),
         }
     }
 }
@@ -85,110 +84,58 @@ impl ApplicationHandler for RenderApp {
                 .expect("ウィンドウの作成に失敗しました"),
         );
 
-        let instance = wgpu::Instance::default();
-        let surface = instance
-            .create_surface(window.clone())
-            .expect("サーフェスの作成に失敗しました");
+        // 1.7.5: アトラスをロードして Renderer を初期化
+        let loader = AssetLoader::new();
+        let atlas_bytes = loader.load_bytes(AssetId::SpriteAtlas);
 
-        let adapter = pollster::block_on(
-            instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference:   wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                ..Default::default()
-            }),
-        )
-        .expect("アダプターの取得に失敗しました");
+        let renderer = pollster::block_on(Renderer::new(window.clone(), &atlas_bytes));
 
-        let (device, queue) = pollster::block_on(
-            adapter.request_device(&wgpu::DeviceDescriptor::default(), None),
-        )
-        .expect("デバイスとキューの取得に失敗しました");
-
-        let size = window.inner_size();
-        let config = surface
-            .get_default_config(&adapter, size.width, size.height)
-            .expect("サーフェス設定の取得に失敗しました");
-        surface.configure(&device, &config);
-
-        self.window       = Some(window.clone());
-        self.wgpu_surface = Some(surface);
-        self.wgpu_device  = Some(device);
-        self.wgpu_queue   = Some(queue);
-        self.wgpu_config  = Some(config);
+        self.window   = Some(window.clone());
+        self.renderer = Some(renderer);
 
         window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // egui にイベントを転送
+        if let (Some(renderer), Some(window)) = (&mut self.renderer, &self.window) {
+            if renderer.handle_window_event(window, &event) {
+                window.request_redraw();
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
 
             WindowEvent::Resized(size) => {
-                if let (Some(device), Some(surface), Some(config)) = (
-                    &self.wgpu_device,
-                    &self.wgpu_surface,
-                    &mut self.wgpu_config,
-                ) {
-                    if size.width > 0 && size.height > 0 {
-                        config.width  = size.width;
-                        config.height = size.height;
-                        surface.configure(device, config);
+                if let (Some(renderer), size) = (&mut self.renderer, (size.width, size.height)) {
+                    if size.0 > 0 && size.1 > 0 {
+                        renderer.resize(size.0, size.1);
                     }
                 }
             }
 
             WindowEvent::RedrawRequested => {
-                if let (Some(surface), Some(device), Some(queue), Some(config), Some(window)) = (
-                    &self.wgpu_surface,
-                    &self.wgpu_device,
-                    &self.wgpu_queue,
-                    &self.wgpu_config,
-                    &self.window,
-                ) {
-                    let output = match surface.get_current_texture() {
-                        Ok(t) => t,
-                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                            surface.configure(device, config);
-                            return;
-                        }
-                        Err(e) => {
-                            eprintln!("Surface error: {:?}", e);
-                            return;
-                        }
+                if let (Some(renderer), Some(window)) = (&mut self.renderer, &self.window) {
+                    // 1.7.5: read でロック取得 → スナップショット構築 → ロック解放
+                    let snapshot = {
+                        let guard = match self.world.0.read() {
+                            Ok(g) => g,
+                            Err(_) => return,
+                        };
+                        build_render_snapshot(&guard)
                     };
-
-                    let view = output.texture.create_view(&Default::default());
-                    let mut encoder =
-                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Clear Encoder"),
-                        });
-
-                    {
-                        let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Clear Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view:           &view,
-                                resolve_target: None,
-                                ops:            wgpu::Operations {
-                                    load:  wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: BG_R,
-                                        g: BG_G,
-                                        b: BG_B,
-                                        a: 1.0,
-                                    }),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes:         None,
-                            occlusion_query_set:      None,
-                        });
-                    }
-
-                    queue.submit(std::iter::once(encoder.finish()));
-                    output.present();
+                    // ロック解放済み。ここから描画（ロック外で wgpu 描画）
+                    renderer.update_instances(
+                        &snapshot.render_data,
+                        &snapshot.particle_data,
+                        &snapshot.item_data,
+                        &snapshot.obstacle_data,
+                        snapshot.camera_offset,
+                    );
+                    let _ = renderer.render(window, &snapshot.hud, &mut self.ui_state);
 
                     window.request_redraw();
                 }
