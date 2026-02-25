@@ -50,33 +50,25 @@
 
 | Path | Lines | Status | Summary |
 |------|-------|--------|--------|
+| [native/game_core/src/boss.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/boss.rs) | 72 | 🟡 | ボス種類・HP・行動の共通定義 |
+| [native/game_core/src/constants.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/constants.rs) | 41 | 🟢 | 画面解像度・マップサイズ・物理定数などの定数定義 |
+| [native/game_core/src/enemy.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/enemy.rs) | 129 | 🟠 | 敵種類・HP・速度・スポーンロジックの共通定義 |
+| [native/game_core/src/entity_params.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/entity_params.rs) | 96 | 🟡 | 敵・武器・ボスの ID ベースパラメータテーブル |
+| [native/game_core/src/item.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/item.rs) | 65 | 🟡 | アイテム種類・レンダー kind の定義と ItemWorld |
+| [native/game_core/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/lib.rs) | 5 | 🟢 | ゲームコア共通ロジック（定数・敵・武器・物理プリミティブ） |
+| [native/game_core/src/physics/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/physics/mod.rs) | 1 | ⚪ | 物理モジュールの再エクスポート（衝突・分離・RNG・空間ハッシュ） |
+| [native/game_core/src/physics/obstacle_resolve.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/physics/obstacle_resolve.rs) | 29 | 🟢 | プレイヤーと障害物の衝突解決・押し出し処理 |
+| [native/game_core/src/physics/rng.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/physics/rng.rs) | 32 | 🟢 | 決定論的 LCG 乱数ジェネレータ（no-std 互換） |
+| [native/game_core/src/physics/separation.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/physics/separation.rs) | 67 | 🟡 | 敵同士の重なり解消（Separation）トレイトと適用ロジック |
+| [native/game_core/src/physics/spatial_hash.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/physics/spatial_hash.rs) | 91 | 🟡 | 空間ハッシュによる衝突検出・近傍クエリ |
+| [native/game_core/src/util.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/util.rs) | 70 | 🟡 | 経験値計算・ウェーブ設定・スポーン位置などの共通ユーティリティ |
+| [native/game_core/src/weapon.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_core/src/weapon.rs) | 105 | 🟠 | 武器種類・クールダウン・発射ロジックの共通定義 |
 | [native/game_native/benches/ai_bench.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/benches/ai_bench.rs) | 42 | 🟢 | Chase AI ベンチマーク（rayon スカラー版 vs SIMD 版） |
-| [native/game_native/src/asset/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/asset/mod.rs) | 116 | 🟠 | アセット ID マッピング・実行時ロード・埋め込みフォールバック |
-| [native/game_native/src/audio.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/audio.rs) | 40 | 🟢 | BGM・SE 管理（rodio、ループ再生・fire-and-forget） |
-| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 1841 | 🔴 | NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ |
-| [native/game_native/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/renderer/mod.rs) | 1440 | 🔴 | wgpu によるスプライト描画・パイプライン・テクスチャ管理 |
-## rust:game
-
-| Path | Lines | Status | Summary |
-|------|-------|--------|--------|
-| [native/game_native/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/main.rs) | 1608 | 🔴 | スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ |
-## rust:core
-
-| Path | Lines | Status | Summary |
-|------|-------|--------|--------|
-| [native/game_native/src/core/boss.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/boss.rs) | 72 | 🟡 | ボス種類・HP・行動の共通定義 |
-| [native/game_native/src/core/constants.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/constants.rs) | 41 | 🟢 | 画面解像度・マップサイズ・物理定数などの定数定義 |
-| [native/game_native/src/core/enemy.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/enemy.rs) | 129 | 🟠 | 敵種類・HP・速度・スポーンロジックの共通定義 |
-| [native/game_native/src/core/entity_params.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/entity_params.rs) | 96 | 🟡 | 敵・武器・ボスの ID ベースパラメータテーブル |
-| [native/game_native/src/core/item.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/item.rs) | 65 | 🟡 | アイテム種類・レンダー kind の定義と ItemWorld |
-| [native/game_native/src/core/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/mod.rs) | 5 | 🟢 | ゲームコア共通モジュール（main/lib 共有ロジックの集約） |
-| [native/game_native/src/core/physics/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/mod.rs) | 1 | ⚪ | 物理モジュールの再エクスポート（衝突・分離・RNG・空間ハッシュ） |
-| [native/game_native/src/core/physics/obstacle_resolve.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/obstacle_resolve.rs) | 29 | 🟢 | プレイヤーと障害物の衝突解決・押し出し処理 |
-| [native/game_native/src/core/physics/rng.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/rng.rs) | 32 | 🟢 | 決定論的 LCG 乱数ジェネレータ（no-std 互換） |
-| [native/game_native/src/core/physics/separation.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/separation.rs) | 67 | 🟡 | 敵同士の重なり解消（Separation）トレイトと適用ロジック |
-| [native/game_native/src/core/physics/spatial_hash.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/physics/spatial_hash.rs) | 91 | 🟡 | 空間ハッシュによる衝突検出・近傍クエリ |
-| [native/game_native/src/core/util.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/util.rs) | 70 | 🟡 | 経験値計算・ウェーブ設定・スポーン位置などの共通ユーティリティ |
-| [native/game_native/src/core/weapon.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/core/weapon.rs) | 157 | 🟠 | 武器種類・クールダウン・発射ロジックの共通定義 |
+| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 1840 | 🔴 | NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ |
+| [native/game_window/src/asset/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_window/src/asset/mod.rs) | 116 | 🟠 | アセット ID マッピング・実行時ロード・埋め込みフォールバック |
+| [native/game_window/src/audio.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_window/src/audio.rs) | 40 | 🟢 | BGM・SE 管理（rodio、ループ再生・fire-and-forget） |
+| [native/game_window/src/main.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_window/src/main.rs) | 1607 | 🔴 | スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ |
+| [native/game_window/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_window/src/renderer/mod.rs) | 1440 | 🔴 | wgpu によるスプライト描画・パイプライン・テクスチャ管理 |
 ## rust:xtask
 
 | Path | Lines | Status | Summary |

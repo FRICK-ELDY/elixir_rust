@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/core/physics/separation.rs
+//! Path: native/game_core/src/physics/separation.rs
 //! Summary: 敵同士の重なり解消（Separation）トレイトと適用ロジック
 
 use super::spatial_hash::SpatialHash;
@@ -53,9 +53,6 @@ pub fn apply_separation<W: EnemySeparation>(
         }
     }
 
-    // 近隣ペアを検索して押し出しベクトルを蓄積
-    // バッファへの書き込みと world の読み取りを分離するため、
-    // 蓄積値をローカル変数に受けてからバッファに書き込む
     for i in 0..len {
         if !world.is_alive(i) {
             continue;

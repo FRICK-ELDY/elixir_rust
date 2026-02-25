@@ -1,8 +1,8 @@
-//! Path: native/game_native/src/core/util.rs
+//! Path: native/game_core/src/util.rs
 //! Summary: 経験値計算・ウェーブ設定・スポーン位置などの共通ユーティリティ
 
-use super::constants::WAVES;
-use super::physics::rng::SimpleRng;
+use crate::constants::WAVES;
+use crate::physics::rng::SimpleRng;
 
 /// 次のレベルに必要な累積経験値を返す。
 /// 現在の `level` から次のレベルに上がるために必要な累積 EXP を返す。

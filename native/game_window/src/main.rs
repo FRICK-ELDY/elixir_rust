@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/main.rs
+//! Path: native/game_window/src/main.rs
 //! Summary: スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ
 
 /// Standalone rendering binary.
@@ -6,7 +6,6 @@
 /// Used for renderer development and visual testing.
 mod asset;
 mod audio;
-mod core;
 mod renderer;
 
 // ─── 1.2.7: 音声ファイルをバイナリに埋め込む ──────────────────────
@@ -29,7 +28,7 @@ use serde::{Deserialize, Serialize};
 
 use audio::AudioManager;
 
-use core::constants::{
+use game_core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CAMERA_LERP_SPEED, CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
@@ -37,16 +36,16 @@ use core::constants::{
     MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
-use core::item::{ItemKind, ItemWorld};
-use core::entity_params::{WeaponParams, lightning_chain_count, whip_range};
-use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
-use core::physics::obstacle_resolve;
-use core::physics::rng::SimpleRng;
-use core::physics::separation::{apply_separation, EnemySeparation};
-use core::physics::spatial_hash::CollisionWorld;
-use core::enemy::EnemyKind;
-use core::boss::BossKind;
-use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_around_player};
+use game_core::item::{ItemKind, ItemWorld};
+use game_core::entity_params::{WeaponParams, lightning_chain_count, whip_range};
+use game_core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use game_core::physics::obstacle_resolve;
+use game_core::physics::rng::SimpleRng;
+use game_core::physics::separation::{apply_separation, EnemySeparation};
+use game_core::physics::spatial_hash::CollisionWorld;
+use game_core::enemy::EnemyKind;
+use game_core::boss::BossKind;
+use game_core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_around_player};
 use renderer::{BossHudInfo, GameUiState, HudData, Renderer};
 
 // 1.5.2: game_window 用のデフォルト障害物（マップ中央付近に配置・起動時に見える）

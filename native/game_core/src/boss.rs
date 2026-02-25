@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/core/boss.rs
+//! Path: native/game_core/src/boss.rs
 //! Summary: ボス種類・HP・行動の共通定義
 
 /// ボスの種類（セーブデータ互換のため #[repr(u8)] と明示値で固定）

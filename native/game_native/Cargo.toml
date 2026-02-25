@@ -7,25 +7,12 @@ edition = "2021"
 name = "game_native"
 crate-type = ["cdylib", "rlib"]  # cdylib: Rustler NIF 用, rlib: ベンチ・テスト用
 
-[[bin]]
-name = "game_window"
-path = "src/main.rs"
-
 [dependencies]
-rustc-hash = "2"
-winit = "0.30.12"
-wgpu = "24"
-pollster = "0.3"
-bytemuck = { version = "1", features = ["derive"] }
-image = "0.25"
+game_core = { path = "../game_core" }
 rustler = "0.34"
 rayon = "1"
 log = "0.4"
 env_logger = "0.11"
-egui = "0.31"
-egui-wgpu = "0.31"
-egui-winit = "0.31"
-rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "vorbis"] }
 serde = { version = "1", features = ["derive"] }
 bincode = "1.3"
 

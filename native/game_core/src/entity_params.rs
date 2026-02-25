@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/core/entity_params.rs
+//! Path: native/game_core/src/entity_params.rs
 //! Summary: 敵・武器・ボスの ID ベースパラメータテーブル
 //!
 //! 1.4.7: EnemyKind / WeaponKind / BossKind の enum を増やさずに、
@@ -89,7 +89,7 @@ static WEAPON_TABLE: [WeaponParams; 7] = [
     WeaponParams { cooldown: 1.0,  damage: 30, as_u8: 3, name: "whip",       bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 20, as_u8: 4, name: "fireball",   bullet_table: None },
     WeaponParams { cooldown: 1.0,  damage: 15, as_u8: 5, name: "lightning",  bullet_table: None },
-    WeaponParams { cooldown: 0.2,  damage: 1,  as_u8: 6, name: "garlic",    bullet_table: None },  // 1 dmg/0.2s = 5 dmg/sec オーラ
+    WeaponParams { cooldown: 0.2,  damage: 1,  as_u8: 6, name: "garlic",     bullet_table: None },
 ];
 
 impl WeaponParams {

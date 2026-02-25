@@ -1,4 +1,4 @@
-//! Path: native/game_native/src/asset/mod.rs
+//! Path: native/game_window/src/asset/mod.rs
 //! Summary: アセット ID マッピング・実行時ロード・埋め込みフォールバック
 //!
 //! G3: アセット管理システム。アセット ID → パス のマッピング、実行時ロード、

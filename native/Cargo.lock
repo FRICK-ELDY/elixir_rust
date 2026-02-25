@@ -1167,23 +1167,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "game_core"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.1",
+]
+
+[[package]]
 name = "game_native"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "bytemuck",
  "criterion",
+ "env_logger",
+ "game_core",
+ "log",
+ "rayon",
+ "rustler",
+ "serde",
+]
+
+[[package]]
+name = "game_window"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "bytemuck",
  "egui",
  "egui-wgpu",
  "egui-winit",
  "env_logger",
+ "game_core",
  "image",
  "log",
  "pollster",
- "rayon",
  "rodio",
- "rustc-hash 2.1.1",
- "rustler",
  "serde",
  "wgpu",
  "winit",

@@ -1,19 +1,17 @@
 //! Path: native/game_native/src/lib.rs
 //! Summary: NIF エントリ・ワールド型・物理ステップ・イベント・セーブをすべて含む game_native ライブラリ
 
-mod core;
-
 // ベンチマーク等から利用するため re-export（後方互換）
-pub use core::enemy::EnemyKind;
-pub use core::boss::BossKind;
+pub use game_core::enemy::EnemyKind;
+pub use game_core::boss::BossKind;
 
-use core::entity_params::{
+use game_core::entity_params::{
     garlic_radius, BossParams, EnemyParams, WeaponParams, whip_range, lightning_chain_count,
     BOSS_ID_BAT_LORD, BOSS_ID_SLIME_KING, BOSS_ID_STONE_GOLEM,
     WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_GARLIC,
     WEAPON_ID_LIGHTNING, WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP,
 };
-use core::constants::{
+use game_core::constants::{
     BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED,
     CELL_SIZE, ENEMY_SEPARATION_FORCE,
     MAP_HEIGHT, MAP_WIDTH,
@@ -22,13 +20,13 @@ use core::constants::{
     INVINCIBLE_DURATION, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
-use core::item::{ItemKind, ItemWorld};
-use core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
-use core::physics::obstacle_resolve;
-use core::physics::rng::SimpleRng;
-use core::physics::separation::{apply_separation, EnemySeparation};
-use core::physics::spatial_hash::CollisionWorld;
-use core::util::{exp_required_for_next, spawn_position_around_player};
+use game_core::item::{ItemKind, ItemWorld};
+use game_core::weapon::{WeaponSlot, MAX_WEAPON_LEVEL, MAX_WEAPON_SLOTS};
+use game_core::physics::obstacle_resolve;
+use game_core::physics::rng::SimpleRng;
+use game_core::physics::separation::{apply_separation, EnemySeparation};
+use game_core::physics::spatial_hash::CollisionWorld;
+use game_core::util::{exp_required_for_next, spawn_position_around_player};
 use rayon::prelude::*;
 use rustler::env::OwnedEnv;
 use rustler::types::list::ListIterator;
