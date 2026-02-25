@@ -1,5 +1,7 @@
 # 3D・三人称 FPS ステップガイド（Step 48〜54）
 
+> **据え置き**: 本ステップは当面保留とする。実施順序は **Rust lib 分割・整理**（[STEPS_RUST_LIB.md](./STEPS_RUST_LIB.md)）→ **2D ゲームの固め** → **EOS 実装**（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）の後に再検討する。詳細は [STEPS_ALL.md](./STEPS_ALL.md) の全体ロードマップを参照。
+
 **目的**: [ENGINE_STRENGTHS_WEAKNESSES.md](../02_spec_design/ENGINE_STRENGTHS_WEAKNESSES.md) の「3D ゲーム適性」を上げる。Rust の **WGPU 対応プラットフォームで 3D を動かす** ことを目標に、三人称視点の FPS（TPS）ゲームを追加する。  
 **前提**: Step 1〜47 のいずれか完了済み（既存 2D サバイバーはそのまま維持）。3D 用の新規ゲームとして「三人称 FPS」を追加する。  
 **アセット**: 既存のヴァンパイアサバイバーズ系スプライトアトラスを 3D 用テクスチャとして流用する（ビルボード・簡易メッシュのテクスチャ等）。
