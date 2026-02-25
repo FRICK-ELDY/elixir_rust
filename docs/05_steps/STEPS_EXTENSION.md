@@ -336,7 +336,7 @@ Engine.best_score()
 
 **推奨**: まず **A（複数 GameWorld）** で「並列ゲームセッション」を実現し、必要に応じて B/C へ移行。
 
-#### 44.2 1.5.4a: 複数 GameWorld の並列管理（最小実装）✅
+#### 1.5.4a: 複数 GameWorld の並列管理（最小実装）✅
 
 **実装済み**:
 
@@ -345,7 +345,7 @@ Engine.best_score()
 - **Engine.GameEvents**: `room_id` オプションに対応。`:main` は従来どおり `Engine.GameEvents` の名前で起動し、SceneManager・FrameCache を駆動。それ以外は headless（physics のみ）
 - **Engine**: `start_room/1`, `stop_room/1`, `list_rooms/0`, `get_loop_for_room/1` を公開
 
-#### 44.3 1.5.4b: Phoenix Channels 連携（将来）
+#### 1.5.4b: Phoenix Channels 連携（将来）
 
 - `RoomChannel` で `join("room:123")` 時に `Engine.start_room("123")` を呼ぶ
 - 入力イベントを Channel でブロードキャストし、各クライアントの GameEvents が受信

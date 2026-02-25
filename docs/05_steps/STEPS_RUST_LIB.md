@@ -140,14 +140,14 @@ src/
 
 本フェーズは「Step 番号」ではなく、**Rust lib 分割のための検討・実施項目**として以下を想定する。
 
-| 項 | 項目 | 内容 |
-|----|------|------|
-| 2.1.1 | R-LIB-1 | 現行 lib.rs のブロック切り出し順序の決定（型 → ヘルパー/AI → physics_step → NIF） |
-| 2.1.2 | R-LIB-2 | `world/` の作成: PlayerState, EnemyWorld, BulletWorld, ParticleWorld, ItemWorld（SoA）, BossState, GameWorldInner, GameWorld を移動 |
-| 2.1.3 | R-LIB-3 | `game_logic/` の作成: FrameEvent, physics_step_inner, drain_frame_events_inner, chase_ai, find_nearest_* を移動 |
-| 2.1.4 | R-LIB-4 | `nif/` の作成: 各 NIF を world_nif / game_loop_nif / save_nif 等に振り分け、lib.rs から呼び出す |
-| 2.1.5 | R-LIB-5 | lib.rs のスリム化: `mod` と `pub use`、`rustler::atoms!`、`rustler::init!` のみ残し、テスト・ビルドで動作確認 |
-| 2.1.6 | R-LIB-6 | ドキュメント更新: 本ドキュメントに「採用した構成」を記録し、STEPS_ALL の実施済みとしてマーク |
+| 項 | 内容 |
+|----|------|
+| 2.1.1 | 現行 lib.rs のブロック切り出し順序の決定（型 → ヘルパー/AI → physics_step → NIF） |
+| 2.1.2 | `world/` の作成: PlayerState, EnemyWorld, BulletWorld, ParticleWorld, ItemWorld（SoA）, BossState, GameWorldInner, GameWorld を移動 |
+| 2.1.3 | `game_logic/` の作成: FrameEvent, physics_step_inner, drain_frame_events_inner, chase_ai, find_nearest_* を移動 |
+| 2.1.4 | `nif/` の作成: 各 NIF を world_nif / game_loop_nif / save_nif 等に振り分け、lib.rs から呼び出す |
+| 2.1.5 | lib.rs のスリム化: `mod` と `pub use`、`rustler::atoms!`、`rustler::init!` のみ残し、テスト・ビルドで動作確認 |
+| 2.1.6 | ドキュメント更新: 本ドキュメントに「採用した構成」を記録し、STEPS_ALL の実施済みとしてマーク |
 
 実施順序は **2.1.1 → 2.1.2 → 2.1.3 → 2.1.4 → 2.1.5 → 2.1.6** を推奨。  
 2D 固めや EOS 実装は、2.1 完了後に行う。
