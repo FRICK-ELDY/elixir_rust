@@ -9,17 +9,19 @@ defmodule Game.VampireSurvivor.SpawnSystem do
   - `maybe_spawn/3` is a pure function: same inputs always produce same outputs
   """
 
-  @max_enemies 300
+  # 1.7.8 debug tuning:
+  # 短時間で負荷をかけるため、敵上限とスポーン密度を大幅に引き上げる。
+  @max_enemies 10_000
 
   @waves [
-    {  0, 3000,   3},
-    { 30, 2000,   5},
-    { 60, 1500,   8},
-    {120, 1000,  12},
-    {180,  800,  15},
+    { 0, 300, 20},
+    {10, 220, 30},
+    {20, 170, 45},
+    {40, 130, 60},
+    {60, 110, 75},
   ]
 
-  @elite_start_sec 600
+  @elite_start_sec 45
   @elite_hp_multiplier 3.0
 
   def maybe_spawn(world_ref, elapsed_ms, last_spawn_ms) do
@@ -68,22 +70,20 @@ defmodule Game.VampireSurvivor.SpawnSystem do
 
   def enemy_kind_for_wave(elapsed_sec) do
     cond do
-      elapsed_sec < 30   -> :slime
-      elapsed_sec < 60   -> Enum.random([:slime, :bat])
-      elapsed_sec < 120  -> Enum.random([:slime, :bat, :skeleton])
-      elapsed_sec < 180  -> Enum.random([:slime, :bat, :skeleton, :ghost])
-      true               -> Enum.random([:slime, :bat, :skeleton, :ghost, :golem])
+      elapsed_sec < 10  -> Enum.random([:slime, :bat])
+      elapsed_sec < 20  -> Enum.random([:slime, :bat, :skeleton])
+      elapsed_sec < 40  -> Enum.random([:slime, :bat, :skeleton, :ghost])
+      true              -> Enum.random([:slime, :bat, :skeleton, :ghost, :golem])
     end
   end
 
   def wave_label(elapsed_sec) do
     cond do
-      elapsed_sec <  30  -> "Wave 1 - Tutorial"
-      elapsed_sec <  60  -> "Wave 2 - Warming Up (Bat added)"
-      elapsed_sec < 120  -> "Wave 3 - Skeleton added"
-      elapsed_sec < 180  -> "Wave 4 - Ghost added (wall-pass)"
-      elapsed_sec < 600  -> "Wave 5 - Golem added"
-      true               -> "Wave 6 - ELITE (HP x3)"
+      elapsed_sec < 10  -> "Wave 1 - High Spawn Start"
+      elapsed_sec < 20  -> "Wave 2 - Skeleton Added"
+      elapsed_sec < 40  -> "Wave 3 - Ghost Added"
+      elapsed_sec < 60  -> "Wave 4 - Golem Added"
+      true              -> "Wave 5 - ELITE (HP x3)"
     end
   end
 end

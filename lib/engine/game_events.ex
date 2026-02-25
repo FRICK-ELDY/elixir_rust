@@ -166,8 +166,7 @@ defmodule Engine.GameEvents do
     new_state =
       case action do
         "__skip__" ->
-          GenServer.cast(self(), {:select_weapon, :__skip__})
-          state
+          handle_ui_action_skip(state)
 
         "__save__" ->
           GenServer.cast(self(), :save_session)
@@ -189,16 +188,75 @@ defmodule Engine.GameEvents do
           state
 
         weapon when is_binary(weapon) ->
-          try do
-            atom = String.to_existing_atom(weapon)
-            GenServer.cast(self(), {:select_weapon, atom})
-          rescue
-            ArgumentError ->
-              Logger.warning("[UI ACTION] Unknown weapon from renderer: #{inspect(weapon)}")
-          end
-          state
+          handle_ui_action_weapon(state, weapon)
       end
     {:noreply, new_state}
+  end
+
+  defp handle_ui_action_skip(state) do
+    {_exp, _level, level_up_pending, _exp_to_next} = Engine.get_level_up_data(state.world_ref)
+
+    if level_up_pending do
+      Engine.skip_level_up(state.world_ref)
+      Logger.info("[LEVEL UP] Skipped from renderer UI")
+    end
+
+    state
+    |> maybe_close_level_up_scene()
+    |> Map.put(:weapon_levels, fetch_weapon_levels(state.world_ref))
+  end
+
+  defp handle_ui_action_weapon(state, weapon) do
+    {_exp, _level, level_up_pending, _exp_to_next} = Engine.get_level_up_data(state.world_ref)
+
+    if level_up_pending do
+      {selected_weapon, new_levels} = apply_weapon_selection(state, weapon)
+      if selected_weapon != :__skip__ do
+        level = Map.get(new_levels, selected_weapon, 1)
+        game = Application.get_env(:game, :current, Game.VampireSurvivor)
+        Logger.info("[LEVEL UP] Weapon selected from renderer: #{game.weapon_label(selected_weapon, level)}")
+      end
+
+      %{state | weapon_levels: new_levels}
+      |> maybe_close_level_up_scene()
+    else
+      state
+    end
+  end
+
+  defp apply_weapon_selection(state, weapon_name) when is_binary(weapon_name) do
+    requested_weapon =
+      try do
+        String.to_existing_atom(weapon_name)
+      rescue
+        ArgumentError -> nil
+      end
+
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    allowed_weapons = game.entity_registry().weapons |> Map.keys() |> MapSet.new()
+    fallback_weapon = Map.keys(state.weapon_levels) |> List.first() || :magic_wand
+
+    cond do
+      is_atom(requested_weapon) and MapSet.member?(allowed_weapons, requested_weapon) ->
+        Engine.add_weapon(state.world_ref, requested_weapon)
+        {requested_weapon, fetch_weapon_levels(state.world_ref)}
+
+      MapSet.member?(allowed_weapons, fallback_weapon) ->
+        Logger.warning(
+          "[LEVEL UP] Renderer weapon '#{weapon_name}' is not available for current game. " <>
+            "Falling back to #{inspect(fallback_weapon)}."
+        )
+        Engine.add_weapon(state.world_ref, fallback_weapon)
+        {fallback_weapon, fetch_weapon_levels(state.world_ref)}
+
+      true ->
+        Logger.warning(
+          "[LEVEL UP] Renderer weapon '#{weapon_name}' is not available and no valid fallback found. " <>
+            "Skipping level-up."
+        )
+        Engine.skip_level_up(state.world_ref)
+        {:__skip__, fetch_weapon_levels(state.world_ref)}
+    end
   end
 
   defp handle_ui_action_load(state) do
@@ -227,6 +285,21 @@ defmodule Engine.GameEvents do
 
       {:error, reason} ->
         Logger.warning("[LOAD] Failed: #{inspect(reason)}")
+        state
+    end
+  end
+
+  defp maybe_close_level_up_scene(state) do
+    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    level_up_scene = game.level_up_scene()
+
+    case Engine.SceneManager.current() do
+      {:ok, %{module: ^level_up_scene}} ->
+        Engine.resume_physics(state.control_ref)
+        Engine.SceneManager.pop_scene()
+        state
+
+      _ ->
         state
     end
   end
@@ -276,11 +349,15 @@ defmodule Engine.GameEvents do
 
   # ── ヘルパー ────────────────────────────────────────────────────
 
-  # 1.5.1: Rust が physics を実行済み。入力設定とイベント配信のみ
+  # 1.5.1: Rust が physics を実行済み。入力設定とイベント配信のみ。
+  # 1.7.8: :main は winit（Rust 側）で入力を直接 world に反映するため、
+  # ここで ETS 入力（InputHandler）を上書きしない。
   defp maybe_set_input_and_broadcast(state, mod, physics_scenes, events) do
     if mod in physics_scenes do
-      {dx, dy} = Engine.InputHandler.get_move_vector()
-      Engine.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+      if state.room_id != :main do
+        {dx, dy} = Engine.InputHandler.get_move_vector()
+        Engine.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
+      end
       unless events == [], do: Engine.EventBus.broadcast(events)
     end
 

@@ -102,12 +102,14 @@ pub fn slime_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
 }
 /// Bat のアニメーション UV（フレーム番号 0〜1）
 pub fn bat_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = BAT_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
+    let frame2 = (frame % 2) as f32;
+    let x = BAT_ATLAS_OFFSET_X + frame2 * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 /// Golem のアニメーション UV（フレーム番号 0〜1）
 pub fn golem_anim_uv(frame: u8) -> ([f32; 2], [f32; 2]) {
-    let x = GOLEM_ATLAS_OFFSET_X + (frame as f32) * FRAME_W;
+    let frame2 = (frame % 2) as f32;
+    let x = GOLEM_ATLAS_OFFSET_X + frame2 * FRAME_W;
     ([x / ATLAS_W, 0.0], [FRAME_W / ATLAS_W, 1.0])
 }
 pub fn bullet_uv() -> ([f32; 2], [f32; 2]) {
@@ -1454,6 +1456,25 @@ fn build_boss_hp_bar_ui(ctx: &egui::Context, hud: &HudData) {
 /// レベルアップ選択画面
 fn build_level_up_ui(ctx: &egui::Context, hud: &HudData) -> Option<String> {
     if !hud.level_up_pending { return None; }
+
+    // キーボードショートカット（Esc / 1 / 2 / 3）
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return Some("__skip__".to_string());
+    }
+    if !hud.weapon_choices.is_empty() {
+        let selected_index = ctx.input(|i| {
+            if i.key_pressed(egui::Key::Num1) { Some(0usize) }
+            else if i.key_pressed(egui::Key::Num2) { Some(1usize) }
+            else if i.key_pressed(egui::Key::Num3) { Some(2usize) }
+            else { None }
+        });
+        if let Some(idx) = selected_index {
+            if let Some(choice) = hud.weapon_choices.get(idx) {
+                return Some(choice.clone());
+            }
+        }
+    }
+
     let mut chosen = None;
     egui::Area::new(egui::Id::new("level_up"))
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))

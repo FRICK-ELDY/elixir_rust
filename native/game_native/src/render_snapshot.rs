@@ -6,7 +6,7 @@
 
 use crate::world::GameWorldInner;
 use crate::renderer::{BossHudInfo, GamePhase, HudData};
-use game_core::constants::{PLAYER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
+use game_core::constants::{INVINCIBLE_DURATION, PLAYER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
 use game_core::entity_params::{BossParams, EnemyParams, WeaponParams};
 use game_core::util::exp_required_for_next;
 
@@ -127,6 +127,13 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
         .map(|s| (WeaponParams::get(s.kind_id).name.to_string(), s.level))
         .collect();
 
+    let screen_flash_alpha = if w.player.invincible_timer > 0.0 && INVINCIBLE_DURATION > 0.0 {
+        // 被弾直後に強く、無敵時間の減衰にあわせてフラッシュも弱くする（最大 0.5）
+        ((w.player.invincible_timer / INVINCIBLE_DURATION).clamp(0.0, 1.0)) * 0.5
+    } else {
+        0.0
+    };
+
     let hud = HudData {
         hp:               w.player.hp,
         max_hp:           w.player_max_hp,
@@ -147,7 +154,7 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
         camera_y:         cam_y,
         boss_info,
         phase:            GamePhase::Playing,
-        screen_flash_alpha: 0.0,
+        screen_flash_alpha,
         score_popups:     w.score_popups.clone(),
         kill_count:       w.kill_count,
     };

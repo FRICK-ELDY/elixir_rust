@@ -8,8 +8,9 @@ use game_core::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
@@ -52,6 +53,11 @@ struct RenderApp {
     renderer:        Option<Renderer>,
     /// egui 用 UI 状態（セーブ/ロード等）
     ui_state:        GameUiState,
+    /// キー状態（WASD / 矢印）
+    move_up:         bool,
+    move_down:       bool,
+    move_left:       bool,
+    move_right:      bool,
 }
 
 impl RenderApp {
@@ -61,6 +67,51 @@ impl RenderApp {
             window:       None,
             renderer:     None,
             ui_state:     GameUiState::default(),
+            move_up:      false,
+            move_down:    false,
+            move_left:    false,
+            move_right:   false,
+        }
+    }
+
+    fn set_move_key(&mut self, key: KeyCode, pressed: bool) -> bool {
+        let target = match key {
+            KeyCode::KeyW | KeyCode::ArrowUp => &mut self.move_up,
+            KeyCode::KeyS | KeyCode::ArrowDown => &mut self.move_down,
+            KeyCode::KeyA | KeyCode::ArrowLeft => &mut self.move_left,
+            KeyCode::KeyD | KeyCode::ArrowRight => &mut self.move_right,
+            _ => return false,
+        };
+
+        if *target == pressed {
+            return false;
+        }
+
+        *target = pressed;
+        true
+    }
+
+    fn clear_move_keys(&mut self) -> bool {
+        let had_pressed = self.move_up || self.move_down || self.move_left || self.move_right;
+        self.move_up = false;
+        self.move_down = false;
+        self.move_left = false;
+        self.move_right = false;
+        had_pressed
+    }
+
+    fn sync_player_input(&self) {
+        let dx = (self.move_right as i8 - self.move_left as i8) as f32;
+        let dy = (self.move_down as i8 - self.move_up as i8) as f32;
+
+        match self.world.0.write() {
+            Ok(mut guard) => {
+                guard.player.input_dx = dx;
+                guard.player.input_dy = dy;
+            }
+            Err(e) => {
+                log::error!("Render thread: Failed to acquire write lock for input: {e:?}");
+            }
         }
     }
 }
@@ -107,6 +158,24 @@ impl ApplicationHandler for RenderApp {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+
+            WindowEvent::Focused(false) => {
+                if self.clear_move_keys() {
+                    self.sync_player_input();
+                }
+            }
+
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.repeat {
+                    return;
+                }
+                if let PhysicalKey::Code(code) = event.physical_key {
+                    let pressed = event.state == ElementState::Pressed;
+                    if self.set_move_key(code, pressed) {
+                        self.sync_player_input();
+                    }
+                }
             }
 
             WindowEvent::Resized(size) => {

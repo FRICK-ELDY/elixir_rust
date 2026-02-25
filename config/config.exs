@@ -14,12 +14,12 @@ config :game, App.NifBridge,
 
 # 1.4.3: ゲーム登録メカニズム
 # 起動時に「どのゲームを動かすか」を config で指定可能。
-# 1.4.9: MiniShooter に切り替え（汎用化検証用）
-config :game, current: Game.MiniShooter
-# config :game, current: Game.VampireSurvivor
+# 1.4.9: VampireSurvivor に切り替え
+config :game, current: Game.VampireSurvivor
+# config :game, current: Game.MiniShooter
 
 # 1.5.2: マップ障害物。:plain | :forest | :minimal
-config :game, map: :plain
+config :game, map: :minimal
 
 # 1.4.8: ゲーム別アセットパス
 # ゲームの assets_path/0 で上書き可能。未指定時は current ゲームの assets_path を使用。
