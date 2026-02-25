@@ -83,42 +83,15 @@ defmodule Engine.StressMonitor do
         }
 
         hp_pct = if max_hp > 0, do: Float.round(hp / max_hp * 100, 1), else: 0.0
-        physics_bar = perf_bar(physics_ms, @frame_budget_ms, 20)
 
         log_fn = if overrun, do: &Logger.warning/1, else: &Logger.info/1
 
         log_fn.(
-          """
-          \n╔══════════════════════════════════════════════════════╗
-          ║  STRESS MONITOR  [#{wave}]
-          ╠══════════════════════════════════════════════════════╣
-          ║  Enemies  : #{pad(enemy_count, 6)} / #{@max_enemies}   (peak: #{new_state.peak_enemies})
-          ║  Bullets  : #{pad(bullet_count, 6)}
-          ║  Score    : #{pad(score, 6)}   HP: #{hp_pct}%
-          ║  Physics  : #{Float.round(physics_ms, 2)}ms  #{physics_bar}  budget: #{@frame_budget_ms}ms
-          ║  Overruns : #{new_state.overrun_count} / #{new_state.samples} samples
-          ║  Peak ms  : #{new_state.peak_physics_ms}ms
-          ╚══════════════════════════════════════════════════════╝\
-          """
+          "[STRESS] #{wave} | enemies=#{enemy_count}/#{new_state.peak_enemies} bullets=#{bullet_count} score=#{score} HP=#{hp_pct}% physics=#{Float.round(physics_ms, 2)}ms overruns=#{new_state.overrun_count}/#{new_state.samples}"
         )
 
         new_state
     end
   end
 
-  defp perf_bar(value, max, width) do
-    filled = round(min(value / max, 1.0) * width)
-    empty  = width - filled
-    color  = cond do
-      value > max        -> "!!"
-      value > max * 0.75 -> ">>"
-      true               -> "  "
-    end
-    "[" <> String.duplicate("#", filled) <> String.duplicate("-", empty) <> "]" <> color
-  end
-
-  defp pad(n, width) do
-    str = to_string(n)
-    String.pad_leading(str, width)
-  end
 end

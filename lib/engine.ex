@@ -168,6 +168,13 @@ defmodule Engine do
   end
 
   @doc """
+  1.7.4: 描画スレッドを起動する。winit EventLoop + wgpu でウィンドウを表示。
+  """
+  def start_render_thread(world_ref) do
+    App.NifBridge.start_render_thread(world_ref)
+  end
+
+  @doc """
   1.5.1: LevelUp・BossAlert 中に physics を一時停止する。
   """
   def pause_physics(control_ref) do

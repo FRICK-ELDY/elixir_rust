@@ -4,6 +4,7 @@
 mod action_nif;
 mod game_loop_nif;
 mod load;
+mod render_nif;
 mod read_nif;
 mod save_nif;
 mod util;
