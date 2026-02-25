@@ -73,6 +73,9 @@ defmodule Engine.GameEvents do
     # 1.5.1: Rust 駆動ゲームループを起動（高精度 60Hz）。pid は当 GenServer（GameEvents）の self()
     Engine.start_rust_game_loop(world_ref, control_ref, self())
 
+    # 1.7.6: main ルームのみ描画スレッドを起動
+    if room_id == :main, do: Engine.start_render_thread(world_ref)
+
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
     {:ok, %{

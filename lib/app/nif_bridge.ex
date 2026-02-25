@@ -89,6 +89,9 @@ defmodule App.NifBridge do
   # 1.5.1: Rust 駆動ゲームループ
   def create_game_loop_control(), do: :erlang.nif_error(:nif_not_loaded)
   def start_rust_game_loop(_world, _control, _pid), do: :erlang.nif_error(:nif_not_loaded)
+
+  # 1.7.4: 描画スレッド起動（winit EventLoop + wgpu 骨組み）
+  def start_render_thread(_world), do: :erlang.nif_error(:nif_not_loaded)
   def pause_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
   def resume_physics(_control), do: :erlang.nif_error(:nif_not_loaded)
 
