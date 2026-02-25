@@ -45,7 +45,7 @@ native/game_native/src/
 | モジュール・use・atoms | core の利用、rustler の use、atoms! | 先頭〜100 行付近 |
 | デバッグ・GameLoopControl | パニックフック、pause/resume 用リソース | 〜66 行 |
 | FrameEvent・型定義 | イベント列挙型、PlayerState, EnemyWorld, BulletWorld, ParticleWorld, BossState, GameWorldInner, GameWorld | 〜520 行 |
-| ヘルパー・AI | find_nearest_*, scalar_chase_one, update_chase_ai_simd, update_chase_ai | 〜460 行 |
+| ヘルパー・AI | find_nearest_*, scalar_chase_one, update_chase_ai_simd, update_chase_ai | 422〜660 行付近 |
 | NIF 群 | create_world, set_player_input, spawn_enemies, physics_step, drain_frame_events, get_* 各種, セーブ/ロード, ゲームループ起動など | 〜1380 行 |
 | ローダー | load, rustler::init | 末尾 |
 
