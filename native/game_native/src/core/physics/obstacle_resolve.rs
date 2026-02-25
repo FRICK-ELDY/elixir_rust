@@ -1,5 +1,7 @@
 //! Path: native/game_native/src/core/physics/obstacle_resolve.rs
 //! Summary: プレイヤーと障害物の衝突解決・押し出し処理
+//!
+//! 1.5.2: lib / main 共通で使用。
 
 use super::spatial_hash::CollisionWorld;
 use crate::core::constants::PLAYER_RADIUS;
