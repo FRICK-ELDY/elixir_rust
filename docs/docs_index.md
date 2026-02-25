@@ -111,6 +111,7 @@
 | ドキュメント | 内容 | 状態 |
 |-------------|------|------|
 | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) | **システムアーキテクチャ全体像**。クライアント〜Phoenix サーバー〜Engine の構成、Channel・実装優先順位（SERVER_DESIGN 準拠） | 全体像・設計参照時 |
+| [FOLDER_CONNECTIONS.md](./06_system_design/FOLDER_CONNECTIONS.md) | **フォルダ単位 接続関係図解**。lib/app, lib/engine, lib/games, game_native, game_window のフォルダ間接続を Mermaid 図で可視化 | フォルダ構成・依存関係把握時 |
 | [ASSET_MANAGEMENT.md](./06_system_design/ASSET_MANAGEMENT.md) | G3: アセット管理システム設計。AssetId、パスマッピング、Elixir/Rust の責務分離、実行時ロード | PRIORITY_STEPS G3 関連 |
 | [ENGINE_API.md](./06_system_design/ENGINE_API.md) | 安定化されたエンジン API リファレンス。ゲームから利用する関数、ルーム管理（Step 44） | API 参照時 |
 | [EPIC_ONLINE_SERVICES.md](./06_system_design/EPIC_ONLINE_SERVICES.md) | **EOS 採用方針**（友達とつなぐ）。マッチング・ロビー・フレンド・ボイスを EOS で賄い、維持コストを抑える。プラグイン化の指針 | マルチプレイ・友達連携の第一選択 |
@@ -184,6 +185,7 @@ docs/
 │       └── README.md
 ├── 06_system_design/      システム設計・提案
 │   ├── ARCHITECTURE.md
+│   ├── FOLDER_CONNECTIONS.md
 │   ├── ASSET_MANAGEMENT.md
 │   ├── ENGINE_API.md
 │   ├── MULTIPLAYER_PHOENIX_CHANNELS.md
@@ -225,6 +227,7 @@ docs/
 | 汎用ゲームエンジン化の次の Step を知りたい | [STEPS_GENERALIZATION.md](./05_steps/01_engine/STEPS_GENERALIZATION.md) |
 | マップ・セーブ・マルチプレイ・デバッグを実装したい | [STEPS_EXTENSION.md](./05_steps/01_engine/STEPS_EXTENSION.md) |
 | システム全体のアーキテクチャを把握したい | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) |
+| フォルダ間の接続・依存関係を把握したい | [FOLDER_CONNECTIONS.md](./06_system_design/FOLDER_CONNECTIONS.md) |
 | Phoenix Channels でマルチプレイ連携したい | [MULTIPLAYER_PHOENIX_CHANNELS.md](./06_system_design/MULTIPLAYER_PHOENIX_CHANNELS.md) |
 | サーバー設計（認証・フレンド・メッセージ）を検討したい | [SERVER_DESIGN.md](./06_system_design/SERVER_DESIGN.md) |
 | パフォーマンス改善を実装したい | [STEPS_PERF.md](./05_steps/01_engine/STEPS_PERF.md) |
