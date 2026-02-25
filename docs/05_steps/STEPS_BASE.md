@@ -1,37 +1,39 @@
-# 実装ステップガイド
+# 1.1 基礎（全15項）
+
+**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.1 節。
 
 このドキュメントは、Elixir x Rust ヴァンパイアサバイバーライクゲームを**ひとつずつ丁寧に**実装するためのステップガイドです。  
-各ステップは独立して動作確認できる単位に分割されています。
+各項は独立して動作確認できる単位に分割されています。**章・節・項**表記は STEPS_ALL に準拠（1.1.1 = 1章 1節 1項）。
 
 ---
 
-## 全体ロードマップ
+## 1.1 節 全体ロードマップ（1.1.1〜1.1.15）
 
-```
-Step 1:  環境構築
-Step 2:  ウィンドウ表示（Rust クレート・winit）
-Step 3:  wgpu 初期化・単色クリア
-Step 4:  スプライト 1 枚描画
-Step 5:  インスタンシング描画（100 体）
-Step 6:  NIF 連携（Elixir + Rustler）
-Step 7:  ゲームループ（GenServer 60 Hz）
-Step 8:  プレイヤー移動
-Step 9:  敵スポーン・追跡 AI
-Step 10: 衝突判定（Spatial Hash）
-Step 11: 武器・弾丸システム
-Step 12: 大規模スポーン・最適化（5000 体）
-Step 13: UI（HP・スコア・タイマー）
-Step 14: レベルアップ・武器選択
-Step 15: ゲームオーバー・リスタート
-```
+| 項 | 目標 |
+|----|------|
+| 1.1.1 | 環境構築 |
+| 1.1.2 | ウィンドウ表示（Rust クレート・winit） |
+| 1.1.3 | wgpu 初期化・単色クリア |
+| 1.1.4 | スプライト 1 枚描画 |
+| 1.1.5 | インスタンシング描画（100 体） |
+| 1.1.6 | NIF 連携（Elixir + Rustler） |
+| 1.1.7 | ゲームループ（GenServer 60 Hz） ※1.5.1 で Rust に移行 |
+| 1.1.8 | プレイヤー移動 |
+| 1.1.9 | 敵スポーン・追跡 AI |
+| 1.1.10 | 衝突判定（Spatial Hash） |
+| 1.1.11 | 武器・弾丸システム |
+| 1.1.12 | 大規模スポーン・最適化（5000 体） |
+| 1.1.13 | UI（HP・スコア・タイマー） |
+| 1.1.14 | レベルアップ・武器選択 |
+| 1.1.15 | ゲームオーバー・リスタート |
 
 ---
 
-## Step 1: 環境構築
+## 1.1.1 環境構築
 
 **目標**: 開発に必要なすべてのツールをインストールし、動作確認する。
 
-### 1.1 Rust のインストール
+### 1.1.1 Rust のインストール
 
 ```powershell
 # rustup インストーラをダウンロードして実行
@@ -102,7 +104,7 @@ mix --version
 
 ---
 
-## Step 2: ウィンドウ表示（Rust クレート・winit）
+## 1.1.2 ウィンドウ表示（Rust クレート・winit）
 
 **目標**: winit でウィンドウを開き、タイトルバーに「Elixir x Rust Survivor」と表示する。
 
@@ -183,7 +185,7 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                // Step 3 以降で描画コードを実装する
+                // 1.1.3 以降で描画コードを実装する
             }
             _ => {}
         }
@@ -209,7 +211,7 @@ cargo run --bin game_window
 
 ---
 
-## Step 3: wgpu 初期化・単色クリア
+## 1.1.3 wgpu 初期化・単色クリア
 
 **目標**: wgpu を初期化し、画面を濃い紫（ゲームの背景色）でクリアする。
 
@@ -426,7 +428,7 @@ cargo run --bin game_window
 
 ---
 
-## Step 4: スプライト 1 枚描画
+## 1.1.4 スプライト 1 枚描画
 
 **目標**: テクスチャアトラスから 1 枚のスプライトを画面中央に描画する。
 
@@ -502,7 +504,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 ---
 
-## Step 5: インスタンシング描画（100 体）
+## 1.1.5 インスタンシング描画（100 体）
 
 **目標**: GPU インスタンシングで 100 体のスプライトを 1 draw call で描画する。
 
@@ -762,7 +764,7 @@ cargo run --bin game_window
 
 ---
 
-## Step 6: NIF 連携（Elixir + Rustler）
+## 1.1.6 NIF 連携（Elixir + Rustler）
 
 **目標**: `mix new` で Elixir プロジェクトを作成し、Rustler NIF で Rust の関数を Elixir から呼び出す。  
 このステップ完了後、Elixir と Rust が同一プロセス内で通信できる基盤が整う。
@@ -784,7 +786,7 @@ Elixir プロセス
 
 ### 6.1 プロジェクト構造の確認
 
-Step 6 完了後のディレクトリ構造:
+1.1.6 完了後のディレクトリ構造:
 
 ```
 elixir_rust/
@@ -798,8 +800,8 @@ elixir_rust/
 │       ├── Cargo.toml          ← cdylib + rustler 依存を追加
 │       └── src/
 │           ├── lib.rs          ← NIF 関数の実装（新規作成）
-│           ├── main.rs         ← Step 5 までの描画バイナリ（変更なし）
-│           └── renderer/       ← Step 5 までの描画コード（変更なし）
+│           ├── main.rs         ← 1.1.5 までの描画バイナリ（変更なし）
+│           └── renderer/       ← 1.1.5 までの描画コード（変更なし）
 ├── mix.exs                     ← Elixir プロジェクト設定（新規作成）
 ├── mix.lock                    ← 依存バージョンのロックファイル（自動生成）
 └── test/
@@ -915,7 +917,7 @@ rustler::init!("Elixir.Game.NifBridge");
 
 > **`lib.rs` と `main.rs` の関係**  
 > - `lib.rs` → `[lib]` セクションのエントリポイント。`cdylib` としてビルドされ、Elixir が `.dll` としてロードする。  
-> - `main.rs` → `[[bin]]` セクションのエントリポイント。Step 5 までの描画バイナリ。  
+> - `main.rs` → `[[bin]]` セクションのエントリポイント。1.1.5 までの描画バイナリ。  
 > 両者は独立してビルドされるため、描画コードと NIF コードは互いに影響しない。
 
 ### 6.6 NifBridge モジュールの作成
@@ -951,7 +953,7 @@ defmodule Game.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Step 7 以降でここに GameEvents などを追加する
+      # 1.1.7 以降でここに GameEvents などを追加する
     ]
 
     opts = [strategy: :one_for_one, name: Game.Supervisor]
@@ -1036,11 +1038,11 @@ ls _build\dev\lib\game\priv\native\
 
 ---
 
-## Step 7: ゲームループ（GenServer 60 Hz）
+## 1.1.7 ゲームループ（GenServer 60 Hz）
 
 **目標**: Elixir の GenServer で 60Hz のゲームループを実装し、Rust の `physics_step` NIF を呼び出す。
 
-**補足**: Elixir のタイマーは BEAM スケジューラ上で動作するため、ミリ秒単位での正確な実行が保証されません。このため、本ステップで一度 GenServer ベースのループを実装したうえで、のちに **Step 41（ゲームループの Rust 移行・高精度 60 Hz）** にて Rust 側へ移行します。ここでは「動くループ」の土台として GenServer 版を扱います。
+**補足**: Elixir のタイマーは BEAM スケジューラ上で動作するため、ミリ秒単位での正確な実行が保証されません。このため、本項で一度 GenServer ベースのループを実装したうえで、のちに **1.5.1（ゲームループの Rust 移行・高精度 60 Hz）** にて Rust 側へ移行します。ここでは「動くループ」の土台として GenServer 版を扱います。
 
 ### 7.1 GameWorld NIF の実装
 
@@ -1104,7 +1106,7 @@ end
 
 ---
 
-## Step 8: プレイヤー移動
+## 1.1.8 プレイヤー移動
 
 **目標**: WASD キーでプレイヤーを移動させ、wgpu で描画する。
 
@@ -1160,7 +1162,7 @@ fn set_player_input(
 
 ---
 
-## Step 9: 敵スポーン・追跡 AI
+## 1.1.9 敵スポーン・追跡 AI
 
 **目標**: 画面外から敵を 100 体スポーンさせ、プレイヤーを追跡させる。
 
@@ -1210,7 +1212,7 @@ pub fn update_chase_ai(
 
 ---
 
-## Step 10: 衝突判定（Spatial Hash）
+## 1.1.10 衝突判定（Spatial Hash）
 
 **目標**: Dual Spatial Hash で敵とプレイヤー・弾丸の衝突を検出し、HP を減らす。
 
@@ -1263,7 +1265,7 @@ impl SpatialHash {
 
 ---
 
-## Step 11: 武器・弾丸システム
+## 1.1.11 武器・弾丸システム
 
 **目標**: Magic Wand（最近接敵への自動発射）を実装する。
 
@@ -1306,7 +1308,7 @@ pub fn find_nearest_enemy(enemies: &EnemyWorld, px: f32, py: f32) -> Option<usiz
 
 ---
 
-## Step 12: 大規模スポーン・最適化（5000 体）
+## 1.1.12 大規模スポーン・最適化（5000 体）
 
 **目標**: 5000 体の敵を 60fps で動かす。
 
@@ -1362,7 +1364,7 @@ use rayon::prelude::*;
 
 ---
 
-## Step 13: UI（HP・スコア・タイマー）
+## 1.1.13 UI（HP・スコア・タイマー）
 
 **目標**: 画面上部に HP バー、スコア、経過時間を表示する。
 
@@ -1395,7 +1397,7 @@ egui::Window::new("HUD").show(ctx, |ui| {
 
 ---
 
-## Step 14: レベルアップ・武器選択
+## 1.1.14 レベルアップ・武器選択
 
 **目標**: 経験値が溜まるとレベルアップ画面が表示され、3 択から武器を選べる。
 
@@ -1426,7 +1428,7 @@ end
 
 ---
 
-## Step 15: ゲームオーバー・リスタート
+## 1.1.15 ゲームオーバー・リスタート
 
 **目標**: HP が 0 になるとゲームオーバー画面が表示され、リスタートできる。
 
@@ -1490,7 +1492,7 @@ cargo build --release
 # → native/game_native/target/release/ に出力
 ```
 
-### 実行ファイルのパッケージング（Step 15 完了後）
+### 実行ファイルのパッケージング（1.1.15 完了後）
 
 ```powershell
 # リリースビルドを platform/windows/_build/release/ にまとめる
@@ -1504,27 +1506,28 @@ mix release
 
 ```mermaid
 flowchart LR
-    S1[Step 1\n環境構築] --> S2[Step 2\nウィンドウ]
-    S2 --> S3[Step 3\nwgpu クリア]
-    S3 --> S4[Step 4\nスプライト 1 枚]
-    S4 --> S5[Step 5\nインスタンシング]
-    S1 --> S6[Step 6\nRustler NIF]
-    S5 --> S7[Step 7\nゲームループ]
+    S1[1.1.1\n環境構築] --> S2[1.1.2\nウィンドウ]
+    S2 --> S3[1.1.3\nwgpu クリア]
+    S3 --> S4[1.1.4\nスプライト 1 枚]
+    S4 --> S5[1.1.5\nインスタンシング]
+    S1 --> S6[1.1.6\nRustler NIF]
+    S5 --> S7[1.1.7\nゲームループ]
     S6 --> S7
-    S7 --> S8[Step 8\nプレイヤー移動]
-    S8 --> S9[Step 9\n敵スポーン]
-    S9 --> S10[Step 10\n衝突判定]
-    S10 --> S11[Step 11\n武器・弾丸]
-    S11 --> S12[Step 12\n5000体最適化]
-    S12 --> S13[Step 13\nUI]
-    S13 --> S14[Step 14\nレベルアップ]
-    S14 --> S15[Step 15\nゲームオーバー]
+    S7 --> S8[1.1.8\nプレイヤー移動]
+    S8 --> S9[1.1.9\n敵スポーン]
+    S9 --> S10[1.1.10\n衝突判定]
+    S10 --> S11[1.1.11\n武器・弾丸]
+    S11 --> S12[1.1.12\n5000体最適化]
+    S12 --> S13[1.1.13\nUI]
+    S13 --> S14[1.1.14\nレベルアップ]
+    S14 --> S15[1.1.15\nゲームオーバー]
 ```
 
 ---
 
 ## 参考ドキュメント
 
+- [STEPS_ALL.md](./STEPS_ALL.md) — 全体ロードマップ・章・節・項構成
 - [ゲーム仕様書](../01_setup/SPEC.md) — 各ステップの詳細な技術仕様
 - [Elixir 採用理由](../03_tech_decisions/WHY_ELIXIR/WHY_ELIXIR.md) — アーキテクチャの設計思想
 - [Rustler ドキュメント](https://docs.rs/rustler) — NIF 実装の詳細

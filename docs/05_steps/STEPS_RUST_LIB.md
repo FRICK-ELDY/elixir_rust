@@ -1,9 +1,26 @@
-# Rust lib.rs 分割・整理（フォルダ構成検討）
+# 2.1 Rust lib 分割・整理（全6項）
 
-**目的**: Step 48〜54（3D）・Step 55〜61（Slot・コンポーネント）に着手する**前**に、`native/game_native/src/lib.rs` を分割・整理し、保守性と拡張性を高める。  
-**前提**: Step 1〜47 の拡張フェーズまで一通り完了していること。2D ゲームの Rust 側が一つの大きな `lib.rs` に集約されている現状を解消する。
+**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 2章 ゲームエンジン応用 の 2.1 節。
 
-**実施タイミング**: 3D・Slot ステップは**据え置き**とし、本「Rust lib 分割・整理」→ **2D ゲームの固め** → [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) の実装、の順で進める。
+**目的**: 2.4（3D）・2.5（Slot・コンポーネント）に着手する**前**に、`native/game_native/src/lib.rs` を分割・整理し、保守性と拡張性を高める。  
+**前提**: 1章（1.1.1〜1.5.7）の拡張フェーズまで一通り完了していること。2D ゲームの Rust 側が一つの大きな `lib.rs` に集約されている現状を解消する。
+
+**実施タイミング**: 2.4・2.5 は**据え置き**とし、本「Rust lib 分割・整理」→ **2D ゲームの固め** → [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) の実装、の順で進める。
+
+---
+
+## 2.1 節 全体ロードマップ（2.1.1〜2.1.6）
+
+| 項 | 目標 |
+|----|------|
+| 2.1.1 | ブロック切り出し順序の決定 |
+| 2.1.2 | `world/` の作成と型定義の移動 |
+| 2.1.3 | `game_logic/` の作成とロジックの移動 |
+| 2.1.4 | `nif/` の作成と NIF 関数の移動 |
+| 2.1.5 | `lib.rs` のスリム化と動作確認 |
+| 2.1.6 | ドキュメント更新 |
+
+> 3D・Slot の**前**に実施。1章完了後に着手する。
 
 ---
 
@@ -123,17 +140,17 @@ src/
 
 本フェーズは「Step 番号」ではなく、**Rust lib 分割のための検討・実施項目**として以下を想定する。
 
-| 項目 | 内容 |
-|------|------|
-| **R-LIB-1** | 現行 lib.rs のブロック切り出し順序の決定（型 → ヘルパー/AI → physics_step → NIF） |
-| **R-LIB-2** | `world/` の作成: PlayerState, EnemyWorld, BulletWorld, ParticleWorld, ItemWorld（SoA）, BossState, GameWorldInner, GameWorld を移動 |
-| **R-LIB-3** | `game_logic/` の作成: FrameEvent, physics_step_inner, drain_frame_events_inner, chase_ai, find_nearest_* を移動 |
-| **R-LIB-4** | `nif/` の作成: 各 NIF を world_nif / game_loop_nif / save_nif 等に振り分け、lib.rs から呼び出す |
-| **R-LIB-5** | lib.rs のスリム化: `mod` と `pub use`、`rustler::atoms!`、`rustler::init!` のみ残し、テスト・ビルドで動作確認 |
-| **R-LIB-6** | ドキュメント更新: 本ドキュメントに「採用した構成」を記録し、STEPS_ALL の実施済みとしてマーク |
+| 項 | 内容 |
+|----|------|
+| 2.1.1 | 現行 lib.rs のブロック切り出し順序の決定（型 → ヘルパー/AI → physics_step → NIF） |
+| 2.1.2 | `world/` の作成: PlayerState, EnemyWorld, BulletWorld, ParticleWorld, ItemWorld（SoA）, BossState, GameWorldInner, GameWorld を移動 |
+| 2.1.3 | `game_logic/` の作成: FrameEvent, physics_step_inner, drain_frame_events_inner, chase_ai, find_nearest_* を移動 |
+| 2.1.4 | `nif/` の作成: 各 NIF を world_nif / game_loop_nif / save_nif 等に振り分け、lib.rs から呼び出す |
+| 2.1.5 | lib.rs のスリム化: `mod` と `pub use`、`rustler::atoms!`、`rustler::init!` のみ残し、テスト・ビルドで動作確認 |
+| 2.1.6 | ドキュメント更新: 本ドキュメントに「採用した構成」を記録し、STEPS_ALL の実施済みとしてマーク |
 
-実施順序は **R-LIB-1 → R-LIB-2 → R-LIB-3 → R-LIB-4 → R-LIB-5 → R-LIB-6** を推奨。  
-2D 固めや EOS 実装は、R-LIB 完了後に行う。
+実施順序は **2.1.1 → 2.1.2 → 2.1.3 → 2.1.4 → 2.1.5 → 2.1.6** を推奨。  
+2D 固めや EOS 実装は、2.1 完了後に行う。
 
 ---
 
@@ -142,6 +159,6 @@ src/
 | ドキュメント | 用途 |
 |-------------|------|
 | [STEPS_ALL.md](./STEPS_ALL.md) | 全体ロードマップ・据え置き（3D/Slot）・Rust lib 分割の位置づけ |
-| [STEPS_3D.md](./STEPS_3D.md) | Step 48〜54（据え置き） |
-| [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md) | Step 55〜61（据え置き） |
+| [STEPS_3D.md](./STEPS_3D.md) | 2.4（据え置き） |
+| [STEPS_SLOT_COMPONENT.md](./STEPS_SLOT_COMPONENT.md) | 2.5（据え置き） |
 | [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | Rust lib 整理・2D 固めの後に実装する EOS 設計 |

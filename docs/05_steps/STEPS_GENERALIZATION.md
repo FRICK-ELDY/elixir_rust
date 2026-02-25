@@ -1,9 +1,25 @@
-# Step 32〜40: 汎用ゲームエンジン化
+# 1.4 汎用化（全9項）
+
+**所属**: [STEPS_ALL.md](./STEPS_ALL.md) 1章 ゲームエンジン基礎 の 1.4 節。
 
 **根拠**: [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md)、[ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)  
 **方針**: 現状のヴァンサバ実装を活かしつつ、**他のゲームでも使える汎用エンジン**へ段階的に移行する
 
-PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため、本ドキュメントではその後の Step を提案する。
+---
+
+## 1.4 節 全体ロードマップ（1.4.1〜1.4.9）
+
+| 項 | 目標 |
+|----|------|
+| 1.4.1 | Game インターフェース設計 |
+| 1.4.2 | render_type 汎用化 |
+| 1.4.3 | ゲーム切替（config） |
+| 1.4.4 | ゲーム分離（vampire_survivor） |
+| 1.4.5 | Game behaviour 実装 |
+| 1.4.6 | エンジン API 安定化 |
+| 1.4.7 | entity_registry（データ駆動） |
+| 1.4.8 | ゲーム別アセットパス |
+| 1.4.9 | 2 つ目のゲーム（ミニマル実装） |
 
 ---
 
@@ -11,7 +27,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 1. [現状の課題（汎用化の観点）](#1-現状の課題汎用化の観点)
 2. [汎用化の目標](#2-汎用化の目標)
-3. [Step 32〜40: 汎用ゲームエンジン化](#3-step-3240-汎用ゲームエンジン化)
+3. [1.4 汎用ゲームエンジン化（1.4.1〜1.4.9）](#3-step-3240-汎用ゲームエンジン化)
 4. [推奨実施順序](#4-推奨実施順序)
 5. [関連ドキュメント](#5-関連ドキュメント)
 
@@ -49,11 +65,11 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-## 3. Step 32〜40: 汎用ゲームエンジン化
+## 3. 1.4 汎用ゲームエンジン化（1.4.1〜1.4.9）
 
-### フェーズ1: 境界の明確化（Step 32〜34）
+### フェーズ1: 境界の明確化（1.4.1〜1.4.3）
 
-#### Step 32: Game インターフェース設計
+#### 1.4.1 Game インターフェース設計
 
 **目標**: ゲームがエンジンに提供すべきインターフェースを文書化し、現状のヴァンサバがどうマッピングするか整理する。
 
@@ -71,7 +87,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 33: render_type 汎用化
+#### 1.4.2 render_type 汎用化
 
 **目標**: `SceneBehaviour.render_type/0` の戻り値をゲームが定義できるようにする。
 
@@ -85,7 +101,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 34: ゲーム切替（config）
+#### 1.4.3 ゲーム切替（config）
 
 **目標**: Application 起動時に「どのゲームを動かすか」を指定できるようにする。
 
@@ -98,9 +114,9 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-### フェーズ2: ゲームの分離（Step 35〜37）
+### フェーズ2: ゲームの分離（1.4.4〜1.4.6）
 
-#### Step 35: ゲーム分離（vampire_survivor）✅ 実装済み
+#### 1.4.4 ゲーム分離（vampire_survivor）✅ 実装済み
 
 **目標**: ヴァンサバ固有のコードを `lib/games/vampire_survivor/` に集約する。
 
@@ -114,9 +130,9 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 36: Game behaviour 実装 ✅ 実装済み
+#### 1.4.5 Game behaviour 実装 ✅ 実装済み
 
-**目標**: Step 32 で設計した Game behaviour をヴァンサバが実装する。
+**目標**: 1.4.1 で設計した Game behaviour をヴァンサバが実装する。
 
 **対応**:
 - `Game.VampireSurvivor` が `@behaviour Game.Engine.Game` を実装
@@ -125,7 +141,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 37: エンジン API 安定化 ✅ 実装済み
+#### 1.4.6 エンジン API 安定化 ✅ 実装済み
 
 **目標**: ゲームがエンジンに依存する箇所をインターフェースとして明文化する。
 
@@ -136,9 +152,9 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-### フェーズ3: 拡張性の強化（Step 38〜40、オプション）
+### フェーズ3: 拡張性の強化（1.4.7〜1.4.9、オプション）
 
-#### Step 38: entity_registry（データ駆動）✅ 実装済み
+#### 1.4.7 entity_registry（データ駆動）✅ 実装済み
 
 **目標**: Rust の enum を増やさずに、ゲームが敵・武器を追加できるようにする（データ駆動の第一歩）。
 
@@ -149,7 +165,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 39: ゲーム別アセットパス ✅ 実装済み
+#### 1.4.8 ゲーム別アセットパス ✅ 実装済み
 
 **目標**: ゲームごとにアセットのベースパスを切り替えられるようにする。
 
@@ -161,7 +177,7 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ---
 
-#### Step 40: 2 つ目のゲーム（ミニマル実装）
+#### 1.4.9 2 つ目のゲーム（ミニマル実装）
 
 **目標**: 汎用化が機能していることを検証するために、極小の 2 つ目のゲームを実装する。
 
@@ -176,22 +192,22 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 ```
 【フェーズ1: 境界の明確化】
-  Step 32  Game インターフェース設計      ← 設計先行、コード変更は最小限
-  Step 33  render_type 汎用化
-  Step 34  ゲーム切替（config）
+  1.4.1  Game インターフェース設計      ← 設計先行、コード変更は最小限
+  1.4.2  render_type 汎用化
+  1.4.3  ゲーム切替（config）
 
 【フェーズ2: ゲームの分離】
-  Step 35  ゲーム分離（vampire_survivor）
-  Step 36  Game behaviour 実装
-  Step 37  エンジン API 安定化
+  1.4.4  ゲーム分離（vampire_survivor）
+  1.4.5  Game behaviour 実装
+  1.4.6  エンジン API 安定化
 
 【フェーズ3: 拡張性の強化（必要に応じて）】
-  Step 38  entity_registry（データ駆動）
-  Step 39  ゲーム別アセットパス
-  Step 40  2 つ目のゲーム（ミニマル実装）
+  1.4.7  entity_registry（データ駆動）
+  1.4.8  ゲーム別アセットパス
+  1.4.9  2 つ目のゲーム（ミニマル実装）
 ```
 
-**注意**: Step 35 はリファクタ規模が大きいため、Step 32〜34 で設計を固めてから着手することを推奨する。
+**注意**: 1.4.4 はリファクタ規模が大きいため、1.4.1〜1.4.3 で設計を固めてから着手することを推奨する。
 
 ---
 
@@ -199,7 +215,8 @@ PRIORITY_STEPS（P1〜P7, G1〜G3, Q1〜Q2）はすべて実装済みのため�
 
 | ドキュメント | 用途 |
 |-------------|------|
+| [STEPS_ALL.md](./STEPS_ALL.md) | 全体ロードマップ・章・節・項構成 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md) | 既存の優先度ロードマップ（P1〜P7, G1〜G3, Q1〜Q2） |
 | [ENGINE_ANALYSIS_REVISED.md](../02_spec_design/ENGINE_ANALYSIS_REVISED.md) | エンジン現状の評価 |
 | [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | Elixir/Rust 役割分担、スコープ外・サポートしない項目 |
-| [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計（Step 39 で拡張） |
+| [ASSET_MANAGEMENT.md](../06_system_design/ASSET_MANAGEMENT.md) | アセット管理設計（1.4.8 で拡張） |
