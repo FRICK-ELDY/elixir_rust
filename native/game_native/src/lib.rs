@@ -34,7 +34,7 @@ use std::sync::RwLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
-// ─── Step 45: デバッグ支援（NIF）────────────────────────────────
+// ─── 1.5.5: デバッグ支援（NIF）────────────────────────────────
 /// デバッグビルド時のみ: NIF パニック時に Rust のバックトレースを stderr に出力する。
 /// RUST_BACKTRACE=1 でより詳細なバックトレースが得られる。
 #[cfg(debug_assertions)]
@@ -45,7 +45,7 @@ fn init_panic_hook() {
     }));
 }
 
-// Step 41: GameLoop 制御用（pause/resume）
+// 1.5.1: GameLoop 制御用（pause/resume）
 pub struct GameLoopControl {
     paused: std::sync::atomic::AtomicBool,
 }
@@ -82,7 +82,7 @@ rustler::atoms! {
     // level_up 通知アトム
     level_up,
     no_change,
-    // Step 24: ボス種別アトム
+    // 1.2.9: ボス種別アトム
     slime_king,
     bat_lord,
     stone_golem,
@@ -90,17 +90,17 @@ rustler::atoms! {
     alive,
     dead,
     none,
-    // Step 26: イベントバス用アトム
+    // 1.3.1: イベントバス用アトム
     enemy_killed,
     player_damaged,
     level_up_event,
     item_pickup,
     boss_defeated,
-    // Step 41: Rust ゲームループ → Elixir 送信用
+    // 1.5.1: Rust ゲームループ → Elixir 送信用
     frame_events,
 }
 
-/// Step 26: フレーム内で発生したゲームイベント（EventBus 用）
+/// 1.3.1: フレーム内で発生したゲームイベント（EventBus 用）
 #[derive(Debug, Clone)]
 pub enum FrameEvent {
     EnemyKilled  { enemy_kind: u8, weapon_kind: u8 },
@@ -110,7 +110,7 @@ pub enum FrameEvent {
     BossDefeated { boss_kind: u8 },
 }
 
-// Step 38: 敵は u8 ID で参照。atom から ID への変換は Elixir の entity_registry で行う。
+// 1.4.7: 敵は u8 ID で参照。atom から ID への変換は Elixir の entity_registry で行う。
 
 // ─── Player ───────────────────────────────────────────────────
 pub struct PlayerState {
@@ -244,7 +244,7 @@ pub struct BulletWorld {
     pub piercing:     Vec<bool>,
     /// 描画種別（BULLET_KIND_* 定数）
     pub render_kind:  Vec<u8>,
-    /// Step 26: 発射元武器（EnemyKilled イベント用、WeaponKind::as_u8()）
+    /// 1.3.1: 発射元武器（EnemyKilled イベント用、WeaponKind::as_u8()）
     pub weapon_kind:  Vec<u8>,
     pub count:        usize,
     /// 空きスロットのインデックススタック — O(1) でスロットを取得・返却
@@ -662,7 +662,7 @@ pub fn update_chase_ai(enemies: &mut EnemyWorld, player_x: f32, player_y: f32, d
 }
 
 
-// Step 38: ボスは u8 kind_id で参照。0=SlimeKing, 1=BatLord, 2=StoneGolem
+// 1.4.7: ボスは u8 kind_id で参照。0=SlimeKing, 1=BatLord, 2=StoneGolem
 
 pub struct BossState {
     pub kind_id:          u8,
@@ -705,24 +705,24 @@ pub struct GameWorldInner {
     pub enemies:            EnemyWorld,
     pub bullets:            BulletWorld,
     pub particles:          ParticleWorld,
-    /// ─── Step 19: アイテム ────────────────────────────────────
+    /// ─── 1.2.4: アイテム ────────────────────────────────────
     pub items:              ItemWorld,
     /// 磁石エフェクト残り時間（秒）
     pub magnet_timer:       f32,
     pub rng:                SimpleRng,
     pub collision:          CollisionWorld,
-    /// Step 42: 障害物クエリ用バッファ（毎フレーム再利用）
+    /// 1.5.2: 障害物クエリ用バッファ（毎フレーム再利用）
     pub obstacle_query_buf: Vec<usize>,
     /// 直近フレームの物理ステップ処理時間（ミリ秒）
     pub last_frame_time_ms: f64,
-    /// ─── Step 13: HUD ─────────────────────────────────────────
+    /// ─── 1.1.13: HUD ─────────────────────────────────────────
     /// 撃破スコア（敵 1 体 = 10 点）
     pub score:              u32,
     /// ゲーム開始からの経過時間（秒）
     pub elapsed_seconds:    f32,
     /// プレイヤーの最大 HP（HP バー計算用）
     pub player_max_hp:      f32,
-    /// ─── Step 14: レベルアップ ────────────────────────────────
+    /// ─── 1.1.14: レベルアップ ────────────────────────────────
     /// 現在の経験値
     pub exp:                u32,
     /// 現在のレベル（1 始まり）
@@ -731,9 +731,9 @@ pub struct GameWorldInner {
     pub level_up_pending:   bool,
     /// 装備中の武器スロット（最大 6 つ）
     pub weapon_slots:       Vec<WeaponSlot>,
-    /// ─── Step 24: ボスエネミー ────────────────────────────────
+    /// ─── 1.2.9: ボスエネミー ────────────────────────────────
     pub boss:               Option<BossState>,
-    /// Step 26: このフレームで発生したイベント（毎フレーム drain される）
+    /// 1.3.1: このフレームで発生したイベント（毎フレーム drain される）
     pub frame_events:       Vec<FrameEvent>,
 }
 
@@ -809,7 +809,7 @@ fn lock_poisoned_err() -> rustler::Error {
     rustler::Error::RaiseAtom("lock_poisoned")
 }
 
-/// プレイヤーの入力方向を設定（Step 8）
+/// プレイヤーの入力方向を設定（1.1.8）
 #[rustler::nif]
 fn set_player_input(world: ResourceArc<GameWorld>, dx: f64, dy: f64) -> NifResult<Atom> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
@@ -827,7 +827,7 @@ fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Ve
         .collect()
 }
 
-/// 敵をスポーン（Step 38: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost）
+/// 敵をスポーン（1.4.7: kind_id で指定。0=Slime, 1=Bat, 2=Golem, 3=Skeleton, 4=Ghost）
 /// SPEC: プレイヤーから 800〜1200px の円周上にスポーン（見つけやすい距離）
 #[rustler::nif]
 fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> NifResult<Atom> {
@@ -837,7 +837,7 @@ fn spawn_enemies(world: ResourceArc<GameWorld>, kind_id: u8, count: usize) -> Ni
     Ok(ok())
 }
 
-/// Step 42: マップ障害物を設定。obstacles: [{x, y, radius, kind}, ...]（kind: 0=木, 1=岩）
+/// 1.5.2: マップ障害物を設定。obstacles: [{x, y, radius, kind}, ...]（kind: 0=木, 1=岩）
 #[rustler::nif]
 fn set_map_obstacles(world: ResourceArc<GameWorld>, obstacles_term: Term) -> NifResult<Atom> {
     let list: ListIterator = obstacles_term.decode()?;
@@ -856,7 +856,7 @@ fn set_map_obstacles(world: ResourceArc<GameWorld>, obstacles_term: Term) -> Nif
     Ok(ok())
 }
 
-/// Step 42: 敵が障害物と重なっている場合に押し出す（Ghost はスキップ）
+/// 1.5.2: 敵が障害物と重なっている場合に押し出す（Ghost はスキップ）
 fn resolve_obstacles_enemy(w: &mut GameWorldInner) {
     let collision = &w.collision;
     let buf = &mut w.obstacle_query_buf;
@@ -883,7 +883,7 @@ fn resolve_obstacles_enemy(w: &mut GameWorldInner) {
     }
 }
 
-/// Step 41: 物理ステップの内部実装（NIF と Rust ゲームループスレッドの両方から呼ぶ）
+/// 1.5.1: 物理ステップの内部実装（NIF と Rust ゲームループスレッドの両方から呼ぶ）
 pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     // trace にしておき、RUST_LOG=trace のときだけ毎フレーム出力（debug だと 60fps でコンソールが埋まる）
     log::trace!("physics_step: delta={}ms frame_id={}", delta_ms, w.frame_id);
@@ -893,7 +893,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
 
     let dt = delta_ms as f32 / 1000.0;
 
-    // ── Step 13: 経過時間を更新 ──────────────────────────────────
+    // ── 1.1.13: 経過時間を更新 ──────────────────────────────────
     w.elapsed_seconds += dt;
     let dx = w.player.input_dx;
     let dy = w.player.input_dy;
@@ -905,7 +905,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         w.player.y += (dy / len) * PLAYER_SPEED * dt;
     }
 
-    // Step 42: プレイヤー vs 障害物（重なったら押し出し）
+    // 1.5.2: プレイヤー vs 障害物（重なったら押し出し）
     obstacle_resolve::resolve_obstacles_player(
         &w.collision,
         &mut w.player.x,
@@ -927,10 +927,10 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     // 敵同士の重なりを解消する分離パス
     apply_separation(&mut w.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
-    // Step 42: 敵 vs 障害物（Ghost 以外は押し出し）
+    // 1.5.2: 敵 vs 障害物（Ghost 以外は押し出し）
     resolve_obstacles_enemy(w);
 
-    // ── Step 10: 衝突判定（Spatial Hash）────────────────────────
+            // ── 1.1.10: 衝突判定（Spatial Hash）────────────────────────
     // 1. 動的 Spatial Hash を再構築
     w.rebuild_collision();
 
@@ -974,7 +974,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
     }
 
-            // ── Step 11/14/17/21: 武器スロット発射処理 ──────────────────
+            // ── 1.1.11/1.1.14/1.2.2/1.2.6: 武器スロット発射処理 ──────────────────
     // level_up_pending 中は発射を止めてゲームを一時停止する
     if !w.level_up_pending {
         // プレイヤーの移動方向（Whip の向き計算用）
@@ -997,7 +997,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
             }
             let kind_id = w.weapon_slots[si].kind_id;
             let wp = WeaponParams::get(kind_id);
-            // Step 17: レベルに応じたクールダウン・ダメージ・弾数を使用
+            // 1.2.2: レベルに応じたクールダウン・ダメージ・弾数を使用
             let cd    = w.weapon_slots[si].effective_cooldown();
             let dmg   = w.weapon_slots[si].effective_damage();
             let level = w.weapon_slots[si].level;
@@ -1045,7 +1045,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                     }
                     w.weapon_slots[si].cooldown_timer = cd;
                 }
-                // ── Step 21: Whip ──────────────────────────────────────────
+                // ── 1.2.6: Whip ──────────────────────────────────────────
                 WEAPON_ID_WHIP => {
                     // プレイヤーの移動方向に扇状の判定を出す（弾丸を生成しない直接判定）
                     let whip_range = whip_range(kind_id, level);
@@ -1108,7 +1108,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                             }
                         }
                     }
-                    // Step 24: Whip vs ボス
+                    // 1.2.9: Whip vs ボス
                     {
                         let whip_range_sq = whip_range * whip_range;
                         let boss_hit_pos: Option<(f32, f32)> = if let Some(ref boss) = w.boss {
@@ -1146,7 +1146,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                         w.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
-                // ── Step 21: Lightning ─────────────────────────────────────
+                // ── 1.2.6: Lightning ─────────────────────────────────────
                 WEAPON_ID_LIGHTNING => {
                     // 最近接敵から始まり、最大 chain_count 体に連鎖
                     let chain_count = lightning_chain_count(kind_id, level);
@@ -1207,7 +1207,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                             break;
                         }
                     }
-                    // Step 24: Lightning vs ボス（600px 以内なら連鎖先としてダメージ）
+                    // 1.2.9: Lightning vs ボス（600px 以内なら連鎖先としてダメージ）
                     {
                         let boss_hit_pos: Option<(f32, f32)> = if let Some(ref boss) = w.boss {
                             if !boss.invincible {
@@ -1294,7 +1294,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
     }
 
-    // ── Step 19: アイテム更新（磁石エフェクト + 自動収集） ─────
+    // ── 1.2.4: アイテム更新（磁石エフェクト + 自動収集） ─────
     {
         // 磁石タイマー更新
         if w.magnet_timer > 0.0 {
@@ -1362,7 +1362,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
             w.bullets.kill(i);
             continue;
         }
-        // Step 42: 障害物に当たったら弾を消す
+        // 1.5.2: 障害物に当たったら弾を消す
         let bx = w.bullets.positions_x[i];
         let by = w.bullets.positions_y[i];
         w.collision.query_static_nearby_into(bx, by, BULLET_RADIUS, &mut w.obstacle_query_buf);
@@ -1414,10 +1414,10 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                         enemy_kind:  kind_id,
                         weapon_kind: weapon_k,
                     });
-                    // ── Step 13: 敵撃破でスコア加算 ──────────────
-                    // Step 18: 敵タイプに応じたスコア（経験値 × 2）
+                    // ── 1.1.13: 敵撃破でスコア加算 ──────────────
+                    // 1.2.3: 敵タイプに応じたスコア（経験値 × 2）
                     w.score += ep.exp_reward * 2;
-                    // ── Step 14/18: 経験値加算（タイプ別）────────
+                    // ── 1.1.14/1.2.3: 経験値加算（タイプ別）────────
                     w.exp += ep.exp_reward;
                     if !w.level_up_pending {
                         let required = exp_required_for_next(w.level);
@@ -1427,9 +1427,9 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                             w.frame_events.push(FrameEvent::LevelUp { new_level: new_lv });
                         }
                     }
-                    // ── Step 16/18: 敵タイプ別パーティクル ────────
+                    // ── 1.2.1/1.2.3: 敵タイプ別パーティクル ────────
                     w.particles.emit(ex, ey, 8, ep.particle_color);
-                    // ── Step 19: アイテムドロップ（1体につき最大1種類）──
+                    // ── 1.2.4: アイテムドロップ（1体につき最大1種類）──
                     // 0〜1%: 磁石、2〜6%: 回復ポーション、7〜100%: 経験値宝石
                     let roll = w.rng.next_u32() % 100;
                     let (item_kind, item_value) = if roll < 2 {
@@ -1441,8 +1441,8 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
                     };
                     w.items.spawn(ex, ey, item_kind, item_value);
                 } else {
-                    // ── Step 16: ヒット時黄色パーティクル ─────────
-                    // ── Step 21: Fireball は炎色パーティクル ──────
+                    // ── 1.2.1: ヒット時黄色パーティクル ─────────
+                    // ── 1.2.6: Fireball は炎色パーティクル ──────
                     let hit_color = if piercing {
                         [1.0, 0.4, 0.0, 1.0]  // 炎（橙赤）
                     } else {
@@ -1459,7 +1459,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
     }
 
-    // ── Step 24: ボス更新（Elixir が spawn_boss で生成したボスを毎フレーム動かす）
+    // ── 1.2.9: ボス更新（Elixir が spawn_boss で生成したボスを毎フレーム動かす）
     {
         // 借用競合を避けるため、副作用データを先に収集する
         struct BossEffect {
@@ -1691,7 +1691,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
         }
     }
 
-    // ── Step 12: フレーム時間計測 ────────────────────────────────
+    // ── 1.1.12: フレーム時間計測 ────────────────────────────────
     let elapsed_ms = t_start.elapsed().as_secs_f64() * 1000.0;
     w.last_frame_time_ms = elapsed_ms;
     if elapsed_ms > FRAME_BUDGET_MS {
@@ -1703,7 +1703,7 @@ pub(crate) fn physics_step_inner(w: &mut GameWorldInner, delta_ms: f64) {
     }
 }
 
-/// 物理ステップ NIF（Step 41 で Rust ループ使用時は NIF 経由では呼ばない）
+/// 物理ステップ NIF（1.5.1 で Rust ループ使用時は NIF 経由では呼ばない）
 #[rustler::nif(schedule = "DirtyCpu")]
 fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
@@ -1711,7 +1711,7 @@ fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> 
     Ok(w.frame_id)
 }
 
-/// Step 41: フレームイベントを取り出す内部実装（Rust ゲームループスレッドから呼ぶ）
+/// 1.5.1: フレームイベントを取り出す内部実装（Rust ゲームループスレッドから呼ぶ）
 pub(crate) fn drain_frame_events_inner(w: &mut GameWorldInner) -> Vec<(Atom, u32, u32)> {
     w.frame_events
         .drain(..)
@@ -1730,21 +1730,21 @@ pub(crate) fn drain_frame_events_inner(w: &mut GameWorldInner) -> Vec<(Atom, u32
         .collect()
 }
 
-/// Step 26: フレームイベントを取り出してクリアする（Elixir tick 駆動時のみ使用）
+/// 1.3.1: フレームイベントを取り出してクリアする（Elixir tick 駆動時のみ使用）
 #[rustler::nif]
 fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
     Ok(drain_frame_events_inner(&mut w))
 }
 
-/// プレイヤー座標を返す（Step 8）
+/// プレイヤー座標を返す（1.1.8）
 #[rustler::nif]
 fn get_player_pos(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64)> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     Ok((w.player.x as f64, w.player.y as f64))
 }
 
-/// プレイヤー HP を返す（Step 10）
+/// プレイヤー HP を返す（1.1.10）
 #[rustler::nif]
 fn get_player_hp(world: ResourceArc<GameWorld>) -> NifResult<f64> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
@@ -1768,7 +1768,7 @@ fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len() + 1);
     result.push((w.player.x, w.player.y, 0u8));
-    // Step 24: ボスを描画（中心座標からスプライト左上に変換）
+    // 1.2.9: ボスを描画（中心座標からスプライト左上に変換）
     if let Some(ref boss) = w.boss {
         let bp = BossParams::get(boss.kind_id);
         let boss_sprite_size = if boss.kind_id == 2 { 128.0 } else { 96.0 }; // StoneGolem
@@ -1822,21 +1822,21 @@ fn get_particle_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, 
     Ok(result)
 }
 
-/// 現在飛んでいる弾丸数を返す（Step 11）
+/// 現在飛んでいる弾丸数を返す（1.1.11）
 #[rustler::nif]
 fn get_bullet_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     Ok(w.bullets.count)
 }
 
-/// 直近フレームの物理ステップ処理時間をミリ秒で返す（Step 12）
+/// 直近フレームの物理ステップ処理時間をミリ秒で返す（1.1.12）
 #[rustler::nif]
 fn get_frame_time_ms(world: ResourceArc<GameWorld>) -> NifResult<f64> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     Ok(w.last_frame_time_ms)
 }
 
-/// Step 45: デバッグ用 — ワールド状態を文字列で取得（開発時のみ。リリースでは :debug_build_only を返す）
+/// 1.5.5: デバッグ用 — ワールド状態を文字列で取得（開発時のみ。リリースでは :debug_build_only を返す）
 #[cfg(debug_assertions)]
 #[rustler::nif]
 fn debug_dump_world(world: ResourceArc<GameWorld>) -> NifResult<String> {
@@ -1863,14 +1863,14 @@ fn debug_dump_world(_world: ResourceArc<GameWorld>) -> NifResult<String> {
     Err(rustler::Error::Atom("debug_build_only"))
 }
 
-/// 現在生存している敵の数を返す（Step 12）
+/// 現在生存している敵の数を返す（1.1.12）
 #[rustler::nif]
 fn get_enemy_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
     let w = world.0.read().map_err(|_| lock_poisoned_err())?;
     Ok(w.enemies.count)
 }
 
-/// HUD データを一括取得（Step 13）
+/// HUD データを一括取得（1.1.13）
 /// 戻り値: (hp, max_hp, score, elapsed_seconds)
 #[rustler::nif]
 fn get_hud_data(world: ResourceArc<GameWorld>) -> NifResult<(f64, f64, u32, f64)> {
@@ -1922,9 +1922,9 @@ fn get_frame_metadata(world: ResourceArc<GameWorld>) -> NifResult<(
     ))
 }
 
-// ─── Step 14: レベルアップ・武器選択 ──────────────────────────
+// ─── 1.1.14: レベルアップ・武器選択 ──────────────────────────
 
-/// レベルアップ関連データを一括取得（Step 14）
+/// レベルアップ関連データを一括取得（1.1.14）
 /// 戻り値: (exp, level, level_up_pending, exp_to_next)
 #[rustler::nif]
 fn get_level_up_data(world: ResourceArc<GameWorld>) -> NifResult<(u32, u32, bool, u32)> {
@@ -1933,7 +1933,7 @@ fn get_level_up_data(world: ResourceArc<GameWorld>) -> NifResult<(u32, u32, bool
     Ok((w.exp, w.level, w.level_up_pending, exp_to_next))
 }
 
-/// 装備中の武器スロット情報を返す（Step 17）
+/// 装備中の武器スロット情報を返す（1.2.2）
 /// 戻り値: [(weapon_name, level)] のリスト
 #[rustler::nif]
 fn get_weapon_levels(world: ResourceArc<GameWorld>) -> NifResult<Vec<(String, u32)>> {
@@ -1943,7 +1943,7 @@ fn get_weapon_levels(world: ResourceArc<GameWorld>) -> NifResult<Vec<(String, u3
         .collect())
 }
 
-/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（Step 17/21/38）
+/// 武器を追加またはレベルアップし、レベルアップ待機を解除する（1.2.2/1.2.6/1.4.7）
 /// weapon_id: 0=MagicWand, 1=Axe, 2=Cross, 3=Whip, 4=Fireball, 5=Lightning
 /// 同じ武器を選んだ場合はレベルアップ（最大 Lv.8）
 /// 新規武器は最大 6 スロットまで追加可能
@@ -1974,7 +1974,7 @@ fn skip_level_up(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
     Ok(ok())
 }
 
-// ─── Step 19: アイテム関連 NIF ─────────────────────────────────
+// ─── 1.2.4: アイテム関連 NIF ─────────────────────────────────
 
 /// アイテム描画データを返す: [(x, y, kind)] kind: 5=gem, 6=potion, 7=magnet
 ///
@@ -2007,9 +2007,9 @@ fn get_magnet_timer(world: ResourceArc<GameWorld>) -> NifResult<f64> {
     Ok(w.magnet_timer as f64)
 }
 
-// ─── Step 24: ボス関連 NIF ─────────────────────────────────────
+// ─── 1.2.9: ボス関連 NIF ─────────────────────────────────────
 
-/// ボスをスポーンする（Step 38: kind_id で指定。0=SlimeKing, 1=BatLord, 2=StoneGolem）
+/// ボスをスポーンする（1.4.7: kind_id で指定。0=SlimeKing, 1=BatLord, 2=StoneGolem）
 /// スポーン位置はプレイヤーの右 600px
 #[rustler::nif]
 fn spawn_boss(world: ResourceArc<GameWorld>, kind_id: u8) -> NifResult<Atom> {
@@ -2071,7 +2071,7 @@ fn spawn_elite_enemy(world: ResourceArc<GameWorld>, kind_id: u8, count: usize, h
     Ok(ok())
 }
 
-// ─── Step 41: Rust ゲームループ NIF ─────────────────────────────
+// ─── 1.5.1: Rust ゲームループ NIF ─────────────────────────────
 
 /// ゲームループ制御用リソースを作成（pause/resume 用）
 #[rustler::nif]
@@ -2079,7 +2079,7 @@ fn create_game_loop_control() -> ResourceArc<GameLoopControl> {
     ResourceArc::new(GameLoopControl::new())
 }
 
-/// Step 41: Rust 駆動の高精度ゲームループを起動。
+/// 1.5.1: Rust 駆動の高精度ゲームループを起動。
 /// 別スレッドで固定 16.67ms (60Hz) の physics_step を実行し、
 /// フレームイベントを Elixir の pid に {:frame_events, events} で送信する。
 #[rustler::nif]
@@ -2149,7 +2149,7 @@ fn resume_physics(control: ResourceArc<GameLoopControl>) -> NifResult<Atom> {
     Ok(ok())
 }
 
-// ─── Step 43: セーブ・ロード ───────────────────────────────────
+// ─── 1.5.3: セーブ・ロード ───────────────────────────────────
 
 /// 武器スロットの保存用データ（NifMap で Elixir map と相互変換）
 #[derive(Debug, Clone, rustler::NifMap)]
@@ -2242,10 +2242,10 @@ fn load_save_snapshot(world: ResourceArc<GameWorld>, snapshot: SaveSnapshot) -> 
 
 #[allow(non_local_definitions)]
 fn load(env: rustler::Env, _: rustler::Term) -> bool {
-    // Step 45: デバッグビルド時のみパニックフックを設定（NIF クラッシュ時にバックトレース表示）
+    // 1.5.5: デバッグビルド時のみパニックフックを設定（NIF クラッシュ時にバックトレース表示）
     #[cfg(debug_assertions)]
     init_panic_hook();
-    // Step 45: RUST_LOG で Rust 側ログを有効化（例: RUST_LOG=debug）
+    // 1.5.5: RUST_LOG で Rust 側ログを有効化（例: RUST_LOG=debug）
     let _ = env_logger::Builder::from_default_env().try_init();
 
     let _ = rustler::resource!(GameWorld, env);

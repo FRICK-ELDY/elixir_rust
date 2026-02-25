@@ -43,7 +43,7 @@ define_assets! {
 }
 
 /// アセットのロードを行う。実行時ロード（ファイル存在時）＋埋め込みフォールバック。
-/// Step 39: ゲーム別アセットパス — game_assets_id により assets/{id}/ を参照可能。
+/// 1.4.8: ゲーム別アセットパス — game_assets_id により assets/{id}/ を参照可能。
 pub struct AssetLoader {
     /// ベースパス（プロジェクトルート相当）。None の場合はカレントディレクトリまたは埋め込みを使用
     base_path: Option<std::path::PathBuf>,
@@ -77,7 +77,7 @@ impl AssetLoader {
         }
     }
 
-    /// ゲーム ID を指定して作成（Step 39: with_game_assets）。
+    /// ゲーム ID を指定して作成（1.4.8: with_game_assets）。
     /// 例: `AssetLoader::with_game_assets("vampire_survivor")` → assets/vampire_survivor/ を参照
     #[allow(dead_code)] // 明示指定用。通常は new() が GAME_ASSETS_ID を読む
     pub fn with_game_assets(game_id: &str) -> Self {

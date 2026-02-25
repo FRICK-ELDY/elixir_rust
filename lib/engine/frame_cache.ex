@@ -21,7 +21,7 @@ defmodule Engine.FrameCache do
   GameEvents が毎秒（60 フレームごと）書き込む。
 
   - render_type: シーンの render_type/0 の戻り値（任意の atom）
-  - high_scores: Step 43: ゲームオーバー時にハイスコア一覧を渡す（任意）
+  - high_scores: 1.5.3: ゲームオーバー時にハイスコア一覧を渡す（任意）
   """
   def put(enemy_count, bullet_count, physics_ms, hud_data, render_type \\ :playing, high_scores \\ nil) do
     base = %{

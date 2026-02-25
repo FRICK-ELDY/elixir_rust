@@ -10,14 +10,14 @@ pub const BG_B: f64 = 0.10;
 pub const SCREEN_WIDTH:  f32 = 1280.0;
 pub const SCREEN_HEIGHT: f32 = 720.0;
 
-// Map size (Step 20: camera scroll)
+// Map size (1.2.5: camera scroll)
 // Used by game_window binary; NIF lib uses fixed screen coordinates.
 #[allow(dead_code)]
 pub const MAP_WIDTH:  f32 = 4096.0;
 #[allow(dead_code)]
 pub const MAP_HEIGHT: f32 = 4096.0;
 
-// Camera lerp speed (Step 20)
+// Camera lerp speed (1.2.5)
 #[allow(dead_code)]
 pub const CAMERA_LERP_SPEED: f32 = 5.0;
 
@@ -62,7 +62,7 @@ pub const WEAPON_SEARCH_RADIUS: f32 = SCREEN_WIDTH / 2.0;
 pub const MAX_ENEMIES: usize = 300;
 
 // Wave-based spawn schedule: (start_secs, interval_secs, count_per_tick)
-// Step 25: 難易度カーブを自然に感じられるよう調整
+// 1.2.10: 難易度カーブを自然に感じられるよう調整
 // Used by game_window binary; Elixir SpawnSystem handles this for the NIF lib.
 #[allow(dead_code)]
 pub const WAVES: &[(f32, f32, usize)] = &[

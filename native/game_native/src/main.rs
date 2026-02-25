@@ -6,7 +6,7 @@ mod audio;
 mod core;
 mod renderer;
 
-// ─── Step 22: 音声ファイルをバイナリに埋め込む ──────────────────────
+// ─── 1.2.7: 音声ファイルをバイナリに埋め込む ──────────────────────
 // assets/audio/ 以下の WAV ファイルが存在しない場合はコンパイルエラーになる。
 // `cargo run` 前に `python assets/audio/gen_audio.py` を実行すること。
 static BGM_BYTES:          &[u8] = include_bytes!("../../../assets/audio/bgm.wav");
@@ -46,14 +46,14 @@ use core::boss::BossKind;
 use core::util::{current_wave, exp_required_for_next, is_elite_spawn, spawn_position_around_player};
 use renderer::{BossHudInfo, GameUiState, HudData, Renderer};
 
-// Step 42: game_window 用のデフォルト障害物（マップ中央付近に配置・起動時に見える）
+// 1.5.2: game_window 用のデフォルト障害物（マップ中央付近に配置・起動時に見える）
 const DEFAULT_OBSTACLES: &[(f32, f32, f32, u8)] = &[
     (2400.0, 2016.0, 40.0, 0),
     (1650.0, 2300.0, 30.0, 1),
     (2300.0, 1700.0, 35.0, 0),
 ];
 
-// ─── Step 24: ボスエネミー ─────────────────────────────────────
+// ─── 1.2.9: ボスエネミー ─────────────────────────────────────
 
 /// ボスの状態
 struct BossState {
@@ -109,9 +109,9 @@ struct PlayerState {
     hp: f32,
     max_hp: f32,
     invincible_timer: f32,
-    /// Step 23: アニメーションタイマー（秒）
+    /// 1.2.8: アニメーションタイマー（秒）
     anim_timer: f32,
-    /// Step 23: 現在のアニメーションフレーム番号（0〜3）
+    /// 1.2.8: 現在のアニメーションフレーム番号（0〜3）
     anim_frame: u8,
 }
 
@@ -127,11 +127,11 @@ struct EnemyWorld {
     sep_y:        Vec<f32>,
     /// 近隣クエリ結果の再利用バッファ（毎フレームのヒープアロケーションを回避）
     neighbor_buf: Vec<usize>,
-    /// Step 23: アニメーションタイマー（秒）
+    /// 1.2.8: アニメーションタイマー（秒）
     anim_timers:  Vec<f32>,
-    /// Step 23: 現在のアニメーションフレーム番号
+    /// 1.2.8: 現在のアニメーションフレーム番号
     anim_frames:  Vec<u8>,
-    /// Step 25: エリート敵フラグ（HP3倍・赤みがかった色で描画）
+    /// 1.2.10: エリート敵フラグ（HP3倍・赤みがかった色で描画）
     is_elite:     Vec<bool>,
 }
 
@@ -201,11 +201,11 @@ impl EnemySeparation for EnemyWorld {
 const BULLET_KIND_NORMAL:   u8 = 4;
 const BULLET_KIND_FIREBALL: u8 = 8;
 
-// Step 25: 画面フラッシュ定数
+// 1.2.10: 画面フラッシュ定数
 const SCREEN_FLASH_DURATION:  f32 = 0.18; // フラッシュの持続時間（秒）
 const SCREEN_FLASH_MAX_ALPHA: f32 = 0.5;  // フラッシュの最大アルファ値
 
-// Step 25: エリート敵レンダリング定数（renderer/mod.rs からも参照）
+// 1.2.10: エリート敵レンダリング定数（renderer/mod.rs からも参照）
 pub const ELITE_SIZE_MULTIPLIER: f32 = 1.2; // 通常敵に対するサイズ倍率
 // ボス render_kind: 11=SlimeKing, 12=BatLord, 13=StoneGolem
 // エリート敵は通常敵の render_kind にこのオフセットを加算して区別する（21/22/23）
@@ -374,7 +374,7 @@ impl ParticleWorld {
     }
 }
 
-// Step 25: ゲームの状態
+// 1.2.10: ゲームの状態
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum GamePhase {
     Title,
@@ -382,7 +382,7 @@ enum GamePhase {
     GameOver,
 }
 
-// ─── Step 43: セーブ・ロード（game_window 用）──────────────────────
+// ─── 1.5.3: セーブ・ロード（game_window 用）──────────────────────
 
 const SAVE_PATH: &str = "saves/session.dat";
 
@@ -413,7 +413,7 @@ struct BossSave {
     max_hp: f32,
 }
 
-// Step 25: スコアポップアップ
+// 1.2.10: スコアポップアップ
 struct ScorePopup {
     x:        f32,
     y:        f32,
@@ -426,35 +426,35 @@ struct GameWorld {
     enemies:          EnemyWorld,
     bullets:          BulletWorld,
     particles:        ParticleWorld,
-    // Step 19: アイテム
+    // 1.2.4: アイテム
     items:            ItemWorld,
     magnet_timer:     f32,
     collision:        CollisionWorld,
-    /// Step 42: 障害物クエリ用バッファ
+    /// 1.5.2: 障害物クエリ用バッファ
     obstacle_query_buf: Vec<usize>,
     rng:              SimpleRng,
     score:            u32,
     elapsed_seconds:  f32,
     last_spawn_secs:  f32,
-    // Step 17: 武器スロット（複数武器・レベル管理）
+    // 1.2.2: 武器スロット（複数武器・レベル管理）
     weapon_slots:     Vec<WeaponSlot>,
     exp:              u32,
     level:            u32,
     level_up_pending: bool,
     weapon_choices:   Vec<String>,
-    // Step 20: カメラ（プレイヤー追従スクロール）
+    // 1.2.5: カメラ（プレイヤー追従スクロール）
     camera_x:         f32,
     camera_y:         f32,
     /// 実際のウィンドウサイズ（リサイズ対応）
     screen_w:         f32,
     screen_h:         f32,
-    // Step 24: ボスエネミー
+    // 1.2.9: ボスエネミー
     boss:             Option<BossState>,
     /// 次に出現するボスのインデックス（0=SlimeKing, 1=BatLord, 2=StoneGolem）
     next_boss_index:  usize,
     /// ボス出現通知フラグ（1 フレームだけ true になる）
     boss_spawned:     bool,
-    // Step 25: ゲームバランス調整・ポリッシュ
+    // 1.2.10: ゲームバランス調整・ポリッシュ
     phase:            GamePhase,
     /// 画面フラッシュ（プレイヤーダメージ時に赤くなる）残り時間
     screen_flash_timer: f32,
@@ -466,7 +466,7 @@ struct GameWorld {
     kill_count:       u32,
 }
 
-/// Step 22: 1 フレーム中に発生した音声イベント
+/// 1.2.7: 1 フレーム中に発生した音声イベント
 #[derive(Default)]
 struct SoundEvents {
     pub enemy_hit:    bool,
@@ -474,7 +474,7 @@ struct SoundEvents {
     pub level_up:     bool,
     pub player_hurt:  bool,
     pub item_pickup:  bool,
-    /// Step 24: ボス出現
+    /// 1.2.9: ボス出現
     pub boss_spawn:   bool,
 }
 
@@ -543,7 +543,7 @@ impl GameWorld {
         }
     }
 
-    /// ウィンドウリサイズ時に画面サイズを更新する（Step 20）
+    /// ウィンドウリサイズ時に画面サイズを更新する（1.2.5）
     fn on_resize(&mut self, width: u32, height: u32) {
         self.screen_w = width  as f32;
         self.screen_h = height as f32;
@@ -563,18 +563,18 @@ impl GameWorld {
             return se;
         }
 
-        // Step 25: ヒットストップ中はゲームロジックをスキップ（タイマーだけ進める）
+        // 1.2.10: ヒットストップ中はゲームロジックをスキップ（タイマーだけ進める）
         if self.hitstop_timer > 0.0 {
             self.hitstop_timer = (self.hitstop_timer - dt).max(0.0);
             return se;
         }
 
-        // Step 25: 画面フラッシュタイマー更新
+        // 1.2.10: 画面フラッシュタイマー更新
         if self.screen_flash_timer > 0.0 {
             self.screen_flash_timer = (self.screen_flash_timer - dt).max(0.0);
         }
 
-        // Step 25: スコアポップアップ更新
+        // 1.2.10: スコアポップアップ更新
         self.score_popups.retain_mut(|p| {
             p.y -= 40.0 * dt;
             p.lifetime -= dt;
@@ -591,17 +591,17 @@ impl GameWorld {
             self.player.x += (dx / len) * PLAYER_SPEED * dt;
             self.player.y += (dy / len) * PLAYER_SPEED * dt;
         }
-        // Step 42: プレイヤー vs 障害物（重なったら押し出し）
+        // 1.5.2: プレイヤー vs 障害物（重なったら押し出し）
         self.resolve_obstacles_player();
 
-        // Step 20: マップ境界内に制限
+        // 1.2.5: マップ境界内に制限
         self.player.x = self.player.x.clamp(0.0, MAP_WIDTH  - PLAYER_SIZE);
         self.player.y = self.player.y.clamp(0.0, MAP_HEIGHT - PLAYER_SIZE);
 
         let px = self.player.x + PLAYER_RADIUS;
         let py = self.player.y + PLAYER_RADIUS;
 
-        // Step 20: カメラの滑らかな追従（lerp）
+        // 1.2.5: カメラの滑らかな追従（lerp）
         // 実際のウィンドウサイズを使うことでリサイズ後も中央追従が正しく動作する
         let sw = self.screen_w;
         let sh = self.screen_h;
@@ -632,7 +632,7 @@ impl GameWorld {
         // 敵同士の重なりを解消する分離パス
         apply_separation(&mut self.enemies, ENEMY_SEPARATION_RADIUS, ENEMY_SEPARATION_FORCE, dt);
 
-        // Step 42: 敵 vs 障害物（main には Ghost なし、全員押し出し）
+        // 1.5.2: 敵 vs 障害物（main には Ghost なし、全員押し出し）
         self.resolve_obstacles_enemy();
 
         // 衝突: Spatial Hash 再構築
@@ -663,7 +663,7 @@ impl GameWorld {
             }
         }
 
-        // Step 23: プレイヤーアニメーション更新（歩行中のみ進める）
+        // 1.2.8: プレイヤーアニメーション更新（歩行中のみ進める）
         {
             const PLAYER_ANIM_FPS: f32 = 8.0;
             const PLAYER_ANIM_INTERVAL: f32 = 1.0 / PLAYER_ANIM_FPS;
@@ -681,7 +681,7 @@ impl GameWorld {
             }
         }
 
-        // Step 23: 敵アニメーション更新
+        // 1.2.8: 敵アニメーション更新
         {
             let elen = self.enemies.len();
             for i in 0..elen {
@@ -715,7 +715,7 @@ impl GameWorld {
                     self.player.invincible_timer = INVINCIBLE_DURATION;
                     // 赤いパーティクル
                     self.particles.emit(px, py, 6, [1.0, 0.15, 0.15, 1.0]);
-                    // Step 25: 画面フラッシュ
+                    // 1.2.10: 画面フラッシュ
                     self.screen_flash_timer = SCREEN_FLASH_DURATION;
                     se.player_hurt = true;
                     // HP が 0 になったらゲームオーバー
@@ -726,7 +726,7 @@ impl GameWorld {
             }
         }
 
-        // Step 17/21: 武器スロット発射処理（レベルに応じたクールダウン・ダメージ・弾数）
+        // 1.2.2/1.2.6: 武器スロット発射処理（レベルに応じたクールダウン・ダメージ・弾数）
         // プレイヤーの移動方向（Whip の向き計算用）
         let facing_angle = {
             let fdx = self.player.input_dx;
@@ -780,7 +780,7 @@ impl GameWorld {
                     }
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
-                // ── Step 21: Whip ──────────────────────────────────────────
+                // ── 1.2.6: Whip ──────────────────────────────────────────
                 3 => { // Whip
                     let wr = whip_range(kind_id, level);
                     let whip_half_angle = std::f32::consts::PI * 0.3;
@@ -825,7 +825,7 @@ impl GameWorld {
                                     EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                                 };
                                 self.particles.emit(hit_x, hit_y, 8, pc);
-                                // Step 25: スコアポップアップ
+                                // 1.2.10: スコアポップアップ
                                 self.score_popups.push(ScorePopup { x: hit_x, y: hit_y - 20.0, value: score_val, lifetime: 0.8 });
                                 se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
@@ -843,7 +843,7 @@ impl GameWorld {
                             }
                         }
                     }
-                    // Step 24: Whip vs ボス
+                    // 1.2.9: Whip vs ボス
                     if let Some(ref mut boss) = self.boss {
                         if boss.alive && !boss.invincible {
                             let ddx = boss.x - px;
@@ -864,7 +864,7 @@ impl GameWorld {
                     }
                     self.weapon_slots[si].cooldown_timer = cd;
                 }
-                // ── Step 21: Fireball ──────────────────────────────────────
+                // ── 1.2.6: Fireball ──────────────────────────────────────
                 4 => { // Fireball
                     if let Some(ti) = self.find_nearest_enemy(px, py) {
                         let target_r = self.enemies.kinds[ti].radius();
@@ -879,7 +879,7 @@ impl GameWorld {
                         self.weapon_slots[si].cooldown_timer = cd;
                     }
                 }
-                // ── Step 21: Lightning ─────────────────────────────────────
+                // ── 1.2.6: Lightning ─────────────────────────────────────
                 5 => { // Lightning
                     let chain_count = lightning_chain_count(kind_id, level);
                     // chain_count は最大 6 程度と小さいため Vec で十分（HashSet 不要）
@@ -909,7 +909,7 @@ impl GameWorld {
                                 let prev_pending = self.level_up_pending;
                                 self.check_level_up();
                                 if self.level_up_pending && !prev_pending { se.level_up = true; }
-                                // Step 25: スコアポップアップ
+                                // 1.2.10: スコアポップアップ
                                 self.score_popups.push(ScorePopup { x: hit_x, y: hit_y - 20.0, value: score_val, lifetime: 0.8 });
                                 se.enemy_death = true;
                                 let roll = self.rng.next_u32() % 100;
@@ -944,7 +944,7 @@ impl GameWorld {
                             break;
                         }
                     }
-                    // Step 24: Lightning vs ボス（チェーン先としてボスを含める）
+                    // 1.2.9: Lightning vs ボス（チェーン先としてボスを含める）
                     if let Some(ref mut boss) = self.boss {
                         if boss.alive && !boss.invincible {
                             let ddx = boss.x - px;
@@ -977,13 +977,13 @@ impl GameWorld {
             }
             let bx = self.bullets.positions_x[i];
             let by = self.bullets.positions_y[i];
-            // Step 42: 障害物に当たったら弾を消す
+            // 1.5.2: 障害物に当たったら弾を消す
             self.collision.query_static_nearby_into(bx, by, BULLET_RADIUS, &mut self.obstacle_query_buf);
             if !self.obstacle_query_buf.is_empty() {
                 self.bullets.kill(i);
                 continue;
             }
-            // Step 20: 画面外判定をマップサイズ基準に変更（ワールド座標で判定）
+            // 1.2.5: 画面外判定をマップサイズ基準に変更（ワールド座標で判定）
             if bx < -100.0 || bx > MAP_WIDTH + 100.0 || by < -100.0 || by > MAP_HEIGHT + 100.0 {
                 self.bullets.kill(i);
             }
@@ -1028,14 +1028,14 @@ impl GameWorld {
                             EnemyKind::Golem => [0.6, 0.6, 0.6, 1.0],
                         };
                         self.particles.emit(ex, ey, 8, pc);
-                        // Step 25: スコアポップアップ
+                        // 1.2.10: スコアポップアップ
                         self.score_popups.push(ScorePopup { x: ex, y: ey - 20.0, value: score_val, lifetime: 0.8 });
                         se.enemy_death = true;
-                        // Step 25: ゴーレム撃破時にヒットストップ（2フレーム ≒ 0.033s）
+                        // 1.2.10: ゴーレム撃破時にヒットストップ（2フレーム ≒ 0.033s）
                         if kind == EnemyKind::Golem {
                             self.hitstop_timer = 0.033;
                         }
-                        // Step 19: アイテムドロップ（1体につき最大1種類）
+                        // 1.2.4: アイテムドロップ（1体につき最大1種類）
                         let roll = self.rng.next_u32() % 100;
                         let (item_kind, item_value) = if roll < 2 {
                             (ItemKind::Magnet, 0)
@@ -1060,7 +1060,7 @@ impl GameWorld {
             }
         }
 
-        // Step 19: アイテム更新（磁石エフェクト + 自動収集）
+        // 1.2.4: アイテム更新（磁石エフェクト + 自動収集）
         {
             if self.magnet_timer > 0.0 {
                 self.magnet_timer = (self.magnet_timer - dt).max(0.0);
@@ -1105,7 +1105,7 @@ impl GameWorld {
             }
         }
 
-        // Step 24: ボス出現チェック（3 分 / 6 分 / 9 分）
+        // 1.2.9: ボス出現チェック（3 分 / 6 分 / 9 分）
         self.boss_spawned = false;
         {
             const BOSS_TIMES: [f32; 3] = [180.0, 360.0, 540.0];
@@ -1124,7 +1124,7 @@ impl GameWorld {
             }
         }
 
-        // Step 24: ボス更新（借用競合を避けるため、特殊行動データを先に取り出す）
+        // 1.2.9: ボス更新（借用競合を避けるため、特殊行動データを先に取り出す）
         #[derive(Default)]
         struct BossAction {
             spawn_slimes:    bool,
@@ -1260,7 +1260,7 @@ impl GameWorld {
             self.particles.emit(boss_action.hurt_x, boss_action.hurt_y, 8, [1.0, 0.15, 0.15, 1.0]);
         }
 
-        // Step 24: 弾丸 vs ボス衝突判定
+        // 1.2.9: 弾丸 vs ボス衝突判定
         let mut boss_killed = false;
         if let Some(ref mut boss) = self.boss {
             if boss.alive && !boss.invincible {
@@ -1310,13 +1310,13 @@ impl GameWorld {
             self.boss = None;
         }
 
-        // Step 24: Whip vs ボス
+        // 1.2.9: Whip vs ボス
         // (Whip の処理は weapon_slots ループ内で行うため、ここでは別途チェック)
         // ※ Whip ダメージはすでに enemies に対して処理済みのため、ボス専用処理を追加
         // → Whip ダメージをボスに適用するため、weapon_slots ループ後にチェック
         // （実装上、Whip の当たり判定はループ内で行われているため、ここでは不要）
 
-        // Wave-based enemy spawn（Step 18: タイプ別スポーン、Step 25: エリート敵）
+        // Wave-based enemy spawn（1.2.3: タイプ別スポーン、1.2.10: エリート敵）
         let (wave_interval, wave_count) = current_wave(self.elapsed_seconds);
         if self.elapsed_seconds - self.last_spawn_secs >= wave_interval
             && self.enemies.count < MAX_ENEMIES
@@ -1392,12 +1392,12 @@ impl GameWorld {
         self.weapon_choices.clear();
     }
 
-    /// Step 20: カメラオフセットを返す
+    /// 1.2.5: カメラオフセットを返す
     fn camera_offset(&self) -> (f32, f32) {
         (self.camera_x, self.camera_y)
     }
 
-    /// Step 42: プレイヤーが障害物と重なっている場合に押し出す（core::physics::obstacle_resolve と共通）
+    /// 1.5.2: プレイヤーが障害物と重なっている場合に押し出す（core::physics::obstacle_resolve と共通）
     fn resolve_obstacles_player(&mut self) {
         obstacle_resolve::resolve_obstacles_player(
             &self.collision,
@@ -1407,7 +1407,7 @@ impl GameWorld {
         );
     }
 
-    /// Step 42: 敵が障害物と重なっている場合に押し出す（main には Ghost なし）
+    /// 1.5.2: 敵が障害物と重なっている場合に押し出す（main には Ghost なし）
     fn resolve_obstacles_enemy(&mut self) {
         for i in 0..self.enemies.len() {
             if !self.enemies.alive[i] { continue; }
@@ -1430,20 +1430,20 @@ impl GameWorld {
         }
     }
 
-    /// Step 42: 障害物の描画データを返す [(x, y, radius, kind)]
+    /// 1.5.2: 障害物の描画データを返す [(x, y, radius, kind)]
     fn get_obstacle_data(&self) -> Vec<(f32, f32, f32, u8)> {
         self.collision.obstacles.iter()
             .map(|o| (o.x, o.y, o.radius, o.kind))
             .collect()
     }
 
-    /// Step 23/24/25: (x, y, kind, anim_frame) を返す
+    /// 1.2.8/1.2.9/1.2.10: (x, y, kind, anim_frame) を返す
     /// エリート敵は render_kind + 20 でマーク（レンダラー側で赤みがかった色で描画）
     /// ボスは render_kind 11/12/13 を使用
     fn get_render_data(&self) -> Vec<(f32, f32, u8, u8)> {
         let mut v = Vec::with_capacity(2 + self.enemies.len() + self.bullets.len());
         v.push((self.player.x, self.player.y, 0u8, self.player.anim_frame));
-        // Step 24: ボスを描画（中心座標から左上に変換）
+        // 1.2.9: ボスを描画（中心座標から左上に変換）
         if let Some(ref boss) = self.boss {
             if boss.alive {
                 let boss_sprite_size = match boss.kind {
@@ -1529,13 +1529,13 @@ impl GameWorld {
             item_count:      self.items.count,
             camera_x:        self.camera_x,
             camera_y:        self.camera_y,
-            // Step 24: ボス情報
+            // 1.2.9: ボス情報
             boss_info:       self.boss.as_ref().filter(|b| b.alive).map(|b| BossHudInfo {
                 name:   b.kind.name().to_string(),
                 hp:     b.hp,
                 max_hp: b.max_hp,
             }),
-            // Step 25
+            // 1.2.10
             phase:           self.phase,
             screen_flash_alpha: if self.screen_flash_timer > 0.0 {
                 (self.screen_flash_timer / SCREEN_FLASH_DURATION).clamp(0.0, 1.0) * SCREEN_FLASH_MAX_ALPHA
@@ -1658,9 +1658,9 @@ struct App {
     game:        GameWorld,
     keys_held:   HashSet<KeyCode>,
     last_update: Option<Instant>,
-    // Step 22: 音声マネージャ（デバイスなし環境では None）
+    // 1.2.7: 音声マネージャ（デバイスなし環境では None）
     audio:       Option<AudioManager>,
-    // Step 43: セーブ・ロード用 UI 状態
+    // 1.5.3: セーブ・ロード用 UI 状態
     ui_state:    GameUiState,
 }
 
@@ -1695,7 +1695,7 @@ impl ApplicationHandler for App {
 
         let renderer = pollster::block_on(Renderer::new(window.clone()));
 
-        // Step 22: 音声デバイスを初期化（BGM はゲーム開始時に再生）
+        // 1.2.7: 音声デバイスを初期化（BGM はゲーム開始時に再生）
         let audio = AudioManager::new();
 
         self.window      = Some(window);
@@ -1719,7 +1719,7 @@ impl ApplicationHandler for App {
                 if let Some(renderer) = self.renderer.as_mut() {
                     renderer.resize(size.width, size.height);
                 }
-                // Step 20: ゲーム側にも画面サイズを通知してカメラ計算を正確に保つ
+                // 1.2.5: ゲーム側にも画面サイズを通知してカメラ計算を正確に保つ
                 self.game.on_resize(size.width, size.height);
             }
 
@@ -1750,7 +1750,7 @@ impl ApplicationHandler for App {
                 self.game.player.input_dx = dx;
                 self.game.player.input_dy = dy;
 
-                // Step 17: レベルアップ中は 1/2/3 キーで武器選択、Esc でスキップ
+                // 1.2.2: レベルアップ中は 1/2/3 キーで武器選択、Esc でスキップ
                 if self.game.level_up_pending {
                     if self.keys_held.contains(&KeyCode::Escape) {
                         self.keys_held.remove(&KeyCode::Escape);
@@ -1777,7 +1777,7 @@ impl ApplicationHandler for App {
                     let dt = now.duration_since(last).as_secs_f32().min(0.05);
                     let se = self.game.step(dt);
 
-                    // Step 22: SE 再生（音声デバイスが存在する場合のみ）
+                    // 1.2.7: SE 再生（音声デバイスが存在する場合のみ）
                     if let Some(ref am) = self.audio {
                         // レベルアップは最優先（他の SE より目立たせる）
                         if se.level_up {
@@ -1811,21 +1811,21 @@ impl ApplicationHandler for App {
                     self.ui_state.has_save = self.game.has_save();
                     if let Some(chosen) = renderer.render(window, &hud, &mut self.ui_state) {
                         match chosen.as_str() {
-                            // Step 25: タイトル「Start」
+                            // 1.2.10: タイトル「Start」
                             "__start__" => {
                                 self.game.reset();
                                 if let Some(ref am) = self.audio {
                                     am.play_bgm(BGM_BYTES);
                                 }
                             }
-                            // Step 25: ゲームオーバー「Retry」
+                            // 1.2.10: ゲームオーバー「Retry」
                             "__retry__" => {
                                 self.game.reset();
                                 if let Some(ref am) = self.audio {
                                     am.resume_bgm();
                                 }
                             }
-                            // Step 43: セーブ
+                            // 1.5.3: セーブ
                             "__save__" => {
                                 match self.game.save_to_file() {
                                     Ok(()) => {
@@ -1837,7 +1837,7 @@ impl ApplicationHandler for App {
                                 }
                                 self.ui_state.has_save = true;
                             }
-                            // Step 43: ロード（ダイアログ表示をトリガー）
+                            // 1.5.3: ロード（ダイアログ表示をトリガー）
                             "__load__" => {
                                 self.ui_state.load_dialog = Some(self.game.has_save());
                             }

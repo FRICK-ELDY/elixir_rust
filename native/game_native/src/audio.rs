@@ -1,4 +1,4 @@
-/// Step 22: BGM・SE 管理モジュール（rodio 0.21 クレート使用）
+/// 1.2.7: BGM・SE 管理モジュール（rodio 0.21 クレート使用）
 ///
 /// # rodio 0.21 API の変更点
 /// - `OutputStream::try_default()` → `OutputStreamBuilder::open_default_stream()`

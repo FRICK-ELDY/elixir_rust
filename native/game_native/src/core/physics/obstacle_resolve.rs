@@ -1,4 +1,4 @@
-//! Step 42: 障害物との衝突解決（lib / main 共通）
+//! 1.5.2: 障害物との衝突解決（lib / main 共通）
 
 use super::spatial_hash::CollisionWorld;
 use crate::core::constants::PLAYER_RADIUS;

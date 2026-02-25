@@ -2,10 +2,10 @@ defmodule Engine.GameEvents do
   @moduledoc """
   Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer。
 
-  Step 41: tick 駆動は Rust 側で高精度 60 Hz。Elixir は `{:frame_events, events}` を
+  1.5.1: tick 駆動は Rust 側で高精度 60 Hz。Elixir は `{:frame_events, events}` を
   受信してイベント駆動でシーン制御・入力設定・EventBus 配信を行う。
 
-  Step 44: ルーム単位で複数インスタンスが起動可能。
+  1.5.4: ルーム単位で複数インスタンスが起動可能。
   :main ルームのみが SceneManager・FrameCache を駆動する（表示・入力対象）。
   その他のルームは headless で physics のみ実行（Phoenix マルチプレイの土台）。
 
@@ -34,12 +34,12 @@ defmodule Engine.GameEvents do
   defp process_name(room_id), do: {:via, Registry, {Engine.RoomRegistry, room_id}}
 
   @doc """
-  Step 43: 現在のゲーム状態をセーブする。
+  1.5.3: 現在のゲーム状態をセーブする。
   """
   def save_session, do: GenServer.cast(__MODULE__, :save_session)
 
   @doc """
-  Step 43: セーブデータをロードしてプレイ画面に戻る。
+  1.5.3: セーブデータをロードしてプレイ画面に戻る。
   - `:ok` - ロード成功
   - `:no_save` - セーブファイルなし
   - `{:error, reason}` - ロード失敗
@@ -52,14 +52,14 @@ defmodule Engine.GameEvents do
   def init(opts) do
     room_id = Keyword.get(opts, :room_id, :main)
 
-    # Step 44: :main は Registry に明示登録（list_rooms で列挙するため）
+    # 1.5.4: :main は Registry に明示登録（list_rooms で列挙するため）
     if room_id == :main do
       Engine.RoomRegistry.register(:main)
     end
 
     world_ref = Engine.create_world()
 
-    # Step 42: マップ障害物をロード
+    # 1.5.2: マップ障害物をロード
     map_id = Application.get_env(:game, :map, :plain)
     obstacles = Engine.MapLoader.obstacles_for_map(map_id)
     Engine.set_map_obstacles(world_ref, obstacles)
@@ -68,7 +68,7 @@ defmodule Engine.GameEvents do
     if room_id == :main, do: Engine.FrameCache.init()
     start_ms = now_ms()
 
-    # Step 41: Rust 駆動ゲームループを起動（高精度 60Hz）。pid は当 GenServer（GameEvents）の self()
+    # 1.5.1: Rust 駆動ゲームループを起動（高精度 60Hz）。pid は当 GenServer（GameEvents）の self()
     Engine.start_rust_game_loop(world_ref, control_ref, self())
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
@@ -154,11 +154,11 @@ defmodule Engine.GameEvents do
     end
   end
 
-  # ── Step 41: Rust からの frame_events を受信してシーン更新 ─────────
+  # ── 1.5.1: Rust からの frame_events を受信してシーン更新 ─────────
 
   @impl true
   def handle_info({:frame_events, events}, state) do
-    # Step 44: 非 main ルームは headless（physics のみ、SceneManager 非使用）
+    # 1.5.4: 非 main ルームは headless（physics のみ、SceneManager 非使用）
     if state.room_id != :main do
       {:noreply, %{state | last_tick: now_ms(), frame_count: state.frame_count + 1}}
     else
@@ -199,7 +199,7 @@ defmodule Engine.GameEvents do
 
   # ── ヘルパー ────────────────────────────────────────────────────
 
-  # Step 41: Rust が physics を実行済み。入力設定とイベント配信のみ
+  # 1.5.1: Rust が physics を実行済み。入力設定とイベント配信のみ
   defp maybe_set_input_and_broadcast(state, mod, physics_scenes, events) do
     if mod in physics_scenes do
       {dx, dy} = Engine.InputHandler.get_move_vector()
@@ -286,7 +286,7 @@ defmodule Engine.GameEvents do
           %{}
         )
 
-        # Step 43: ハイスコアを保存
+        # 1.5.3: ハイスコアを保存
         Engine.save_high_score(score)
 
         Map.merge(init_arg || %{}, %{high_scores: Engine.load_high_scores()})
@@ -301,7 +301,7 @@ defmodule Engine.GameEvents do
   defp process_transition(_, state, _, _), do: state
 
   defp maybe_log_and_cache(state, _mod, _elapsed, game) do
-    # Step 44: FrameCache は main ルームのみ更新
+    # 1.5.4: FrameCache は main ルームのみ更新
     if state.room_id == :main and rem(state.frame_count, 60) == 0 do
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =

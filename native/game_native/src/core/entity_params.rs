@@ -1,4 +1,4 @@
-//! Step 38: エンティティ・武器の ID ベース参照
+//! 1.4.7: エンティティ・武器の ID ベース参照
 //!
 //! EnemyKind / WeaponKind / BossKind の enum を増やさずに、
 //! u8 ID でパラメータを参照するテーブルを提供する。
@@ -36,7 +36,7 @@ impl EnemyParams {
         ENEMY_TABLE.get(id as usize).expect("Invalid enemy ID")
     }
 
-    /// Ghost は障害物をすり抜ける（Step 42）
+    /// Ghost は障害物をすり抜ける（1.5.2）
     pub fn passes_through_obstacles(id: u8) -> bool {
         id == ENEMY_ID_GHOST
     }

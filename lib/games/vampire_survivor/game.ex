@@ -1,6 +1,6 @@
 defmodule Game.VampireSurvivor do
   @moduledoc """
-  Step 35–36: ヴァンサバを Game 実装として分離し、Engine.Game behaviour を実装。
+  1.4.4–1.4.5: ヴァンサバを Game 実装として分離し、Engine.Game behaviour を実装。
 
   起動時の初期シーン構成、物理演算対象シーン、シーン遷移で使用する
   モジュール参照を提供する。
@@ -19,7 +19,7 @@ defmodule Game.VampireSurvivor do
     ]
   end
 
-  # Step 38: 敵・武器・ボスの ID マッピング（Rust の u8 ID に相当）
+  # 1.4.7: 敵・武器・ボスの ID マッピング（Rust の u8 ID に相当）
   @impl Engine.Game
   def entity_registry do
     %{
@@ -45,7 +45,7 @@ defmodule Game.VampireSurvivor do
   @impl Engine.Game
   def context_defaults, do: %{}
 
-  # Step 39: ゲーム別アセットパス
+  # 1.4.8: ゲーム別アセットパス
   @impl Engine.Game
   def assets_path, do: "vampire_survivor"
 
@@ -54,7 +54,7 @@ defmodule Game.VampireSurvivor do
   @doc "レベルアップ武器選択シーンのモジュール"
   def level_up_scene, do: Game.VampireSurvivor.Scenes.LevelUp
 
-  @doc "ボス出現警告シーンのモジュール（Step 41: pause_physics 用）"
+  @doc "ボス出現警告シーンのモジュール（1.5.1: pause_physics 用）"
   def boss_alert_scene, do: Game.VampireSurvivor.Scenes.BossAlert
 
   @doc "ゲームオーバーシーンのモジュール"

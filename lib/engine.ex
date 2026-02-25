@@ -1,6 +1,6 @@
 defmodule Engine do
   @moduledoc """
-  ゲームエンジンの安定化された公開 API（Step 37）。
+  ゲームエンジンの安定化された公開 API（1.4.6）。
 
   ゲームは **Engine モジュール経由でのみ** エンジンとやり取りする。
   `App.NifBridge` や `Engine.SceneManager` を直接呼び出さず、
@@ -34,7 +34,7 @@ defmodule Engine do
   # ── World 操作（ゲームから利用）───────────────────────────────────────
 
   @doc """
-  通常敵をスポーンする（Step 38: entity_registry で kind → ID に解決）。
+  通常敵をスポーンする（1.4.7: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_enemies(world_ref, :slime, 5)
@@ -52,7 +52,7 @@ defmodule Engine do
   end
 
   @doc """
-  エリート敵をスポーンする。HP 倍率を指定可能（Step 38: entity_registry で kind → ID に解決）。
+  エリート敵をスポーンする。HP 倍率を指定可能（1.4.7: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_elite_enemy(world_ref, :golem, 2, 3.0)
@@ -63,7 +63,7 @@ defmodule Engine do
   end
 
   @doc """
-  ボスをスポーンする（Step 38: entity_registry で kind → ID に解決）。
+  ボスをスポーンする（1.4.7: entity_registry で kind → ID に解決）。
 
   ## 例
       Engine.spawn_boss(world_ref, :slime_king)
@@ -142,7 +142,7 @@ defmodule Engine do
   end
 
   @doc """
-  Step 42: マップ障害物を設定する。
+  1.5.2: マップ障害物を設定する。
   GameEvents の init で呼ばれる。obstacles は MapLoader.obstacles_for_map/1 の戻り値。
   """
   def set_map_obstacles(world_ref, obstacles) do
@@ -150,7 +150,7 @@ defmodule Engine do
   end
 
   @doc """
-  Step 41: ゲームループ制御用リソースを作成する。
+  1.5.1: ゲームループ制御用リソースを作成する。
   pause_physics / resume_physics で使用。
   """
   def create_game_loop_control do
@@ -158,7 +158,7 @@ defmodule Engine do
   end
 
   @doc """
-  Step 41: Rust 駆動の高精度ゲームループを起動する。
+  1.5.1: Rust 駆動の高精度ゲームループを起動する。
   pid には GameEvents の self() を渡す。
   """
   def start_rust_game_loop(world_ref, control_ref, pid) do
@@ -166,14 +166,14 @@ defmodule Engine do
   end
 
   @doc """
-  Step 41: LevelUp・BossAlert 中に physics を一時停止する。
+  1.5.1: LevelUp・BossAlert 中に physics を一時停止する。
   """
   def pause_physics(control_ref) do
     App.NifBridge.pause_physics(control_ref)
   end
 
   @doc """
-  Step 41: physics を再開する。
+  1.5.1: physics を再開する。
   """
   def resume_physics(control_ref) do
     App.NifBridge.resume_physics(control_ref)
@@ -212,7 +212,7 @@ defmodule Engine do
   end
 
   @doc """
-  武器を追加する（Step 38: entity_registry で weapon → ID に解決）。
+  武器を追加する（1.4.7: entity_registry で weapon → ID に解決）。
   GameEvents の weapon 選択処理で呼ばれる。
 
   ## 引数
@@ -236,7 +236,7 @@ defmodule Engine do
     App.NifBridge.get_weapon_levels(world_ref)
   end
 
-  # ── Step 43: セーブ・ロード ─────────────────────────────────────────────
+  # ── 1.5.3: セーブ・ロード ─────────────────────────────────────────────
 
   @doc """
   現在のゲーム状態をセーブする。saves/session.dat に保存。
@@ -276,7 +276,7 @@ defmodule Engine do
   """
   def best_score, do: Engine.SaveManager.best_score()
 
-  # ── Step 44: マルチプレイ・ルーム管理 ────────────────────────────────────
+  # ── 1.5.4: マルチプレイ・ルーム管理 ────────────────────────────────────
 
   @doc """
   新規ルームを起動する。各ルームは独立した GameEvents + GameWorld を持つ。
@@ -344,7 +344,7 @@ defmodule Engine do
   @doc "現在シーンの state を更新する。GameEvents が使用。"
   defdelegate update_current_scene(fun), to: Engine.SceneManager, as: :update_current
 
-  # ── Step 38: entity_registry による ID 解決（内部用）─────────────────────
+  # ── 1.4.7: entity_registry による ID 解決（内部用）─────────────────────
 
   defp resolve_enemy_id(kind) do
     game = Application.get_env(:game, :current, Game.VampireSurvivor)
