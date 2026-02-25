@@ -9,25 +9,31 @@ rustler::atoms! {
     slime,
     bat,
     golem,
+    // 武器種別アトム
     magic_wand,
     axe,
     cross,
     whip,
     fireball,
     lightning,
+    // level_up 通知アトム
     level_up,
     no_change,
+    // ボス種別アトム
     slime_king,
     bat_lord,
     stone_golem,
+    // ゲーム状態アトム
     alive,
     dead,
     none,
+    // イベントバス用アトム
     enemy_killed,
     player_damaged,
     level_up_event,
     item_pickup,
     boss_defeated,
+    // Rust ゲームループ → Elixir 送信用
     frame_events,
 }
 

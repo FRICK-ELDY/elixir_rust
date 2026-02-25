@@ -20,10 +20,18 @@ pub fn load(env: rustler::Env, _: rustler::Term) -> bool {
 
     let _ = rustler::resource!(GameWorld, env);
     let _ = rustler::resource!(GameLoopControl, env);
+    // アトムを NIF ロード時に事前登録して、比較が確実に動作するようにする
     let _ = crate::ok();
+    let _ = crate::frame_events();
+    // 敵種別
     let _ = crate::slime();
     let _ = crate::bat();
     let _ = crate::golem();
-    let _ = crate::frame_events();
+    // イベントバス用
+    let _ = crate::enemy_killed();
+    let _ = crate::player_damaged();
+    let _ = crate::level_up_event();
+    let _ = crate::item_pickup();
+    let _ = crate::boss_defeated();
     true
 }
