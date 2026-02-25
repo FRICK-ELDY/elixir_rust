@@ -1,3 +1,6 @@
+//! Path: native/game_native/src/main.rs
+//! Summary: スタンドアロン描画ループ・ウィンドウ（winit/wgpu）、game_window バイナリ
+
 /// Standalone rendering binary.
 /// Runs the full game loop in pure Rust without Elixir/NIF.
 /// Used for renderer development and visual testing.

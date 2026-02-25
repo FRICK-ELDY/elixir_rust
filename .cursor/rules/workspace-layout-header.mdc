@@ -1,0 +1,26 @@
+---
+description: 各ソースファイル先頭に Path と Summary ヘッダーを記述（Workspace Layout ツール用）
+globs: "**/*.{rs,ex,exs}"
+alwaysApply: false
+---
+
+# Workspace Layout ファイルヘッダー規約
+
+各ソースファイルの**先頭**に以下を記述する。
+
+## Rust
+```rust
+//! Path: <リポジトリルートからの相対パス>
+//! Summary: <1行でファイルの責務・内容を要約>
+```
+
+## Elixir
+```elixir
+# Path: <リポジトリルートからの相対パス>
+# Summary: <1行でファイルの責務・内容を要約>
+```
+
+- **Path**: 当該ファイルのリポジトリルートからの相対パス（例: `native/game_native/src/lib.rs`）
+- **Summary**: 日本語または英語で 1 行要約。AI が文脈を把握しやすくする
+
+`cargo run -p xtask -- workspace-layout` 実行で WorkspaceLayout.md が生成され、Summary が自動収集される。
