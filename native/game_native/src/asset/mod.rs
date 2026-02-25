@@ -108,9 +108,6 @@ impl AssetLoader {
     /// "assets/sprites/atlas.png" + "vampire_survivor" → "assets/vampire_survivor/sprites/atlas.png"
     fn game_specific_path(&self, default_path: &str) -> Option<String> {
         let id = self.game_assets_id.as_ref()?;
-        if id.is_empty() {
-            return None;
-        }
         if let Some(rest) = default_path.strip_prefix("assets/") {
             Some(format!("assets/{}/{}", id, rest))
         } else {
@@ -126,28 +123,28 @@ impl AssetLoader {
     pub fn load_bytes(&self, id: AssetId) -> Vec<u8> {
         let default_path = id.default_path();
 
-        // 1. ゲーム別パスを試行（assets/{game_id}/sprites/... 等）
-        if let Some(ref game_path) = self.game_specific_path(default_path) {
-            if let Some(ref base) = self.base_path {
-                if let Ok(bytes) = std::fs::read(base.join(game_path)) {
-                    return bytes;
-                }
+        let mut paths_to_try: Vec<std::path::PathBuf> = Vec::new();
+
+        // 1. ゲーム別パスを試行
+        if let Some(game_path_str) = self.game_specific_path(default_path) {
+            if let Some(base) = &self.base_path {
+                paths_to_try.push(base.join(&game_path_str));
             }
-            if let Ok(bytes) = std::fs::read(game_path) {
-                return bytes;
-            }
+            paths_to_try.push(game_path_str.into());
         }
 
         // 2. ベースパス + デフォルト相対パス
-        if let Some(ref base) = self.base_path {
-            if let Ok(bytes) = std::fs::read(base.join(default_path)) {
-                return bytes;
-            }
+        if let Some(base) = &self.base_path {
+            paths_to_try.push(base.join(default_path));
         }
 
         // 3. カレントディレクトリからの相対パス
-        if let Ok(bytes) = std::fs::read(default_path) {
-            return bytes;
+        paths_to_try.push(default_path.into());
+
+        for path in paths_to_try {
+            if let Ok(bytes) = std::fs::read(&path) {
+                return bytes;
+            }
         }
 
         // 4. 埋め込みフォールバック
