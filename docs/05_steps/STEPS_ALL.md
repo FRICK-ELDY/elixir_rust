@@ -24,7 +24,7 @@
 |               | 4. 汎用化            | 全9項  | Game インターフェース・シーン汎用化・ゲーム分離・2 つ目のゲーム土台                                                                              |
 |               | 5. 拡張             | 全7項  | ゲームループ Rust 移行・マップ・セーブ・マルチ・デバッグ・リネーム・SPEC コンテンツ                                                                    |
 |               | 6. Rust lib 分割・整理 | 全9項  | Workspace Layout ツール(xtask)＋3クレート構成＋lib.rs分割。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
-|               | 7. 描画統合（game_window → game_native） | — | game_window 廃止・game_native へ統合。NIF が描画スレッド spawn、iex -S mix 単一プロセスで wgpu 描画。まずは Windows（[STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)） |
+|               | 7. 描画統合（game_window → game_native） | 全8項 | game_window 廃止・game_native へ統合。NIF が描画スレッド spawn、iex -S mix 単一プロセスで wgpu 描画。まずは Windows（[STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)） |
 |               | 8. 2Dゲームの固め       | —    | 2D サバイバーを仕様・バランス・品質として固める                                                                                          |
 |               | 9. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
 |               | 10. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
@@ -168,9 +168,20 @@
 
 ---
 
-### 1.7  描画統合（game_window → game_native）
+### 1.7  描画統合（game_window → game_native）（全8項）
 
-1.6 完了後、game_window バイナリを廃止し、renderer / winit / wgpu を game_native に統合する。NIF が描画スレッドを spawn し、`iex -S mix` 単一プロセスで wgpu 描画を実行。NIF 内の GameWorld と Elixir 側のシーン・UI 状態の両方を描画。まずは Windows で動作確認。項は今後決める。
+| 項     | 目標                                                                 |
+|--------|----------------------------------------------------------------------|
+| 1.7.1  | アーキテクチャとデータ共有方式の確定（描画スレッド spawn・GameWorld 共有方針） |
+| 1.7.2  | game_native に renderer を追加（game_window から移動）               |
+| 1.7.3  | game_native に asset / audio を追加                                 |
+| 1.7.4  | 描画スレッド spawn と winit 統合（NIF で spawn、EventLoop 骨組み）   |
+| 1.7.5  | GameWorld から描画データ取得経路の実装（read でスナップショット→renderer） |
+| 1.7.6  | Elixir 起動フローとの接続（描画開始 NIF を 1 回呼ぶ）                |
+| 1.7.7  | game_window クレートの廃止（workspace・CI・README 更新）              |
+| 1.7.8  | Windows 動作確認と FOLDER_CONNECTIONS / ARCHITECTURE 更新            |
+
+1.6 完了後、game_window バイナリを廃止し、renderer / winit / wgpu を game_native に統合。NIF が描画スレッドを spawn し、`iex -S mix` 単一プロセスで wgpu 描画を実行。まずは Windows で動作確認。
 
 **詳細**: [STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)
 
