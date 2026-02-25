@@ -33,7 +33,7 @@ use game_core::constants::{
     CAMERA_LERP_SPEED, CELL_SIZE, ENEMY_SEPARATION_FORCE,
     ENEMY_SEPARATION_RADIUS, INVINCIBLE_DURATION,
     MAP_HEIGHT, MAP_WIDTH,
-    MAX_ENEMIES, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
+    MAX_ENEMIES, PARTICLE_RNG_SEED, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED,
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
 use game_core::item::{ItemKind, ItemWorld};
@@ -512,7 +512,7 @@ impl GameWorld {
             },
             enemies:          EnemyWorld::new(),
             bullets:          BulletWorld::new(),
-            particles:        ParticleWorld::new(67890),
+            particles:        ParticleWorld::new(PARTICLE_RNG_SEED),
             items:            ItemWorld::new(),
             magnet_timer:     0.0,
             collision:        {
@@ -1618,7 +1618,7 @@ impl GameWorld {
 
         self.enemies = EnemyWorld::new();
         self.bullets = BulletWorld::new();
-        self.particles = ParticleWorld::new(67890);
+        self.particles = ParticleWorld::new(PARTICLE_RNG_SEED);
         self.items = ItemWorld::new();
         self.magnet_timer = 0.0;
         self.score_popups.clear();

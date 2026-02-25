@@ -56,6 +56,9 @@ pub const BULLET_LIFETIME:      f32 = 3.0;
 // Spatial hash cell size
 pub const CELL_SIZE: f32 = 80.0;
 
+/// パーティクル用 RNG シード（create_world / load_save_snapshot 等で使用）
+pub const PARTICLE_RNG_SEED: u64 = 67890;
+
 /// 武器の最近接敵探索半径（MagicWand / Fireball / Lightning 用）
 #[allow(dead_code)] // lib で使用、bin (game_window) では未使用（main.rs 空間ハッシュ化で使用予定）
 pub const WEAPON_SEARCH_RADIUS: f32 = SCREEN_WIDTH / 2.0;
