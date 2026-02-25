@@ -99,7 +99,7 @@ defmodule Engine.GameEvents do
 
   @impl true
   def handle_cast({:select_weapon, :__skip__}, state) do
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     level_up_scene = game.level_up_scene()
 
     case Engine.SceneManager.current() do
@@ -126,7 +126,7 @@ defmodule Engine.GameEvents do
 
   @impl true
   def handle_call(:load_session, _from, state) do
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     result = Engine.load_session(state.world_ref)
 
     case result do
@@ -141,7 +141,7 @@ defmodule Engine.GameEvents do
 
   @impl true
   def handle_cast({:select_weapon, weapon}, state) do
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     level_up_scene = game.level_up_scene()
 
     case Engine.SceneManager.current() do
@@ -199,11 +199,12 @@ defmodule Engine.GameEvents do
     if level_up_pending do
       Engine.skip_level_up(state.world_ref)
       Logger.info("[LEVEL UP] Skipped from renderer UI")
+      state
+      |> maybe_close_level_up_scene()
+      |> Map.put(:weapon_levels, fetch_weapon_levels(state.world_ref))
+    else
+      state
     end
-
-    state
-    |> maybe_close_level_up_scene()
-    |> Map.put(:weapon_levels, fetch_weapon_levels(state.world_ref))
   end
 
   defp handle_ui_action_weapon(state, weapon) do
@@ -213,7 +214,7 @@ defmodule Engine.GameEvents do
       {selected_weapon, new_levels} = apply_weapon_selection(state, weapon)
       if selected_weapon != :__skip__ do
         level = Map.get(new_levels, selected_weapon, 1)
-        game = Application.get_env(:game, :current, Game.VampireSurvivor)
+        game = current_game()
         Logger.info("[LEVEL UP] Weapon selected from renderer: #{game.weapon_label(selected_weapon, level)}")
       end
 
@@ -232,7 +233,7 @@ defmodule Engine.GameEvents do
         ArgumentError -> nil
       end
 
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     allowed_weapons = game.entity_registry().weapons |> Map.keys() |> MapSet.new()
     fallback_weapon = Map.keys(state.weapon_levels) |> List.first() || :magic_wand
 
@@ -275,7 +276,7 @@ defmodule Engine.GameEvents do
   defp do_load_session(state) do
     case Engine.load_session(state.world_ref) do
       :ok ->
-        game = Application.get_env(:game, :current, Game.VampireSurvivor)
+        game = current_game()
         Engine.SceneManager.replace_scene(game.physics_scenes() |> List.first(), %{})
         %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}
 
@@ -290,7 +291,7 @@ defmodule Engine.GameEvents do
   end
 
   defp maybe_close_level_up_scene(state) do
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     level_up_scene = game.level_up_scene()
 
     case Engine.SceneManager.current() do
@@ -320,7 +321,7 @@ defmodule Engine.GameEvents do
     now = now_ms()
     elapsed = now - state.start_ms
 
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     physics_scenes = game.physics_scenes()
 
     case Engine.SceneManager.current() do
@@ -375,7 +376,7 @@ defmodule Engine.GameEvents do
       frame_count:   state.frame_count,
       start_ms:      state.start_ms,
     }
-    game = Application.get_env(:game, :current, Game.VampireSurvivor)
+    game = current_game()
     Map.merge(game.context_defaults(), base)
   end
 
@@ -496,6 +497,10 @@ defmodule Engine.GameEvents do
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)
+
+  defp current_game do
+    Application.get_env(:game, :current, Game.VampireSurvivor)
+  end
 
   defp fetch_weapon_levels(world_ref) do
     world_ref
