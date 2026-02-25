@@ -7,6 +7,11 @@
 
 import Config
 
+# 1.6.8: Rustler NIF ビルドパス（3 クレート構成で game_native を明示）
+# プロジェクトルートからの相対パス。workspace 化後も Mix が native/game_native を正しくビルドするよう path を指定する。
+config :game, App.NifBridge,
+  path: "native/game_native"
+
 # 1.4.3: ゲーム登録メカニズム
 # 起動時に「どのゲームを動かすか」を config で指定可能。
 # 1.4.9: MiniShooter に切り替え（汎用化検証用）
