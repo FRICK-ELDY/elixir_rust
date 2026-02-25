@@ -181,6 +181,37 @@ pub fn start_render_thread(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
 
 ---
 
+## 1.7.8 Windows 動作確認とドキュメント更新（実施）
+
+**実施日**: 2026-02-25
+
+### 動作確認結果
+
+- Windows で `iex -S mix` から起動し、ゲームとしてプレイ可能であることを確認。
+- `game_window` なしの構成で、`game_native` 側の描画スレッド起動・ウィンドウ表示・描画更新が成立。
+- 1.7 の到達目標（単一プロセス起動での描画統合）は達成とする。
+
+### 確認観点（1.7.8）
+
+| 観点 | 結果 |
+|------|------|
+| `iex -S mix` 単体起動でウィンドウ表示 | OK |
+| 描画更新と入力反映 | OK |
+| ゲーム進行（プレイ可能性） | OK |
+| `game_window` 非依存での実行 | OK |
+
+### 更新ドキュメント
+
+- `docs/06_system_design/FOLDER_CONNECTIONS.md` を 1.7 完了後の構成（`game_window` 廃止、`game_native` 集約）に合わせて更新。
+- `docs/06_system_design/ARCHITECTURE.md` を単一プロセス + NIF 描画スレッド構成に合わせて更新。
+- 本書（`STEPS_RENDER_INTEGRATION.md`）に 1.7.8 の実施記録を追記。
+
+### 補足
+
+- macOS はメインスレッド制約があるため、現設計のままでは未対応。対応時は本書の「macOS 対応について（設計修正予定）」に従って再設計する。
+
+---
+
 ## 最終アーキテクチャ（1.7 完了後）
 
 ### プロセス・スレッド構成
