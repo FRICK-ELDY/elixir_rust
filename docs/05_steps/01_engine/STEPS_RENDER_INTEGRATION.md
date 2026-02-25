@@ -34,7 +34,7 @@
 | **1.7.2** | **game_native に renderer を追加**: game_window の renderer/ を game_native に移動。game_core 依存を維持し、型・定数は game_core を参照する |
 | **1.7.3** | **game_native に asset / audio を追加**: game_window の asset/ と audio を game_native に移動。アセットパスは環境変数（GAME_ASSETS_ID 等）で解決する |
 | **1.7.4** | **描画スレッド spawn と winit 統合**: NIF（例: start_render_thread）で描画用スレッドを spawn。そのスレッドで winit の EventLoop・ウィンドウ作成・wgpu 初期化の骨組みを実装する |
-| **1.7.5** | **GameWorld から描画データ取得経路の実装**: 描画スレッド内で ResourceArc&lt;GameWorld&gt; を read し、get_frame_metadata および描画用スナップショット（スプライト・パーティクル・HUD）を取得して renderer に渡す |
+| **1.7.5** | **GameWorld から描画データ取得経路の実装**: 描画スレッド内で ResourceArc&lt;GameWorld&gt; を read し、get_frame_metadata（HUD用）および描画用スナップショット（スプライト・パーティクル等）を取得して renderer に渡す |
 | **1.7.6** | **Elixir 起動フローとの接続**: Application または GameEvents の init で「描画開始」NIF を 1 回呼び出し、iex -S mix 起動時にウィンドウが開くようにする |
 | **1.7.7** | **game_window クレートの廃止**: workspace から game_window を削除。ビルド・CI・README を game_native 単体で動くように更新する |
 | **1.7.8** | **Windows 動作確認とドキュメント更新**: Windows で iex -S mix から描画まで一通り動作確認。FOLDER_CONNECTIONS.md と ARCHITECTURE.md を 1.7 完了後の構成に更新する |
@@ -94,7 +94,7 @@ native/
 └── (game_window は廃止)
 ```
 
-- **Elixir 側**: lib/app, lib/engine, lib/games は変更なし。NifBridge に「描画開始」用 NIF を追加し、Application または GameEvents の起動時に 1 回呼ぶ。
+- **Elixir 側**: `lib/app`、`lib/engine`、`lib/games` のアーキテクチャに大きな変更はありません。`NifBridge` に「描画開始」用 NIF を追加し、`Application` または `GameEvents` の起動時に 1 回呼び出す変更のみです。
 
 ### 起動シーケンス（1.7 完了後）
 
