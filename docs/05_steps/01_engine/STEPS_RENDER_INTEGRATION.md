@@ -43,6 +43,127 @@
 
 ---
 
+## 1.7.1 アーキテクチャとデータ共有方式（確定）
+
+**実施日**: 2025-02-25
+
+### 決定事項サマリ
+
+| 項目 | 決定内容 |
+|------|----------|
+| **描画スレッドの spawn 方法** | `std::thread::spawn` で専用スレッドを起動。NIF `start_render_thread(world_ref)` が `ResourceArc<GameWorld>` を clone してスレッドに渡す。`start_rust_game_loop` と同様のパターン。 |
+| **スレッドのライフサイクル** | winit の `EventLoop::run()` がブロックするため、spawn したスレッド内で実行。戻り値は不要。 |
+| **GameWorld とのデータ共有** | `ResourceArc<GameWorld>` を clone して描画スレッドへ渡す。描画スレッド内では `world.0.read()` で `RwLockReadGuard` を取得し、スナップショットを構築。 |
+| **スナップショット取得方式** | read でロック取得 → 必要なデータを `RenderSnapshot` にコピー → ロック解放 → ロック外で wgpu 描画。read の保持時間を最小化する。 |
+
+---
+
+### 1. 描画スレッドの spawn 方法（決定）
+
+#### 1.1 スレッド起動パターン
+
+`start_rust_game_loop` と同様、NIF から `std::thread::spawn` を用いて専用スレッドを起動する。
+
+```rust
+// 例: nif/render_nif.rs（1.7.4 で実装）
+#[rustler::nif]
+pub fn start_render_thread(world: ResourceArc<GameWorld>) -> NifResult<Atom> {
+    let world_clone = world.clone();
+    thread::spawn(move || {
+        if let Err(e) = std::panic::catch_unwind(move || {
+            run_render_thread(world_clone);  // winit EventLoop::run がブロック
+        }) {
+            eprintln!("Render thread panicked: {:?}", e);
+        }
+    });
+    Ok(ok())
+}
+```
+
+#### 1.2 起動タイミングと引数
+
+| 項目 | 内容 |
+|------|------|
+| **起動タイミング** | GameEvents の init（または Application の start）で、`start_rust_game_loop` の後、または並列に 1 回だけ呼ぶ。 |
+| **引数** | `world_ref: ResourceArc<GameWorld>` のみ。Elixir 側の `world_ref` をそのまま渡す。 |
+| **戻り値** | `:ok` を返す。スレッドはバックグラウンドで動作し、BEAM はブロックしない。 |
+
+#### 1.3 パニックハンドリング
+
+`thread::spawn` で起動したスレッドがパニックすると、NIF 呼び出し元（Elixir 側）には通知されず、デフォルトではパニックが握りつぶされる。デバッグと堅牢性のため、`std::panic::catch_unwind` でパニックを捕捉し、ログ出力する（上記コード例参照）。コンパイル時に `UnwindSafe` 関連のエラーが出る場合は `AssertUnwindSafe` でラップする。
+
+#### 1.4 winit EventLoop の配置
+
+- `EventLoop::run()` はブロッキングであるため、spawn したスレッド内でのみ呼ぶ。
+- BEAM スレッドやゲームループスレッドからは呼ばない。
+- 描画スレッドはウィンドウを閉じるまで生き続ける。終了時はプロセスごと終了する前提。
+
+---
+
+### 2. GameWorld と描画スレッド間のデータ渡し（決定）
+
+#### 2.1 共有モデル
+
+```
+[ゲームループスレッド]                    [描画スレッド]
+        │                                      │
+        │ world.0.write()                      │ world.0.read()
+        │   physics_step_inner                 │   → RenderSnapshot 構築
+        │   drain_frame_events_inner           │   → ロック解放
+        │   (約 1–2 ms / フレーム)             │   → ロック外で wgpu 描画
+        ▼                                      ▼
+        └────────── RwLock<GameWorldInner> ────┘
+```
+
+- **ゲームループ**: `write()` で排他ロック。60 Hz、フレームあたり約 1–2 ms 想定。
+- **描画スレッド**: `read()` で共有ロック。フレームごとに短時間だけロックを保持し、スナップショットをコピーした後に解放。
+
+#### 2.2 スナップショット取得フロー
+
+1. **ロック取得**: `let guard = world.0.read()?`
+2. **スナップショット構築**: `guard` を参照して `RenderSnapshot` に必要なデータをコピー（player, enemies, bullets, particles, items, boss 等）
+3. **ロック解放**: `guard` がスコープを抜けて `drop` → read ロック解放
+4. **描画**: ロック外で `RenderSnapshot` を使って wgpu 描画・egui HUD 描画
+
+#### 2.3 RenderSnapshot の内容（確定）
+
+| データ種別 | 取得元（GameWorldInner） | 用途 |
+|------------|--------------------------|------|
+| スプライト（player, enemies, bullets, boss） | `get_render_data` 相当のロジック | wgpu スプライト描画 |
+| パーティクル | `get_particle_data` 相当 | wgpu パーティクル描画 |
+| アイテム | `get_item_data` 相当 | wgpu アイテム描画 |
+| 障害物 | `get_obstacle_data` 相当（game_window に存在） | 背景・当たり判定表示 |
+| カメラオフセット | `camera_offset` 相当 | 描画位置補正 |
+| HUD メタデータ | `get_frame_metadata` 相当（HP, スコア, 敵数, 弾数, レベルアップ等） | egui HUD |
+| FPS 用 | `last_frame_time_ms` 等 | デバッグ表示 |
+
+※ 既存の `get_render_data`, `get_particle_data`, `get_item_data`, `get_frame_metadata` のロジックを、描画スレッド内の `build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot` に集約する方針。
+
+#### 2.4 ロック競合の考慮
+
+| 考慮点 | 対策 |
+|--------|------|
+| **read の保持時間** | スナップショット構築のみでロックを保持。wgpu 描画はロック解放後に実行。 |
+| **write vs read** | ゲームループが write 中は read はブロック。1 フレームあたり 1–2 ms 程度を想定し、描画フレームレートへの影響を許容範囲とする。 |
+| **read vs read** | 複数 read は並行可。現状は描画スレッドのみが read するため問題なし。 |
+
+#### 2.5 ResourceArc の扱い
+
+- `ResourceArc<GameWorld>` は `Clone` 可能で、参照カウント方式で複数スレッドから共有される。
+- Elixir の `world_ref` が ResourceArc を保持。create_world 時に 1 つ生成され、ゲームループ・描画スレッド・NIF 呼び出しで clone される。
+- プロセス終了時に ResourceArc がすべて drop され、GameWorld が解放される。
+
+---
+
+### 3. 実装フェーズへの受け渡し
+
+| 1.7.x | 本決定の反映 |
+|-------|--------------|
+| **1.7.4** | `start_render_thread` NIF と `run_render_thread` の骨組み。thread::spawn と winit EventLoop の配置。 |
+| **1.7.5** | `RenderSnapshot` 型の定義、`build_render_snapshot` の実装、描画ループ内での read → スナップショット → 描画の接続。 |
+
+---
+
 ## 最終アーキテクチャ（1.7 完了後）
 
 ### プロセス・スレッド構成
