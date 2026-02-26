@@ -40,13 +40,13 @@ flowchart LR
   subgraph RUST_APP
     nif_entry[nif entry handlers]
     app_services[application services]
-    world_repo[world repository]
     loop_service[game loop service]
     render_service[render service]
     save_service[save service]
   end
 
   subgraph RUST_DOMAIN
+    world_repo[world repository]
     domain_world[world domain model]
     domain_systems[domain systems]
     domain_events[domain events]
@@ -78,8 +78,9 @@ flowchart LR
   app_services --> save_service
 
   loop_service --> domain_systems
-  domain_systems --> domain_world
+  domain_systems --> world_repo
   domain_systems --> domain_events
+  world_repo --> domain_world
 
   render_service --> world_repo
   render_service --> game_render
