@@ -58,8 +58,15 @@ impl RenderBridge for NativeRenderBridge {
     fn on_ui_action(&self, action: String) {
         match self.world.0.read() {
             Ok(guard) => {
-                if let Ok(mut pending) = guard.pending_ui_action.lock() {
-                    *pending = Some(action);
+                match guard.pending_ui_action.lock() {
+                    Ok(mut pending) => {
+                        *pending = Some(action);
+                    }
+                    Err(e) => {
+                        log::error!("Render bridge: pending_ui_action mutex poisoned: {e:?}");
+                        let mut pending = e.into_inner();
+                        *pending = Some(action);
+                    }
                 }
             }
             Err(e) => {
