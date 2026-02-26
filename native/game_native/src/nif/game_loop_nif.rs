@@ -3,6 +3,7 @@
 
 use super::util::lock_poisoned_err;
 use crate::game_logic::{drain_frame_events_inner, physics_step_inner};
+use crate::lock_metrics::record_write_wait;
 use crate::GameLoopControl;
 use crate::world::GameWorld;
 use rustler::env::OwnedEnv;
@@ -14,14 +15,18 @@ use crate::{frame_events, ok, ui_action};
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn physics_step(world: ResourceArc<GameWorld>, delta_ms: f64) -> NifResult<u32> {
+    let wait_start = Instant::now();
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    record_write_wait("nif.physics_step", wait_start.elapsed());
     physics_step_inner(&mut w, delta_ms);
     Ok(w.frame_id)
 }
 
 #[rustler::nif]
 pub fn drain_frame_events(world: ResourceArc<GameWorld>) -> NifResult<Vec<(Atom, u32, u32)>> {
+    let wait_start = Instant::now();
     let mut w = world.0.write().map_err(|_| lock_poisoned_err())?;
+    record_write_wait("nif.drain_frame_events", wait_start.elapsed());
     Ok(drain_frame_events_inner(&mut w))
 }
 
@@ -62,10 +67,12 @@ fn run_rust_game_loop(
         }
 
         let (events, ui_action_opt): (Vec<(Atom, u32, u32)>, Option<String>) = {
+            let wait_start = Instant::now();
             let mut w = match world.0.write() {
                 Ok(guard) => guard,
                 Err(_) => break,
             };
+            record_write_wait("loop.simulation_tick", wait_start.elapsed());
             let ui_action_opt = w.pending_ui_action.lock().ok().and_then(|mut g| g.take());
             let events = if control.is_paused() {
                 Vec::new()

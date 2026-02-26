@@ -1,6 +1,6 @@
 defmodule Engine.Commands do
   @moduledoc """
-  Engine の command 境界。
+  Engine の `control` 境界。
 
   World を変更する操作（spawn / input / physics / save load 適用など）は
   このモジュール経由で `App.NifBridge` に集約する。

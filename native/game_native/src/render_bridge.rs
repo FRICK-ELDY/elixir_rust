@@ -2,12 +2,14 @@
 //! Summary: game_window の RenderBridge 実装（1.8.4）
 
 use crate::asset::AssetLoader;
+use crate::lock_metrics::{record_read_wait, record_write_wait};
 use crate::render_snapshot::build_render_frame;
 use crate::world::GameWorld;
 use game_core::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use game_render::RenderFrame;
 use game_window::{run_render_loop, RenderBridge, RendererInit, WindowConfig};
 use rustler::ResourceArc;
+use std::time::Instant;
 
 pub fn run_render_thread(world: ResourceArc<GameWorld>) {
     let bridge = NativeRenderBridge { world };
@@ -33,19 +35,26 @@ struct NativeRenderBridge {
 
 impl RenderBridge for NativeRenderBridge {
     fn next_frame(&self) -> RenderFrame {
+        let wait_start = Instant::now();
         match self.world.0.read() {
-            Ok(guard) => build_render_frame(&guard),
+            Ok(guard) => {
+                record_read_wait("render.next_frame", wait_start.elapsed());
+                build_render_frame(&guard)
+            }
             Err(e) => {
                 log::error!("Render bridge: read lock poisoned in next_frame: {e:?}");
                 let guard = e.into_inner();
+                record_read_wait("render.next_frame_poisoned", wait_start.elapsed());
                 build_render_frame(&guard)
             }
         }
     }
 
     fn on_move_input(&self, dx: f32, dy: f32) {
+        let wait_start = Instant::now();
         match self.world.0.write() {
             Ok(mut guard) => {
+                record_write_wait("render.on_move_input", wait_start.elapsed());
                 guard.player.input_dx = dx;
                 guard.player.input_dy = dy;
             }
@@ -56,8 +65,10 @@ impl RenderBridge for NativeRenderBridge {
     }
 
     fn on_ui_action(&self, action: String) {
+        let wait_start = Instant::now();
         match self.world.0.read() {
             Ok(guard) => {
+                record_read_wait("render.on_ui_action", wait_start.elapsed());
                 match guard.pending_ui_action.lock() {
                     Ok(mut pending) => {
                         *pending = Some(action);
