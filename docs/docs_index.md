@@ -111,6 +111,7 @@
 | ドキュメント | 内容 | 状態 |
 |-------------|------|------|
 | [ARCHITECTURE.md](./06_system_design/ARCHITECTURE.md) | **システムアーキテクチャ全体像**。クライアント〜Phoenix サーバー〜Engine の構成、Channel・実装優先順位（SERVER_DESIGN 準拠） | 全体像・設計参照時 |
+| [ARCHITECTURE_IMPROVEMENT.md](./06_system_design/ARCHITECTURE_IMPROVEMENT.md) | **改善アーキテクチャ提案**。責務分離、NIF 境界整理、Rust 分割方針を Mermaid で図解 | 改善設計・リファクタ計画時 |
 | [FOLDER_CONNECTIONS.md](./06_system_design/FOLDER_CONNECTIONS.md) | **フォルダ単位 接続関係図解**。lib/app, lib/engine, lib/games, game_native, game_window のフォルダ間接続を Mermaid 図で可視化 | フォルダ構成・依存関係把握時 |
 | [ASSET_MANAGEMENT.md](./06_system_design/ASSET_MANAGEMENT.md) | G3: アセット管理システム設計。AssetId、パスマッピング、Elixir/Rust の責務分離、実行時ロード | PRIORITY_STEPS G3 関連 |
 | [ENGINE_API.md](./06_system_design/ENGINE_API.md) | 安定化されたエンジン API リファレンス。ゲームから利用する関数、ルーム管理（Step 44） | API 参照時 |
