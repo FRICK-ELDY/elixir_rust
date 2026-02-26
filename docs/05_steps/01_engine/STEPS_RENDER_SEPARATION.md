@@ -60,16 +60,15 @@
 
 ---
 
-## 公開 API 案（初期）
+## 公開 API 案（初期 / game_window・game_render）
 
-### `game_render` 側
+### `game_window` 側（winit 管理）
 
 ```rust
-pub struct RenderConfig {
+pub struct WindowConfig {
     pub title: String,
     pub width: u32,
     pub height: u32,
-    pub atlas_png: Vec<u8>,
 }
 
 pub struct RenderFrame {
@@ -91,6 +90,18 @@ pub enum UiAction {
     ChooseWeapon(String),
 }
 
+pub enum RenderError {
+    EventLoopCreate(String),
+    WindowCreate(String),
+    SurfaceCreate(String),
+    AdapterRequest(String),
+    DeviceRequest(String),
+    SurfaceAcquire(String),
+    SurfaceLost,
+    SurfaceOutdated,
+    RenderBackend(String),
+}
+
 pub trait RenderBridge: Send + 'static {
     fn next_frame(&self) -> RenderFrame;
     fn on_move_input(&self, dx: f32, dy: f32);
@@ -99,14 +110,32 @@ pub trait RenderBridge: Send + 'static {
 
 pub fn run_render_loop<B: RenderBridge>(
     bridge: B,
-    config: RenderConfig,
+    config: WindowConfig,
 ) -> Result<(), RenderError>;
+```
+
+### `game_render` 側（wgpu 描画）
+
+```rust
+pub struct RendererInit {
+    pub atlas_png: Vec<u8>,
+}
+
+pub struct Renderer;
+
+impl Renderer {
+    pub fn new(init: RendererInit, surface: &wgpu::Surface<'_>) -> Result<Self, RenderError>;
+    pub fn resize(&mut self, width: u32, height: u32);
+    pub fn render(&mut self, frame: &RenderFrame) -> Result<Option<UiAction>, RenderError>;
+}
 ```
 
 ### 補足
 
+- `run_render_loop` は `game_window` に所属し、EventLoop と入力イベントを管理する
 - 解像度の**決定責務**は `game_window` が持つ
 - `game_render` は `resize(w, h)` の**適用責務**のみ持つ
+- 外部エラー型（`winit` / `wgpu`）は境界で `RenderError` に変換して返す
 - 文字列ベースの UI アクションは段階的に `UiAction` enum へ移行する
 
 ---
@@ -114,19 +143,20 @@ pub fn run_render_loop<B: RenderBridge>(
 ## データフロー（分離後）
 
 ```
-Elixir (GameEvents) ──NIF──► game_native
-                              │
-                              ├─ world.read() -> RenderFrame
-                              ├─ on_move_input(dx, dy)
-                              └─ on_ui_action(action)
-                                      ▲
-                                      │
-                       game_window (winit) -> game_render (wgpu)
+Elixir (GameEvents) ──NIF──► game_native (RenderBridge 実装)
+                                  ▲
+                                  │ next_frame / on_move_input / on_ui_action
+                                  │
+                          game_window (winit EventLoop)
+                                  │
+                                  ▼ render(frame), resize(w, h)
+                            game_render (wgpu)
 ```
 
 - `GameWorld` からのスナップショット生成は `game_native` 側で実施
+- `game_window` は `RenderBridge` 経由で `game_native` を呼び出す（`next_frame` / `on_move_input` / `on_ui_action`）
 - `game_render` は `RenderFrame` を受けて描画に専念
-- `game_window` はプラットフォーム固有のイベントを吸収
+- `game_window` はプラットフォーム固有のイベントを吸収し、描画ループを進行する
 
 ---
 
