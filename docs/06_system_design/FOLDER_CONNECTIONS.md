@@ -1,16 +1,13 @@
-# フォルダ単位 接続関係図解
+# フォルダ単位 接続関係図解（1.8 描画責務分離後）
 
-**注意**: このドキュメントは、[STEPS_ALL.md](../05_steps/STEPS_ALL.md) の 1.7 節「描画統合（game_window → game_native）」が実施される**前**のアーキテクチャを記述しています。1.7 完了後は game_window が廃止され、描画は game_native に統合されるため、内容の更新が必要です。
+**根拠**: [ARCHITECTURE.md](./ARCHITECTURE.md)、[ENGINE_API.md](./ENGINE_API.md)、[WorkspaceLayout.md](../../WorkspaceLayout.md)  
+**適用状態**: `STEPS_RENDER_SEPARATION.md` の 1.8.6 完了後
 
-**根拠**: [ARCHITECTURE.md](./ARCHITECTURE.md)、[ENGINE_API.md](./ENGINE_API.md)、[WorkspaceLayout.md](../../WorkspaceLayout.md)
-
-`lib/app`、`lib/engine`、`lib/games`、`native/game_native`（nif, game_logic, world, lib.rs）、`native/game_window`（main.rs, renderer）のフォルダ単位での接続関係を可視化する。
+`lib/app`、`lib/engine`、`lib/games`、`native/game_native`、`native/game_window`、`native/game_render`、`native/game_core` の接続関係を、責務分離後の実装に合わせて整理する。
 
 ---
 
-## 1. 全体アーキテクチャ（2系統）
-
-プロジェクトには **Elixir-NIF 系統** と **スタンドアロン描画系統** の2つがあり、`game_core` のみ共通で参照されます。
+## 1. 全体アーキテクチャ（分離後）
 
 ```mermaid
 flowchart TB
@@ -20,191 +17,91 @@ flowchart TB
         lib_games[lib/games]
     end
 
-    subgraph RustNIF [game_native - NIF ライブラリ]
-        lib_rs[lib.rs]
-        nif[nif]
-        game_logic[game_logic]
-        world[world]
+    subgraph NativeNif [native/game_native]
+        native_lib[lib.rs / nif / game_logic / world]
+        bridge[render_bridge]
     end
 
-    subgraph Standalone [game_window - スタンドアロンバイナリ]
-        main_rs[main.rs]
-        renderer[renderer]
+    subgraph NativeWindow [native/game_window]
+        window_loop[winit EventLoop]
+    end
+
+    subgraph NativeRender [native/game_render]
+        renderer[wgpu Renderer]
     end
 
     subgraph Shared [共通]
-        game_core[game_core]
+        game_core[native/game_core]
     end
 
     lib_app --> lib_engine
-    lib_app -->|NifBridge| lib_rs
     lib_engine --> lib_games
-    lib_engine -->|Engine API| lib_app
     lib_games --> lib_engine
+    lib_app -->|NifBridge| native_lib
 
-    lib_rs --> nif
-    lib_rs --> game_logic
-    lib_rs --> world
-    nif --> game_logic
-    nif --> world
-    game_logic --> world
-    world --> game_core
-    game_logic --> game_core
+    native_lib --> bridge
+    bridge -->|run_render_loop / RenderBridge| window_loop
+    window_loop -->|render(frame), resize| renderer
 
-    main_rs --> renderer
-    main_rs --> game_core
+    native_lib --> game_core
     renderer --> game_core
 ```
 
 ---
 
-## 2. lib フォルダ詳細（Elixir 側）
+## 2. レイヤー別責務
 
-| フォルダ | 主な役割 | 依存先 | 呼び出し元 |
-|----------|----------|--------|------------|
-| **lib/app** | OTP Application、NIF 橋渡し | `lib/engine`, `lib/app/nif_bridge` → game_native | OTP |
-| **lib/engine** | ゲームエンジン（シーン、イベント、Room） | `lib/app`（NifBridge）、`lib/games`（config） | lib/app |
-| **lib/games** | ゲーム実装（VampireSurvivor, MiniShooter） | `lib/engine` | lib/engine（GameEvents 経由） |
+| レイヤー | 主な責務 | 依存先 |
+|---|---|---|
+| `lib/app` | OTP 起動、NIF ロード、環境初期化 | `lib/engine`, `native/game_native` |
+| `lib/engine` | ゲーム進行制御、ルーム管理、イベント処理 | `lib/app`, `lib/games` |
+| `lib/games` | ゲーム別ロジック（シーン・スポーン等） | `lib/engine` |
+| `native/game_native` | NIF 境界、`GameWorld` 管理、RenderBridge 実装 | `game_core`, `game_window`, `game_render` |
+| `native/game_window` | `winit` EventLoop、入力イベント・リサイズ管理 | `game_render` |
+| `native/game_render` | `wgpu` 描画パイプライン、`render/resize`、HUD | `game_core` |
+| `native/game_core` | 物理・敵・武器・定数など共通ロジック | 依存なし（下位共通） |
 
-### lib フロー
+---
+
+## 3. native 配下の依存方向
 
 ```mermaid
 flowchart LR
-    subgraph lib_app [lib/app]
-        Application[Application.ex]
-        NifBridge[NifBridge.ex]
-    end
+    GN[game_native]
+    GW[game_window]
+    GR[game_render]
+    GC[game_core]
 
-    subgraph lib_engine [lib/engine]
-        GameEvents[GameEvents]
-        Engine[Engine]
-        SceneManager[SceneManager]
-    end
-
-    subgraph lib_games [lib/games]
-        VampireSurvivor[VampireSurvivor]
-        MiniShooter[MiniShooter]
-    end
-
-    Application -->|起動| SceneManager
-    Application -->|起動| GameEvents
-    Application -->|GAME_ASSETS_ID| EnvVar[環境変数]
-
-    NifBridge -->|create_world, physics_step 等| game_native[game_native NIF]
-
-    GameEvents -->|{:frame_events}| Engine
-    GameEvents -->|update| VampireSurvivor
-    Engine --> NifBridge
-    VampireSurvivor --> Engine
-    MiniShooter --> Engine
+    GN --> GW
+    GN --> GR
+    GN --> GC
+    GW --> GR
+    GR --> GC
 ```
+
+- `game_window` は `game_native` に依存しない（Bridge トレイトで逆依存を回避）。
+- `game_render` は NIF や `rustler` を知らず、描画データ入力に専念する。
+- `game_native` は描画詳細を持たず、`RenderFrame` 生成と入力・UI 反映を担当する。
 
 ---
 
-## 3. native/game_native 詳細（NIF 側）
-
-| フォルダ/ファイル | 主な役割 | 依存先 | 呼び出し元 |
-|-------------------|----------|--------|------------|
-| **lib.rs** | NIF 初期化、Elixir.App.NifBridge 登録、pub use | nif, game_logic, world | Elixir（Rustler ロード時） |
-| **nif/** | NIF エントリ（world_nif, action_nif, game_loop_nif, read_nif, save_nif） | game_logic, world | App.NifBridge |
-| **game_logic/** | 物理ステップ、chase_ai、frame_events drain | world, game_core | nif |
-| **world/** | GameWorld, PlayerState, EnemyWorld 等 | game_core | nif, game_logic |
-
-### game_native フロー
+## 4. フレームと入力のデータフロー
 
 ```mermaid
-flowchart TB
-    subgraph ElixirSide [Elixir]
-        NifBridge[App.NifBridge]
-    end
+sequenceDiagram
+    participant E as Elixir(GameEvents)
+    participant N as game_native
+    participant W as game_window
+    participant R as game_render
 
-    subgraph lib_rs [lib.rs]
-        rustler_init["rustler::init(Elixir.App.NifBridge)"]
-    end
-
-    subgraph nif [nif]
-        load[load.rs]
-        world_nif[world_nif]
-        action_nif[action_nif]
-        game_loop_nif[game_loop_nif]
-        read_nif[read_nif]
-        save_nif[save_nif]
-    end
-
-    subgraph game_logic [game_logic]
-        physics_step[physics_step]
-        chase_ai[chase_ai]
-        events[events]
-    end
-
-    subgraph world [world]
-        GameWorld[GameWorld]
-        GameWorldInner[GameWorldInner]
-    end
-
-    NifBridge -->|NIF呼び出し| rustler_init
-    rustler_init --> nif
-
-    world_nif -->|create_world, spawn_enemies| GameWorld
-    world_nif -->|get_spawn_positions| game_logic
-    action_nif --> GameWorld
-    action_nif --> game_logic
-    game_loop_nif -->|physics_step_inner| physics_step
-    game_loop_nif -->|drain_frame_events| events
-    read_nif --> GameWorld
-    save_nif --> GameWorld
-
-    physics_step --> chase_ai
-    physics_step --> GameWorldInner
-    events --> GameWorldInner
-    game_logic --> world
-    world --> game_core[game_core]
-```
-
----
-
-## 4. native/game_window 詳細（スタンドアロン側）
-
-| フォルダ/ファイル | 主な役割 | 依存先 | 備考 |
-|-------------------|----------|--------|------|
-| **main.rs** | ウィンドウ・イベントループ、ゲームループ | asset, audio, renderer, game_core | Elixir 非依存 |
-| **renderer/** | wgpu 描画、スプライト、HUD | game_core, asset | main から呼び出し |
-
-### game_window と Elixir の接続
-
-- **直接の依存関係はない**: game_window は game_native を参照しない
-- **環境変数で連携**: `lib/app/application.ex` が `GAME_ASSETS_ID` を設定
-- **起動方法**:
-  - Elixir 起動後、同じシェルで `cargo run -p game_window` → env を継承
-  - `bin/start.bat` で `GAME_ASSETS_ID` を設定して直接起動
-
-### game_window フロー
-
-```mermaid
-flowchart TB
-    subgraph main_rs [main.rs]
-        EventLoop[EventLoop]
-        App[App]
-        GameLoop["GameWorld::step(dt)"]
-    end
-
-    subgraph renderer [renderer]
-        wgpu_init[wgpu 初期化]
-        SpritePipeline[スプライトパイプライン]
-        egui_hud[egui HUD]
-    end
-
-    subgraph game_window_deps [game_window 内モジュール]
-        asset[asset]
-        audio[audio]
-    end
-
-    main_rs --> renderer
-    main_rs --> asset
-    main_rs --> audio
-    main_rs --> game_core[game_core]
-    renderer --> game_core
-    renderer --> asset
+    E->>N: NIF (create_world / physics_step)
+    W->>N: next_frame()
+    N->>W: RenderFrame
+    W->>R: render(frame)
+    W->>N: on_move_input(dx, dy)
+    R->>W: String
+    W->>N: on_ui_action(action)
+    N->>E: pending_ui_action / frame_events
 ```
 
 ---
@@ -212,52 +109,21 @@ flowchart TB
 ## 5. 接続サマリ表
 
 | 起点 | 接続先 | 接続種別 |
-|------|--------|----------|
-| lib/app | lib/engine | Application 起動（子プロセス） |
-| lib/app | native/game_native | NifBridge 経由 NIF 呼び出し |
-| lib/app | game_window | GAME_ASSETS_ID 環境変数 |
-| lib/engine | lib/app | NifBridge 経由で NIF 呼び出し |
-| lib/engine | lib/games | Application.get_env、Scene update |
-| lib/games | lib/engine | Engine API（spawn, is_player_dead 等） |
-| native/game_native/lib.rs | nif | モジュール集約・初期化 |
-| native/game_native/lib.rs | game_logic | pub use |
-| native/game_native/lib.rs | world | pub use |
-| native/game_native/nif | game_logic | physics_step_inner, get_spawn_positions |
-| native/game_native/nif | world | GameWorld 操作 |
-| native/game_native/game_logic | world | GameWorldInner 更新 |
-| native/game_window/main.rs | renderer | 描画呼び出し |
-| native/game_window/main.rs | game_core | ゲームロジック |
-| native/game_window/renderer | game_core | 定数・種別 |
+|---|---|---|
+| `lib/app` | `lib/engine` | Application 起動（Supervisor） |
+| `lib/app` | `native/game_native` | Rustler による NIF ロード |
+| `lib/engine` | `lib/games` | シーン更新・ゲーム設定参照 |
+| `native/game_native` | `native/game_window` | `run_render_loop` 呼び出し |
+| `native/game_window` | `native/game_render` | `Renderer::new / render / resize` |
+| `native/game_native` | `native/game_render` | `RenderFrame` 型共有 |
+| `native/game_native` | `native/game_core` | 物理・敵・武器・定数の利用 |
+| `native/game_render` | `native/game_core` | 描画種別・定数の利用 |
 
 ---
 
-## 6. 2系統の分離
+## 6. 実装上の境界ルール
 
-```mermaid
-flowchart LR
-    subgraph ElixirPath [Elixir-NIF 経路]
-        E1[lib/app]
-        E2[lib/engine]
-        E3[lib/games]
-        E4[game_native]
-    end
-
-    subgraph StandalonePath [スタンドアロン経路]
-        S1[game_window/main.rs]
-        S2[game_window/renderer]
-    end
-
-    GC[game_core]
-
-    E1 --> E2 --> E3
-    E3 --> E4
-    E4 --> GC
-
-    S1 --> S2
-    S1 --> GC
-    S2 --> GC
-
-    Env[GAME_ASSETS_ID] -.->|env 変数のみ| S1
-```
-
-Elixir 系統と game_window は **game_core 以外は共有しておらず**、game_window は NIF を使わないスタンドアロンバイナリです。
+- `game_render` に `rustler` / `ResourceArc` を持ち込まない。
+- `game_window` は描画命令の生成を行わず、イベント処理とループ進行に限定する。
+- `game_native` は `GameWorld` の読み取りスナップショット生成と入力・UI の橋渡しに限定する。
+- Windows は `with_any_thread(true)` を使い、NIF spawn スレッド上の EventLoop 実行を許可する。

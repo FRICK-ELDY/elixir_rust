@@ -176,3 +176,30 @@ Elixir (GameEvents) ──NIF──► game_native (RenderBridge 実装)
 - Windows で `iex -S mix` 起動から入力・描画・UI 操作が成立
 - `FOLDER_CONNECTIONS.md` / `ARCHITECTURE.md` が新構成を反映
 
+---
+
+## 1.8.6 Windows 動作確認と構成ドキュメント更新（実施）
+
+**実施日**: 2026-02-26
+
+### 動作確認結果
+
+- Windows で `iex -S mix` から起動し、ウィンドウ表示・描画更新・入力反映・UI 操作が成立することを確認。
+- `game_window`（winit 管理）と `game_render`（wgpu 描画）が分離された状態で、`game_native` は NIF 境界と `GameWorld` 連携に集中できていることを確認。
+- 1.8 の到達目標（責務分離後の実動作確認）は達成とする。
+
+### 確認観点（1.8.6）
+
+| 観点 | 結果 |
+|------|------|
+| `iex -S mix` 単体起動でウィンドウ表示 | OK |
+| WASD/矢印キー入力の反映 | OK |
+| HUD 操作（Start/Retry/Save/Load/武器選択） | OK |
+| `game_native` から描画実装依存の分離 | OK |
+
+### 更新ドキュメント
+
+- `docs/06_system_design/FOLDER_CONNECTIONS.md` を 1.8 完了後の構成（`game_native` / `game_window` / `game_render` の責務分離）に更新。
+- `docs/06_system_design/ARCHITECTURE.md` を分離後のエンジン内部構成に合わせて更新。
+- 本書（`STEPS_RENDER_SEPARATION.md`）に 1.8.6 の実施記録を追記。
+
