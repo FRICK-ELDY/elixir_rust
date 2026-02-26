@@ -99,7 +99,7 @@ sequenceDiagram
     N->>W: RenderFrame
     W->>R: render(frame)
     W->>N: on_move_input(dx, dy)
-    R->>W: UiAction
+    R->>W: String
     W->>N: on_ui_action(action)
     N->>E: pending_ui_action / frame_events
 ```
