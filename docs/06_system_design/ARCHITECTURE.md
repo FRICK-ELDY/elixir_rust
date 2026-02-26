@@ -36,8 +36,10 @@
 │                                                                             │
 │ RoomSupervisor / RoomRegistry  … ルーム ID ごとに GameEvents + GameWorld       │
 │ GameEvents GenServer             … frame_events 受信・フェーズ管理・NIF 呼び出し │
-│ Rust NIF (Rustler)             … ResourceArc<RwLock<GameWorld>>             │
-│ Rust Native                    … ECS(SoA), Physics, wgpu Renderer           │
+│ Rust NIF (game_native)         … ResourceArc<RwLock<GameWorld>>             │
+│ Rust Window (game_window)      … winit EventLoop・入力・リサイズ             │
+│ Rust Render (game_render)      … wgpu Renderer・render(frame)               │
+│ Rust Core (game_core)          … 共通定数・物理・敵/武器ロジック               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -74,6 +76,31 @@
 | **通知** | フレンド申請・ルーム招待・メッセージ着信の push | SERVER_DESIGN §7 |
 | **マッチング・ルーム** | ルーム作成/参加/退出、RoomChannel、Engine 連携 | MULTIPLAYER_PHOENIX_CHANNELS |
 | **エンジン** | ルームごとの GameEvents / GameWorld、物理・描画 | ENGINE_API, SPEC_ENGINE |
+
+---
+
+## 3.1 エンジン内部（1.8 描画責務分離後）
+
+`native` 配下は次の依存方向で分離される。
+
+```mermaid
+flowchart LR
+    GN[game_native]
+    GW[game_window]
+    GR[game_render]
+    GC[game_core]
+
+    GN --> GW
+    GN --> GR
+    GN --> GC
+    GW --> GR
+    GR --> GC
+```
+
+- `game_native`: NIF 境界、`GameWorld` 管理、RenderBridge 実装。
+- `game_window`: `winit` のライフサイクル管理と入力イベント吸収。
+- `game_render`: `wgpu` 初期化・描画パイプライン・`render(frame)` / `resize(width, height)`。
+- `game_core`: 物理・敵・武器・定数の共通ロジック。
 
 ---
 

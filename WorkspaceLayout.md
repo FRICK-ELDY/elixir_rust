@@ -70,7 +70,7 @@
 | [native/game_native/src/game_logic/events.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/game_logic/events.rs) | 16 | 🟢 | フレームイベントの drain（Elixir EventBus 用） |
 | [native/game_native/src/game_logic/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/game_logic/mod.rs) | 6 | 🟢 | 物理ステップ・Chase AI・イベント drain |
 | [native/game_native/src/game_logic/physics_step.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/game_logic/physics_step.rs) | 777 | 🔴 | 物理ステップ内部実装 |
-| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 49 | 🟢 | NIF エントリ・モジュール宣言・pub use・rustler::init のみ（スリム化済み） |
+| [native/game_native/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/lib.rs) | 48 | 🟢 | NIF エントリ・モジュール宣言・pub use・rustler::init のみ（スリム化済み） |
 | [native/game_native/src/nif/action_nif.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/action_nif.rs) | 57 | 🟡 | アクション NIF（add_weapon, skip_level_up, spawn_boss, spawn_elite_enemy） |
 | [native/game_native/src/nif/game_loop_nif.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/game_loop_nif.rs) | 82 | 🟡 | ゲームループ NIF（physics_step, drain_frame_events, pause/resume, Rust ループ起動） |
 | [native/game_native/src/nif/load.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/load.rs) | 24 | 🟢 | NIF ローダー（パニックフック・リソース登録・アトム事前登録） |
@@ -80,9 +80,8 @@
 | [native/game_native/src/nif/save_nif.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/save_nif.rs) | 78 | 🟡 | セーブ・ロード NIF |
 | [native/game_native/src/nif/util.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/util.rs) | 1 | ⚪ | NIF 共通ユーティリティ（lock_poisoned_err） |
 | [native/game_native/src/nif/world_nif.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/nif/world_nif.rs) | 80 | 🟡 | ワールド作成・入力・スポーン・障害物設定 NIF |
-| [native/game_native/src/render_snapshot.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/render_snapshot.rs) | 128 | 🟠 | GameWorld から描画用スナップショットを構築（1.7.5） |
-| [native/game_native/src/render_thread.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/render_thread.rs) | 183 | 🟠 | 描画スレッドのエントリ（1.7.4 / 1.7.5） |
-| [native/game_native/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/renderer/mod.rs) | 1410 | 🔴 | wgpu によるスプライト描画・パイプライン・テクスチャ管理 |
+| [native/game_native/src/render_bridge.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/render_bridge.rs) | 64 | 🟡 | game_window の RenderBridge 実装（1.8.4） |
+| [native/game_native/src/render_snapshot.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/render_snapshot.rs) | 119 | 🟠 | GameWorld から描画用スナップショットを構築（1.7.5） |
 | [native/game_native/src/world/boss.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/boss.rs) | 30 | 🟢 | ボス状態（BossState） |
 | [native/game_native/src/world/bullet.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/bullet.rs) | 79 | 🟡 | 弾丸 SoA（BulletWorld）と描画種別定数 |
 | [native/game_native/src/world/enemy.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/enemy.rs) | 86 | 🟡 | 敵 SoA（EnemyWorld）と EnemySeparation の実装 |
@@ -92,6 +91,9 @@
 | [native/game_native/src/world/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/mod.rs) | 13 | 🟢 | ワールド型（PlayerState, EnemyWorld, BulletWorld, ParticleWorld, BossState, GameWorld） |
 | [native/game_native/src/world/particle.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/particle.rs) | 82 | 🟡 | パーティクル SoA（ParticleWorld） |
 | [native/game_native/src/world/player.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_native/src/world/player.rs) | 5 | 🟢 | プレイヤー状態（座標・入力・HP・無敵タイマー） |
+| [native/game_render/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_render/src/lib.rs) | 41 | 🟢 | (未設定) |
+| [native/game_render/src/renderer/mod.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_render/src/renderer/mod.rs) | 1410 | 🔴 | wgpu によるスプライト描画・パイプライン・テクスチャ管理 |
+| [native/game_window/src/lib.rs](https://github.com/FRICK-ELDY/elixir_rust/blob/main/native/game_window/src/lib.rs) | 162 | 🟠 | (未設定) |
 ## rust:xtask
 
 | Path | Lines | Status | Summary |
