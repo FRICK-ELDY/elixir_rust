@@ -53,12 +53,10 @@ pub(crate) fn update_boss(w: &mut GameWorldInner, dt: f32) {
     };
 
     // フェーズ1: boss の移動・タイマー更新（boss のみを借用）
-    if w.boss.is_some() {
+    if let Some(boss) = w.boss.as_mut() {
         // プレイヤー座標をコピーして boss 借用前に取得
         let px = w.player.x + PLAYER_RADIUS;
         let py = w.player.y + PLAYER_RADIUS;
-
-        let boss = w.boss.as_mut().expect("boss exists");
 
         // 無敵タイマー
         if boss.invincible_timer > 0.0 {
