@@ -5,7 +5,7 @@
 
 **構成**:
 
-- **1. エンジン構築**: 1.1 基礎〜1.11 Slot・コンポーネントまで、ゲームエンジン本体の実装
+- **1. エンジン構築**: 1.1 基礎〜1.12 Slot・コンポーネントまで、ゲームエンジン本体の実装
 - **2. エディタ構築**: ビジュアルエディタの実装（詳細は今後決める）
 - **3. サーバー構築**: Elixir/Phoenix バックエンド・EOS 等のオンライン化（詳細は今後決める）
 
@@ -25,10 +25,11 @@
 |               | 5. 拡張             | 全7項  | ゲームループ Rust 移行・マップ・セーブ・マルチ・デバッグ・リネーム・SPEC コンテンツ                                                                    |
 |               | 6. Rust lib 分割・整理 | 全9項  | Workspace Layout ツール(xtask)＋3クレート構成＋lib.rs分割。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
 |               | 7. 描画統合（game_window → game_native） | 全8項 | game_window 廃止・game_native へ統合。NIF が描画スレッド spawn、iex -S mix 単一プロセスで wgpu 描画。まずは Windows（[STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)） |
-|               | 8. 2Dゲームの固め       | —    | 2D サバイバーを仕様・バランス・品質として固める                                                                                          |
-|               | 9. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
-|               | 10. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
-|               | 11. Slot・コンポーネント  | 全7項  | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)）      |
+|               | 8. 描画責務分離（game_native → game_window / game_render） | 全6項 | ウィンドウ管理（winit）と描画コア（wgpu）を分離し、`game_native` を NIF 境界に専念させる（[STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)） |
+|               | 9. 2Dゲームの固め       | —    | 2D サバイバーを仕様・バランス・品質として固める                                                                                          |
+|               | 10. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
+|               | 11. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
+|               | 12. Slot・コンポーネント  | 全7項  | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)）      |
 | **2. エディタ構築** | —                 | —    | ビジュアルエディタの実装。項は今後決める                                                                                               |
 | **3. サーバー構築** | —                 | —    | Elixir/Phoenix バックエンド・オンライン化。項は今後決める                                                                               |
 
@@ -37,7 +38,7 @@
 
 ## 1. エンジン構築
 
-1.1.1〜1.11.7 を、1. 基礎〜11. Slot・コンポーネントの**項**として配置する。
+1.1.1〜1.12.7 を、1. 基礎〜12. Slot・コンポーネントの**項**として配置する。
 
 ---
 
@@ -187,23 +188,40 @@
 
 ---
 
-### 1.8  2Dゲームの固め
+### 1.8  描画責務分離（game_native → game_window / game_render）（全6項）
 
-1.7 完了後、2D サバイバーを仕様・バランス・品質として固める。項は今後決める。
+| 項     | 目標 |
+|--------|------|
+| 1.8.1  | 分離方針の確定（責務・依存方向・公開 API） |
+| 1.8.2  | `native/game_render` の作成（wgpu パイプライン、描画 API） |
+| 1.8.3  | `native/game_window` の再導入（winit 管理、サイズ決定、イベント処理） |
+| 1.8.4  | Bridge 実装（`game_native` が frame/input/ui_action を仲介） |
+| 1.8.5  | `game_native` から描画実装依存を削減（NIF 境界・GameWorld 連携に集中） |
+| 1.8.6  | Windows 動作確認とアーキテクチャ文書更新 |
+
+1.7 で統合した描画を責務分離し、`game_window` はウィンドウ管理、`game_render` は描画コア、`game_native` は NIF/状態管理に専念する構成に整理する。
+
+**詳細**: [STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)
 
 ---
 
-### 1.9 EOS 実装
+### 1.9  2Dゲームの固め
 
-1.8 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
+1.8 完了後、2D サバイバーを仕様・バランス・品質として固める。項は今後決める。
+
+---
+
+### 1.10 EOS 実装
+
+1.9 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
 
 **詳細**: [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)
 
 ---
 
-### 1.10  3D・三人称 FPS（全7項・据え置き）
+### 1.11  3D・三人称 FPS（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。1.6〜1.9 の後に再検討する。
+> **据え置き**: 本節は当面保留。1.6〜1.10 の後に再検討する。
 
 
 | 項   | 目標               | 備考                               |
@@ -221,9 +239,9 @@
 
 ---
 
-### 1.11 Slot・コンポーネント（全7項・据え置き）
+### 1.12 Slot・コンポーネント（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。1.10 完了後に実施する。
+> **据え置き**: 本節は当面保留。1.11 完了後に実施する。
 
 
 | 項   | 目標                              | 備考                                            |
@@ -263,10 +281,11 @@
 - **1.5（全7項）**: 1.4 完了後。1.を優先すると他項の土台ができる。6.は 1.完了後であればいつでも実施可。7.は 2.完了後が望ましい
 - **1.6**: 1.5 完了後。3D・Slot の**前**に実施
 - **1.7**: 1.6 完了後。描画統合（game_window → game_native）、iex -S mix 単一プロセスで wgpu 描画
-- **1.8**: 1.7 完了後。2D の仕様・バランス・品質を固める
-- **1.9**: 1.8 完了後。EOS で友達・ロビー・セッションを実装
-- **1.10（据え置き）**: 上記が一区切りついた後に再検討
-- **1.11（据え置き）**: 1.10 完了後
+- **1.8**: 1.7 完了後。描画責務分離（`game_native` → `game_window` / `game_render`）
+- **1.9**: 1.8 完了後。2D の仕様・バランス・品質を固める
+- **1.10**: 1.9 完了後。EOS で友達・ロビー・セッションを実装
+- **1.11（据え置き）**: 上記が一区切りついた後に再検討
+- **1.12（据え置き）**: 1.11 完了後
 - **2. エディタ構築**: 1章完了後
 - **3. サーバー構築**: 1章完了後
 
@@ -287,8 +306,9 @@
 | [STEPS_GENERALIZATION.md](./01_engine/STEPS_GENERALIZATION.md)             | 1.4（全9項）汎用化の詳細                     |
 | [STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)                         | 1.6 Rust lib 分割・フォルダ構成検討           |
 | [STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)     | 1.7 描画統合（game_window → game_native）の詳細 |
-| [STEPS_3D.md](./01_engine/STEPS_3D.md)                                     | 1.10（全7項）3D・三人称 FPS の詳細（**据え置き**）   |
-| [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)             | 1.11（全7項）Slot・コンポーネントの詳細（**据え置き**） |
+| [STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)       | 1.8 描画責務分離（game_native → game_window / game_render）の詳細 |
+| [STEPS_3D.md](./01_engine/STEPS_3D.md)                                     | 1.11（全7項）3D・三人称 FPS の詳細（**据え置き**）   |
+| [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)             | 1.12（全7項）Slot・コンポーネントの詳細（**据え置き**） |
 
 
 ### 他フォルダ
@@ -296,7 +316,7 @@
 
 | ドキュメント                                                                 | 用途                  |
 | ---------------------------------------------------------------------- | ------------------- |
-| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.9 EOS 実装          |
+| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.10 EOS 実装          |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md)                   | 実施優先度（P1〜P7, G1〜G3） |
 | [SPEC.md](../01_setup/SPEC.md)                                         | ゲーム仕様・技術仕様          |
 
