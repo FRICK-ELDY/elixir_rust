@@ -1,6 +1,6 @@
 use crate::world::GameWorldInner;
 use game_core::entity_params::{
-    WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_LIGHTNING,
+    WEAPON_ID_AXE, WEAPON_ID_CROSS, WEAPON_ID_FIREBALL, WEAPON_ID_GARLIC, WEAPON_ID_LIGHTNING,
     WEAPON_ID_MAGIC_WAND, WEAPON_ID_WHIP,
 };
 
@@ -13,6 +13,7 @@ pub(crate) fn compute_weapon_choices(w: &GameWorldInner) -> Vec<String> {
         ("whip", WEAPON_ID_WHIP),
         ("fireball", WEAPON_ID_FIREBALL),
         ("lightning", WEAPON_ID_LIGHTNING),
+        ("garlic", WEAPON_ID_GARLIC),
     ];
 
     let mut choices: Vec<(i32, String)> = ALL

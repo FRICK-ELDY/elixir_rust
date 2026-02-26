@@ -14,6 +14,7 @@ flowchart TB
     subgraph Elixir [Elixir 系統]
         lib_app[lib/app]
         lib_engine[lib/engine]
+        engine_boundary[engine/commands + engine/queries]
         lib_games[lib/games]
     end
 
@@ -35,9 +36,11 @@ flowchart TB
     end
 
     lib_app --> lib_engine
+    lib_engine --> engine_boundary
+    engine_boundary -->|NifBridge 呼び出し集約| native_lib
     lib_engine --> lib_games
     lib_games --> lib_engine
-    lib_app -->|NifBridge| native_lib
+    lib_app -->|Rustler load| native_lib
 
     native_lib --> bridge
     bridge -->|run_render_loop / RenderBridge| window_loop
@@ -55,6 +58,8 @@ flowchart TB
 |---|---|---|
 | `lib/app` | OTP 起動、NIF ロード、環境初期化 | `lib/engine`, `native/game_native` |
 | `lib/engine` | ゲーム進行制御、ルーム管理、イベント処理 | `lib/app`, `lib/games` |
+| `lib/engine/commands` | NIF command（更新系）呼び出しの集約 | `lib/app` |
+| `lib/engine/queries` | NIF query（取得系）呼び出しの集約 | `lib/app` |
 | `lib/games` | ゲーム別ロジック（シーン・スポーン等） | `lib/engine` |
 | `native/game_native` | NIF 境界、`GameWorld` 管理、RenderBridge 実装 | `game_core`, `game_window`, `game_render` |
 | `native/game_window` | `winit` EventLoop、入力イベント・リサイズ管理 | `game_render` |
@@ -82,6 +87,7 @@ flowchart LR
 - `game_window` は `game_native` に依存しない（Bridge トレイトで逆依存を回避）。
 - `game_render` は NIF や `rustler` を知らず、描画データ入力に専念する。
 - `game_native` は描画詳細を持たず、`RenderFrame` 生成と入力・UI 反映を担当する。
+- `game_native/src/game_logic/systems` で責務を機能分割し、`physics_step` は統合オーケストレーションのみを担当する。
 
 ---
 
@@ -112,6 +118,9 @@ sequenceDiagram
 |---|---|---|
 | `lib/app` | `lib/engine` | Application 起動（Supervisor） |
 | `lib/app` | `native/game_native` | Rustler による NIF ロード |
+| `lib/engine` | `lib/engine/commands` | 更新系 command の呼び出し |
+| `lib/engine` | `lib/engine/queries` | 取得系 query の呼び出し |
+| `lib/engine/commands,queries` | `lib/app/nif_bridge.ex` | NIF 境界呼び出し |
 | `lib/engine` | `lib/games` | シーン更新・ゲーム設定参照 |
 | `native/game_native` | `native/game_window` | `run_render_loop` 呼び出し |
 | `native/game_window` | `native/game_render` | `Renderer::new / render / resize` |
@@ -127,3 +136,4 @@ sequenceDiagram
 - `game_window` は描画命令の生成を行わず、イベント処理とループ進行に限定する。
 - `game_native` は `GameWorld` の読み取りスナップショット生成と入力・UI の橋渡しに限定する。
 - Windows は `with_any_thread(true)` を使い、NIF spawn スレッド上の EventLoop 実行を許可する。
+- 旧描画取得 NIF API（`get_render_data` / `get_particle_data` / `get_item_data`）は廃止し、描画データ転送の主経路にしない。

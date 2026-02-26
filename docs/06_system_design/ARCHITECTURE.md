@@ -36,6 +36,7 @@
 │                                                                             │
 │ RoomSupervisor / RoomRegistry  … ルーム ID ごとに GameEvents + GameWorld       │
 │ GameEvents GenServer             … frame_events 受信・フェーズ管理・NIF 呼び出し │
+│ Engine.Commands / Engine.Queries … command/query 境界で NIF 呼び出しを集約     │
 │ Rust NIF (game_native)         … ResourceArc<RwLock<GameWorld>>             │
 │ Rust Window (game_window)      … winit EventLoop・入力・リサイズ             │
 │ Rust Render (game_render)      … wgpu Renderer・render(frame)               │
@@ -101,6 +102,13 @@ flowchart LR
 - `game_window`: `winit` のライフサイクル管理と入力イベント吸収。
 - `game_render`: `wgpu` 初期化・描画パイプライン・`render(frame)` / `resize(width, height)`。
 - `game_core`: 物理・敵・武器・定数の共通ロジック。
+
+### 3.2 1.9 改善の反映点
+
+- Elixir 側は `Engine.Commands` / `Engine.Queries` を追加し、`App.NifBridge` 直接呼び出しを境界集約した。
+- Rust 側は `game_native/src/game_logic/systems` で処理を機能分割し、`physics_step.rs` はオーケストレーション中心の薄い層になった。
+- `systems` には `spawn` / `leveling` / `collision` / `effects` / `items` / `projectiles` / `boss` / `weapons` が配置される。
+- 旧描画取得 NIF API（`get_render_data` / `get_particle_data` / `get_item_data`）は削除済みで、描画は Rust 内部完結を前提とする。
 
 ---
 

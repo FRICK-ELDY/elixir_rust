@@ -43,8 +43,8 @@
 - [x] 1.9.4 として `Engine.Commands` / `Engine.Queries` を追加し、`App.NifBridge` 直接呼び出しを集約。
 - [x] 1.9.5 として旧描画取得 API（`get_render_data` / `get_particle_data` / `get_item_data`）を削除。
 - [x] 1.9.5 として Windows で `iex.bat -S mix` の起動確認を実施（IEx プロンプト到達を確認）。
-- [ ] 1.9.2 の残タスク（武器発射処理ブロックの更なる機能別分離）
-- [ ] 1.9.5 の残タスク（不要化した旧APIに関する関連ドキュメントの全面更新）
+- [x] 1.9.2 の残タスク（武器発射処理ブロックを `systems/weapons.rs` へ分離）
+- [x] 1.9.5 の残タスク（不要化した旧APIに関する関連ドキュメントの更新）
 
 ---
 
