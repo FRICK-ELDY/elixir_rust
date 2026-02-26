@@ -2,6 +2,8 @@
 # Summary: セーブ・ロード・ハイスコア永続化
 defmodule Engine.SaveManager do
   require Logger
+  alias Engine.Commands
+  alias Engine.Queries
 
   @moduledoc """
   1.5.3: セーブ・ロード管理。
@@ -31,7 +33,7 @@ defmodule Engine.SaveManager do
   """
   def save_session(world_ref) do
     try do
-      snapshot = App.NifBridge.get_save_snapshot(world_ref)
+      snapshot = Queries.get_save_snapshot(world_ref)
       binary = :erlang.term_to_binary(snapshot)
       File.mkdir_p!("saves")
       File.write!(@session_path, binary)
@@ -65,7 +67,7 @@ defmodule Engine.SaveManager do
           snapshot = :erlang.binary_to_term(binary)
           # 1.7.5: 旧セーブとの互換性（kill_count が無い場合は 0 で補う）
           snapshot = Map.put_new(snapshot, :kill_count, 0)
-          App.NifBridge.load_save_snapshot(world_ref, snapshot)
+          Commands.load_save_snapshot(world_ref, snapshot)
           :ok
         rescue
           e -> {:error, Exception.message(e)}

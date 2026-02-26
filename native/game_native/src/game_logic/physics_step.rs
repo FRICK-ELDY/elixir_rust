@@ -1,7 +1,12 @@
 //! Path: native/game_native/src/game_logic/physics_step.rs
 //! Summary: 物理ステップ内部実装
 
-use super::chase_ai::{find_nearest_enemy_spatial, find_nearest_enemy_spatial_excluding, update_chase_ai, update_chase_ai_simd};
+use super::chase_ai::{find_nearest_enemy_spatial, find_nearest_enemy_spatial_excluding};
+#[cfg(not(target_arch = "x86_64"))]
+use super::chase_ai::update_chase_ai;
+#[cfg(target_arch = "x86_64")]
+use super::chase_ai::update_chase_ai_simd;
+use super::systems::leveling::compute_weapon_choices;
 use crate::world::{FrameEvent, GameWorldInner};
 use crate::{BULLET_KIND_LIGHTNING, BULLET_KIND_ROCK, BULLET_KIND_WHIP};
 use game_core::constants::{BULLET_LIFETIME, BULLET_RADIUS, BULLET_SPEED, ENEMY_SEPARATION_FORCE, ENEMY_SEPARATION_RADIUS, FRAME_BUDGET_MS, INVINCIBLE_DURATION, MAP_HEIGHT, MAP_WIDTH, PLAYER_RADIUS, PLAYER_SIZE, PLAYER_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH, WEAPON_SEARCH_RADIUS};
@@ -9,37 +14,7 @@ use game_core::entity_params::{garlic_radius, BossParams, EnemyParams, WeaponPar
 use game_core::item::ItemKind;
 use game_core::physics::obstacle_resolve;
 use game_core::physics::separation::apply_separation;
-use game_core::util::{exp_required_for_next, spawn_position_around_player};
-
-/// 1.7.5: レベルアップ時の武器選択肢を計算（未所持優先 → 低レベル順、Lv8 除外）
-fn compute_weapon_choices(w: &GameWorldInner) -> Vec<String> {
-    const ALL: &[(&str, u8)] = &[
-        ("magic_wand", 0), ("axe", 1), ("cross", 2),
-        ("whip", 3), ("fireball", 4), ("lightning", 5),
-    ];
-    let mut choices: Vec<(i32, String)> = ALL.iter()
-        .filter_map(|(name, wid)| {
-            let lv = w.weapon_slots.iter()
-                .find(|s| s.kind_id == *wid)
-                .map(|s| s.level)
-                .unwrap_or(0);
-            if lv >= 8 { return None; }
-            let sort_key = if lv == 0 { -1i32 } else { lv as i32 };
-            Some((sort_key, (*name).to_string()))
-        })
-        .collect();
-    choices.sort_by_key(|(k, _)| *k);
-    choices.into_iter().take(3).map(|(_, n)| n).collect()
-}
-
-/// プレイヤー周囲 800〜1200px の円周上にスポーン位置を生成（spawn_enemies / spawn_elite_enemy 共通）
-pub(crate) fn get_spawn_positions_around_player(w: &mut GameWorldInner, count: usize) -> Vec<(f32, f32)> {
-    let px = w.player.x + PLAYER_RADIUS;
-    let py = w.player.y + PLAYER_RADIUS;
-    (0..count)
-        .map(|_| spawn_position_around_player(&mut w.rng, px, py, 800.0, 1200.0))
-        .collect()
-}
+use game_core::util::exp_required_for_next;
 
 /// 1.5.2: 敵が障害物と重なっている場合に押し出す（Ghost はスキップ）
 fn resolve_obstacles_enemy(w: &mut GameWorldInner) {

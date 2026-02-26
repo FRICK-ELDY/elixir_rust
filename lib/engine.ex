@@ -33,6 +33,9 @@ defmodule Engine do
       Engine.get_enemy_count(world_ref)
   """
 
+  alias Engine.Commands
+  alias Engine.Queries
+
   # ── World 操作（ゲームから利用）───────────────────────────────────────
 
   @doc """
@@ -50,7 +53,7 @@ defmodule Engine do
   """
   def spawn_enemies(world_ref, kind, count) do
     kind_id = resolve_enemy_id(kind)
-    App.NifBridge.spawn_enemies(world_ref, kind_id, count)
+    Commands.spawn_enemies(world_ref, kind_id, count)
   end
 
   @doc """
@@ -61,7 +64,7 @@ defmodule Engine do
   """
   def spawn_elite_enemy(world_ref, kind, count, hp_multiplier) do
     kind_id = resolve_enemy_id(kind)
-    App.NifBridge.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)
+    Commands.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)
   end
 
   @doc """
@@ -74,7 +77,7 @@ defmodule Engine do
   """
   def spawn_boss(world_ref, kind) do
     kind_id = resolve_boss_id(kind)
-    App.NifBridge.spawn_boss(world_ref, kind_id)
+    Commands.spawn_boss(world_ref, kind_id)
   end
 
   @doc """
@@ -87,7 +90,7 @@ defmodule Engine do
       end
   """
   def get_enemy_count(world_ref) do
-    App.NifBridge.get_enemy_count(world_ref)
+    Queries.get_enemy_count(world_ref)
   end
 
   @doc """
@@ -99,7 +102,7 @@ defmodule Engine do
       end
   """
   def is_player_dead?(world_ref) do
-    App.NifBridge.is_player_dead(world_ref)
+    Queries.is_player_dead(world_ref)
   end
 
   @doc """
@@ -115,7 +118,7 @@ defmodule Engine do
       end
   """
   def get_level_up_data(world_ref) do
-    App.NifBridge.get_level_up_data(world_ref)
+    Queries.get_level_up_data(world_ref)
   end
 
   @doc """
@@ -128,7 +131,7 @@ defmodule Engine do
       end
   """
   def skip_level_up(world_ref) do
-    App.NifBridge.skip_level_up(world_ref)
+    Commands.skip_level_up(world_ref)
   end
 
   # ── エンジン内部用（GameEvents が使用。ゲームは通常呼ばない）─────────────
@@ -140,7 +143,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def create_world do
-    App.NifBridge.create_world()
+    Commands.create_world()
   end
 
   @doc """
@@ -148,7 +151,7 @@ defmodule Engine do
   GameEvents の init で呼ばれる。obstacles は MapLoader.obstacles_for_map/1 の戻り値。
   """
   def set_map_obstacles(world_ref, obstacles) do
-    App.NifBridge.set_map_obstacles(world_ref, obstacles)
+    Commands.set_map_obstacles(world_ref, obstacles)
   end
 
   @doc """
@@ -156,7 +159,7 @@ defmodule Engine do
   pause_physics / resume_physics で使用。
   """
   def create_game_loop_control do
-    App.NifBridge.create_game_loop_control()
+    Commands.create_game_loop_control()
   end
 
   @doc """
@@ -164,28 +167,28 @@ defmodule Engine do
   pid には GameEvents の self() を渡す。
   """
   def start_rust_game_loop(world_ref, control_ref, pid) do
-    App.NifBridge.start_rust_game_loop(world_ref, control_ref, pid)
+    Commands.start_rust_game_loop(world_ref, control_ref, pid)
   end
 
   @doc """
   1.7.4: 描画スレッドを起動する。winit EventLoop + wgpu でウィンドウを表示。
   """
   def start_render_thread(world_ref) do
-    App.NifBridge.start_render_thread(world_ref)
+    Commands.start_render_thread(world_ref)
   end
 
   @doc """
   1.5.1: LevelUp・BossAlert 中に physics を一時停止する。
   """
   def pause_physics(control_ref) do
-    App.NifBridge.pause_physics(control_ref)
+    Commands.pause_physics(control_ref)
   end
 
   @doc """
   1.5.1: physics を再開する。
   """
   def resume_physics(control_ref) do
-    App.NifBridge.resume_physics(control_ref)
+    Commands.resume_physics(control_ref)
   end
 
   @doc """
@@ -193,7 +196,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def physics_step(world_ref, delta_ms) do
-    App.NifBridge.physics_step(world_ref, delta_ms)
+    Commands.physics_step(world_ref, delta_ms)
   end
 
   @doc """
@@ -201,7 +204,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def set_player_input(world_ref, dx, dy) do
-    App.NifBridge.set_player_input(world_ref, dx, dy)
+    Commands.set_player_input(world_ref, dx, dy)
   end
 
   @doc """
@@ -209,7 +212,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def drain_frame_events(world_ref) do
-    App.NifBridge.drain_frame_events(world_ref)
+    Commands.drain_frame_events(world_ref)
   end
 
   @doc """
@@ -217,7 +220,7 @@ defmodule Engine do
   GameEvents が使用。ゲームから直接呼ぶことはない。
   """
   def get_frame_metadata(world_ref) do
-    App.NifBridge.get_frame_metadata(world_ref)
+    Queries.get_frame_metadata(world_ref)
   end
 
   @doc """
@@ -229,12 +232,12 @@ defmodule Engine do
   """
   def add_weapon(world_ref, weapon_name) when is_binary(weapon_name) do
     weapon_id = resolve_weapon_id(String.to_atom(weapon_name))
-    App.NifBridge.add_weapon(world_ref, weapon_id)
+    Commands.add_weapon(world_ref, weapon_id)
   end
 
   def add_weapon(world_ref, weapon) when is_atom(weapon) do
     weapon_id = resolve_weapon_id(weapon)
-    App.NifBridge.add_weapon(world_ref, weapon_id)
+    Commands.add_weapon(world_ref, weapon_id)
   end
 
   @doc """
@@ -242,7 +245,7 @@ defmodule Engine do
   ゲームから直接呼ぶことはない。
   """
   def get_weapon_levels(world_ref) do
-    App.NifBridge.get_weapon_levels(world_ref)
+    Queries.get_weapon_levels(world_ref)
   end
 
   # ── 1.5.3: セーブ・ロード ─────────────────────────────────────────────
