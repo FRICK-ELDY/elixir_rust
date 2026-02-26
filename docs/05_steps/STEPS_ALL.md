@@ -26,7 +26,7 @@
 |               | 6. Rust lib 分割・整理 | 全9項  | Workspace Layout ツール(xtask)＋3クレート構成＋lib.rs分割。3D・Slot の**前**に実施（[STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)） |
 |               | 7. 描画統合（game_window → game_native） | 全8項 | game_window 廃止・game_native へ統合。NIF が描画スレッド spawn、iex -S mix 単一プロセスで wgpu 描画。まずは Windows（[STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)） |
 |               | 8. 描画責務分離（game_native → game_window / game_render） | 全6項 | ウィンドウ管理（winit）と描画コア（wgpu）を分離し、`game_native` を NIF 境界に専念させる（[STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)） |
-|               | 9. 2Dゲームの固め       | —    | 2D サバイバーを仕様・バランス・品質として固める                                                                                          |
+|               | 9. アーキテクチャ改善     | 全5項 | Rust/Elixir 境界と責務を整理し、`physics_step`・`renderer/mod.rs`・NIF 契約を段階的に改善（[ARCHITECTURE_IMPROVEMENT.md](../06_system_design/ARCHITECTURE_IMPROVEMENT.md)） |
 |               | 10. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
 |               | 11. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
 |               | 12. Slot・コンポーネント  | 全7項  | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)）      |
@@ -205,9 +205,20 @@
 
 ---
 
-### 1.9  2Dゲームの固め
+### 1.9  アーキテクチャ改善（全5項）
 
-1.8 完了後、2D サバイバーを仕様・バランス・品質として固める。項は今後決める。
+| 項     | 目標 |
+|--------|------|
+| 1.9.1  | `game_native/systems` 配下の再編方針を確定（`physics_step.rs` 分割単位・依存方向・移行順） |
+| 1.9.2  | `physics_step.rs` を機能別モジュールへ分割（移動・衝突・ダメージ・ドロップ等） |
+| 1.9.3  | `game_render/renderer/mod.rs` を facade 化し、pipeline/buffers/sprites/ui へ分割 |
+| 1.9.4  | Elixir 側を command/query 入口に整理し、`App.NifBridge` 呼び出しを集約 |
+| 1.9.5  | 旧 API を deprecate して段階置換、最終削除。Windows 動作確認と設計文書更新 |
+
+1.8 完了後、責務集中したモジュールを分割し、Rust/Elixir の境界契約を明確化する。最終的に変更影響範囲を小さくし、差し替え性と保守性を高める。
+
+**詳細**: [STEPS_ARCHITECTURE_IMPROVEMENT.md](./01_engine/STEPS_ARCHITECTURE_IMPROVEMENT.md)  
+**参照設計**: [ARCHITECTURE_IMPROVEMENT.md](../06_system_design/ARCHITECTURE_IMPROVEMENT.md)
 
 ---
 
@@ -282,7 +293,7 @@
 - **1.6**: 1.5 完了後。3D・Slot の**前**に実施
 - **1.7**: 1.6 完了後。描画統合（game_window → game_native）、iex -S mix 単一プロセスで wgpu 描画
 - **1.8**: 1.7 完了後。描画責務分離（`game_native` → `game_window` / `game_render`）
-- **1.9**: 1.8 完了後。2D の仕様・バランス・品質を固める
+- **1.9**: 1.8 完了後。アーキテクチャ改善（`physics_step` 分割・`renderer` 分割・NIF 契約整理）
 - **1.10**: 1.9 完了後。EOS で友達・ロビー・セッションを実装
 - **1.11（据え置き）**: 上記が一区切りついた後に再検討
 - **1.12（据え置き）**: 1.11 完了後
@@ -307,6 +318,7 @@
 | [STEPS_RUST_LIB.md](./01_engine/STEPS_RUST_LIB.md)                         | 1.6 Rust lib 分割・フォルダ構成検討           |
 | [STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)     | 1.7 描画統合（game_window → game_native）の詳細 |
 | [STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)       | 1.8 描画責務分離（game_native → game_window / game_render）の詳細 |
+| [STEPS_ARCHITECTURE_IMPROVEMENT.md](./01_engine/STEPS_ARCHITECTURE_IMPROVEMENT.md) | 1.9 アーキテクチャ改善（実施ステップ）の詳細 |
 | [STEPS_3D.md](./01_engine/STEPS_3D.md)                                     | 1.11（全7項）3D・三人称 FPS の詳細（**据え置き**）   |
 | [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)             | 1.12（全7項）Slot・コンポーネントの詳細（**据え置き**） |
 
@@ -317,6 +329,7 @@
 | ドキュメント                                                                 | 用途                  |
 | ---------------------------------------------------------------------- | ------------------- |
 | [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.10 EOS 実装          |
+| [ARCHITECTURE_IMPROVEMENT.md](../06_system_design/ARCHITECTURE_IMPROVEMENT.md) | 1.9 改善アーキテクチャ設計 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md)                   | 実施優先度（P1〜P7, G1〜G3） |
 | [SPEC.md](../01_setup/SPEC.md)                                         | ゲーム仕様・技術仕様          |
 
