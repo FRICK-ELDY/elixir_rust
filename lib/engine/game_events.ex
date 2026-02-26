@@ -433,7 +433,7 @@ defmodule Engine.GameEvents do
     init_arg =
       if mod == game_over_scene do
         {{_hp, _max_hp, score, _elapsed}, _counts, _level_up, _boss} =
-          App.NifBridge.get_frame_metadata(state.world_ref)
+          Engine.get_frame_metadata(state.world_ref)
 
         :telemetry.execute(
           [:game, :session_end],
@@ -460,7 +460,7 @@ defmodule Engine.GameEvents do
     if state.room_id == :main and rem(state.frame_count, 60) == 0 do
       {{hp, max_hp, score, elapsed_s}, {enemy_count, bullet_count, physics_ms},
        {exp, level, _level_up_pending, _exp_to_next}, {boss_alive, boss_hp, boss_max_hp}} =
-        App.NifBridge.get_frame_metadata(state.world_ref)
+        Engine.get_frame_metadata(state.world_ref)
 
       hud_data = {hp, max_hp, score, elapsed_s}
       render_type = Engine.SceneManager.render_type()
@@ -504,7 +504,7 @@ defmodule Engine.GameEvents do
 
   defp fetch_weapon_levels(world_ref) do
     world_ref
-    |> App.NifBridge.get_weapon_levels()
+    |> Engine.get_weapon_levels()
     |> Map.new(fn {name, level} -> {String.to_existing_atom(name), level} end)
   end
 end

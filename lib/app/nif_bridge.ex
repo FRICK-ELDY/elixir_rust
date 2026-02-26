@@ -27,8 +27,6 @@ defmodule App.NifBridge do
 
   # 1.1.9: 敵スポーン + 描画データ取得
   def spawn_enemies(_world, _kind, _count), do: :erlang.nif_error(:nif_not_loaded)
-  # Q2: 非推奨 — 毎フレーム呼び出さないこと。get_frame_metadata でメタデータを取得すること。
-  def get_render_data(_world), do: :erlang.nif_error(:nif_not_loaded)
 
   # 1.1.10: プレイヤー HP 取得
   def get_player_hp(_world), do: :erlang.nif_error(:nif_not_loaded)
@@ -55,19 +53,11 @@ defmodule App.NifBridge do
   # weapon_name: "magic_wand" | "axe" | "cross" | "whip" | "fireball" | "lightning"
   def add_weapon(_world, _weapon_name), do: :erlang.nif_error(:nif_not_loaded)
 
-  # 1.2.1: パーティクル描画データ取得（[{x, y, r, g, b, alpha, size}]）
-  # Q2: 非推奨 — 毎フレーム呼び出さないこと。描画は Rust 内で完結させること。
-  def get_particle_data(_world), do: :erlang.nif_error(:nif_not_loaded)
-
   # 1.2.2: 装備中の武器スロット情報取得（[{weapon_name, level}]）
   def get_weapon_levels(_world), do: :erlang.nif_error(:nif_not_loaded)
 
   # 武器選択をスキップしてレベルアップ待機を解除する（全武器MaxLv時など）
   def skip_level_up(_world), do: :erlang.nif_error(:nif_not_loaded)
-
-  # 1.2.4: アイテム描画データ取得（[{x, y, kind}] kind: 5=gem, 6=potion, 7=magnet）
-  # Q2: 非推奨 — 毎フレーム呼び出さないこと。描画は Rust 内で完結させること。
-  def get_item_data(_world), do: :erlang.nif_error(:nif_not_loaded)
 
   # 1.2.4: 磁石エフェクト残り時間（秒）を取得
   def get_magnet_timer(_world), do: :erlang.nif_error(:nif_not_loaded)

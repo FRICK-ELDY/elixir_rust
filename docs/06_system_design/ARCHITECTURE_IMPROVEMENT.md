@@ -2,7 +2,7 @@
 
 **対象**: `lib/app` `lib/engine` `lib/games` `native/game_core/src` `native/game_native/src` `native/game_render/src` `native/game_window/src`  
 **目的**: 責務の明確化、巨大ファイル分割、NIF 境界の整理  
-**ステータス**: 提案
+**ステータス**: 実施中（1.9.2 / 1.9.3 / 1.9.4 を段階反映中）
 
 ---
 
@@ -173,6 +173,16 @@ flowchart LR
 2. `game_render` で `renderer/mod.rs` を facade 化し、内部モジュールへ分割する  
 3. Elixir 側に command と query の入口を追加し、`App.NifBridge` 呼び出しを集約する  
 4. 既存 API を deprecate して段階置換し、最終的に旧入口を削除する
+
+### 実施メモ（2026-02-26）
+
+- `lib/engine/commands.ex` と `lib/engine/queries.ex` を追加し、`Engine` から command/query を明示して呼び出す構成へ移行。
+- `Engine.GameEvents` / `Engine.SaveManager` の `App.NifBridge` 直接呼び出しを除去し、`Engine` または `Engine.Commands` / `Engine.Queries` 経由に集約。
+- `native/game_render/src/renderer/ui.rs` を新設し、HUD/UI 実装を `renderer/mod.rs` から分離（`mod.rs` は Renderer の facade 入口を維持）。
+- `native/game_native/src/game_logic/systems/{mod.rs,spawn.rs,leveling.rs}` を追加し、`physics_step.rs` からスポーン座標生成とレベルアップ候補計算を段階移設。
+- `native/game_native/src/game_logic/systems/{collision.rs,effects.rs,items.rs,projectiles.rs,boss.rs}` を追加し、`physics_step.rs` の移動/衝突/更新処理を段階分離。
+- 旧描画取得 API（`get_render_data` / `get_particle_data` / `get_item_data`）を Elixir/Rust 両側から削除し、NIF 境界を縮小。
+- Windows で `iex.bat -S mix` の起動確認を実施し、IEx プロンプト到達・ゲームループ起動ログを確認。
 
 ---
 

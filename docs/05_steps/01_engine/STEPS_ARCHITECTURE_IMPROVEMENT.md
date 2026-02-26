@@ -35,6 +35,17 @@
 | **1.9.4** | Elixir 側の command/query 入口整理と `App.NifBridge` 呼び出し集約 |
 | **1.9.5** | 旧 API deprecate → 段階置換 → 削除、Windows 動作確認、設計文書更新 |
 
+### 進捗メモ（2026-02-26）
+
+- [x] 1.9.2 の初期分割として `game_logic/systems` を導入し、`spawn` / `leveling` を `physics_step.rs` から移設。
+- [x] 1.9.2 の追加分割として `collision` / `effects` / `items` / `projectiles` / `boss` を `systems` に分離し、`physics_step.rs` をオーケストレーション中心へ整理。
+- [x] 1.9.3 の初期分割として `renderer/ui.rs` を追加し、`renderer/mod.rs` の HUD/UI 実装を分離。
+- [x] 1.9.4 として `Engine.Commands` / `Engine.Queries` を追加し、`App.NifBridge` 直接呼び出しを集約。
+- [x] 1.9.5 として旧描画取得 API（`get_render_data` / `get_particle_data` / `get_item_data`）を削除。
+- [x] 1.9.5 として Windows で `iex.bat -S mix` の起動確認を実施（IEx プロンプト到達を確認）。
+- [x] 1.9.2 の残タスク（武器発射処理ブロックを `systems/weapons.rs` へ分離）
+- [x] 1.9.5 の残タスク（不要化した旧APIに関する関連ドキュメントの更新）
+
 ---
 
 ## 1.9.1 `systems` 再編方針の確定
