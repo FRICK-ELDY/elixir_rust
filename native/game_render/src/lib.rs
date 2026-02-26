@@ -31,7 +31,7 @@ impl UiAction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RenderFrame {
     pub render_data: Vec<(f32, f32, u8, u8)>,
     pub particle_data: Vec<(f32, f32, f32, f32, f32, f32, f32)>,

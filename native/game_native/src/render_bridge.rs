@@ -33,12 +33,14 @@ struct NativeRenderBridge {
 
 impl RenderBridge for NativeRenderBridge {
     fn next_frame(&self) -> RenderFrame {
-        let guard = self
-            .world
-            .0
-            .read()
-            .expect("render bridge: failed to acquire read lock");
-        build_render_frame(&guard)
+        match self.world.0.read() {
+            Ok(guard) => build_render_frame(&guard),
+            Err(e) => {
+                log::error!("Render bridge: read lock poisoned in next_frame: {e:?}");
+                let guard = e.into_inner();
+                build_render_frame(&guard)
+            }
+        }
     }
 
     fn on_move_input(&self, dx: f32, dy: f32) {
