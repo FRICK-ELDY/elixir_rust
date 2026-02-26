@@ -3,7 +3,7 @@
 
 use super::util::lock_poisoned_err;
 use crate::world::GameWorld;
-use game_core::entity_params::{BossParams, EnemyParams, WeaponParams};
+use game_core::entity_params::WeaponParams;
 use game_core::util::exp_required_for_next;
 use rustler::{Atom, NifResult, ResourceArc};
 
@@ -21,63 +21,6 @@ pub fn get_player_hp(world: ResourceArc<GameWorld>) -> NifResult<f64> {
     Ok(w.player.hp as f64)
 }
 
-#[deprecated(
-    since = "0.1.0",
-    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。get_frame_metadata でメタデータのみ取得すること"
-)]
-#[rustler::nif]
-pub fn get_render_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
-    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
-    let mut result = Vec::with_capacity(1 + w.enemies.len() + w.bullets.len() + 1);
-    result.push((w.player.x, w.player.y, 0u8));
-    if let Some(ref boss) = w.boss {
-        let bp = BossParams::get(boss.kind_id);
-        let boss_sprite_size = if boss.kind_id == 2 { 128.0 } else { 96.0 };
-        result.push((
-            boss.x - boss_sprite_size / 2.0,
-            boss.y - boss_sprite_size / 2.0,
-            bp.render_kind,
-        ));
-    }
-    for i in 0..w.enemies.len() {
-        if w.enemies.alive[i] {
-            result.push((
-                w.enemies.positions_x[i],
-                w.enemies.positions_y[i],
-                EnemyParams::get(w.enemies.kind_ids[i]).render_kind,
-            ));
-        }
-    }
-    for i in 0..w.bullets.len() {
-        if w.bullets.alive[i] {
-            result.push((w.bullets.positions_x[i], w.bullets.positions_y[i], w.bullets.render_kind[i]));
-        }
-    }
-    Ok(result)
-}
-
-#[deprecated(
-    since = "0.1.0",
-    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。描画は Rust 内で完結させること"
-)]
-#[rustler::nif]
-pub fn get_particle_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, f32, f32, f32, f32, f32)>> {
-    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
-    let mut result = Vec::with_capacity(w.particles.count);
-    for i in 0..w.particles.len() {
-        if !w.particles.alive[i] { continue; }
-        let alpha = (w.particles.lifetime[i] / w.particles.max_lifetime[i]).clamp(0.0, 1.0);
-        let c = w.particles.color[i];
-        result.push((
-            w.particles.positions_x[i],
-            w.particles.positions_y[i],
-            c[0], c[1], c[2],
-            alpha,
-            w.particles.size[i],
-        ));
-    }
-    Ok(result)
-}
 
 #[rustler::nif]
 pub fn get_bullet_count(world: ResourceArc<GameWorld>) -> NifResult<usize> {
@@ -163,26 +106,6 @@ pub fn get_weapon_levels(world: ResourceArc<GameWorld>) -> NifResult<Vec<(String
     Ok(w.weapon_slots.iter()
         .map(|s| (WeaponParams::get(s.kind_id).name.to_string(), s.level))
         .collect())
-}
-
-#[deprecated(
-    since = "0.1.0",
-    note = "毎フレーム呼び出すと NIF オーバーヘッドが発生。描画は Rust 内で完結させること"
-)]
-#[rustler::nif]
-pub fn get_item_data(world: ResourceArc<GameWorld>) -> NifResult<Vec<(f32, f32, u8)>> {
-    let w = world.0.read().map_err(|_| lock_poisoned_err())?;
-    let mut result = Vec::with_capacity(w.items.count);
-    for i in 0..w.items.len() {
-        if w.items.alive[i] {
-            result.push((
-                w.items.positions_x[i],
-                w.items.positions_y[i],
-                w.items.kinds[i].render_kind(),
-            ));
-        }
-    }
-    Ok(result)
 }
 
 #[rustler::nif]

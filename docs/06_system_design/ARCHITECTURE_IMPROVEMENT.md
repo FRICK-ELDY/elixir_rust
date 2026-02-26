@@ -180,6 +180,9 @@ flowchart LR
 - `Engine.GameEvents` / `Engine.SaveManager` の `App.NifBridge` 直接呼び出しを除去し、`Engine` または `Engine.Commands` / `Engine.Queries` 経由に集約。
 - `native/game_render/src/renderer/ui.rs` を新設し、HUD/UI 実装を `renderer/mod.rs` から分離（`mod.rs` は Renderer の facade 入口を維持）。
 - `native/game_native/src/game_logic/systems/{mod.rs,spawn.rs,leveling.rs}` を追加し、`physics_step.rs` からスポーン座標生成とレベルアップ候補計算を段階移設。
+- `native/game_native/src/game_logic/systems/{collision.rs,effects.rs,items.rs,projectiles.rs,boss.rs}` を追加し、`physics_step.rs` の移動/衝突/更新処理を段階分離。
+- 旧描画取得 API（`get_render_data` / `get_particle_data` / `get_item_data`）を Elixir/Rust 両側から削除し、NIF 境界を縮小。
+- Windows で `iex.bat -S mix` の起動確認を実施し、IEx プロンプト到達・ゲームループ起動ログを確認。
 
 ---
 

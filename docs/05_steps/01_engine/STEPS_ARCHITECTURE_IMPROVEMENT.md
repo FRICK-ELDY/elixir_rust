@@ -38,10 +38,13 @@
 ### 進捗メモ（2026-02-26）
 
 - [x] 1.9.2 の初期分割として `game_logic/systems` を導入し、`spawn` / `leveling` を `physics_step.rs` から移設。
+- [x] 1.9.2 の追加分割として `collision` / `effects` / `items` / `projectiles` / `boss` を `systems` に分離し、`physics_step.rs` をオーケストレーション中心へ整理。
 - [x] 1.9.3 の初期分割として `renderer/ui.rs` を追加し、`renderer/mod.rs` の HUD/UI 実装を分離。
 - [x] 1.9.4 として `Engine.Commands` / `Engine.Queries` を追加し、`App.NifBridge` 直接呼び出しを集約。
-- [ ] 1.9.2 の残タスク（`physics_step.rs` の移動・衝突・ダメージ・ドロップ・ボス更新の更なる機能分割）
-- [ ] 1.9.5 の旧 API 削除と最終検証（`iex -S mix` 実行確認）
+- [x] 1.9.5 として旧描画取得 API（`get_render_data` / `get_particle_data` / `get_item_data`）を削除。
+- [x] 1.9.5 として Windows で `iex.bat -S mix` の起動確認を実施（IEx プロンプト到達を確認）。
+- [ ] 1.9.2 の残タスク（武器発射処理ブロックの更なる機能別分離）
+- [ ] 1.9.5 の残タスク（不要化した旧APIに関する関連ドキュメントの全面更新）
 
 ---
 
