@@ -42,9 +42,8 @@ mod asset;
 mod audio;
 mod game_logic;
 mod nif;
-mod renderer;
+mod render_bridge;
 mod render_snapshot;
-mod render_thread;
 mod world;
 
 pub use asset::{AssetId, AssetLoader};
@@ -53,8 +52,8 @@ pub use game_logic::{
     find_nearest_enemy, find_nearest_enemy_excluding, find_nearest_enemy_spatial,
     find_nearest_enemy_spatial_excluding, update_chase_ai, update_chase_ai_simd,
 };
+pub use game_render::{BossHudInfo, GamePhase, HudData, RenderFrame};
 pub use nif::{SaveSnapshot, WeaponSlotSave};
-pub use renderer::{BossHudInfo, GamePhase, GameUiState, HudData, Renderer};
 pub use world::{
     BossState, BulletWorld, EnemyWorld, FrameEvent, GameLoopControl, GameWorld, GameWorldInner,
     ParticleWorld, PlayerState,
