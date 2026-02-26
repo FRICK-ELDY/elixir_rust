@@ -9,21 +9,14 @@ crate-type = ["cdylib", "rlib"]  # cdylib: Rustler NIF 用, rlib: ベンチ・�
 
 [dependencies]
 game_core = { path = "../game_core" }
+game_render = { path = "../game_render" }
+game_window = { path = "../game_window" }
 rustler = "0.34"
 rayon = "1"
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 bincode = "1.3"
-# 1.7.2: renderer（game_window から統合）
-winit = "0.30.12"
-wgpu = "24"
-pollster = "0.3"
-bytemuck = { version = "1", features = ["derive"] }
-image = "0.25"
-egui = "0.31"
-egui-wgpu = "0.31"
-egui-winit = "0.31"
 # 1.7.3: asset / audio（game_window から統合）
 rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "vorbis"] }
 

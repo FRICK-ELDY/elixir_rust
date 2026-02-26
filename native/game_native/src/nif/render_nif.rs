@@ -4,7 +4,7 @@
 //! NIF から描画用スレッドを spawn し、そのスレッドで winit の EventLoop・
 //! ウィンドウ作成・wgpu 初期化の骨組みを実行する。
 
-use crate::render_thread::run_render_thread;
+use crate::render_bridge::run_render_thread;
 use crate::world::GameWorld;
 use rustler::{Atom, NifResult, ResourceArc};
 use std::panic::AssertUnwindSafe;

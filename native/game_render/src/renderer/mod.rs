@@ -1,6 +1,6 @@
-//! Path: native/game_native/src/renderer/mod.rs
+//! Path: native/game_render/src/renderer/mod.rs
 //! Summary: wgpu によるスプライト描画・パイプライン・テクスチャ管理
-//! 1.7.2: game_window から game_native に移動。game_core 依存を維持。
+//! 1.8: game_native から game_render へ分離移設。
 
 use game_core::constants::{BG_B, BG_G, BG_R, SPRITE_SIZE};
 use game_core::item::{RENDER_KIND_GEM, RENDER_KIND_MAGNET, RENDER_KIND_POTION};

@@ -5,32 +5,14 @@
 //! 必要なデータを RenderSnapshot にコピーしてからロックを解放する。
 
 use crate::world::GameWorldInner;
-use crate::renderer::{BossHudInfo, GamePhase, HudData};
+use game_render::{BossHudInfo, GamePhase, HudData, RenderFrame};
 use game_core::constants::{INVINCIBLE_DURATION, PLAYER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
 use game_core::entity_params::{BossParams, EnemyParams, WeaponParams};
 use game_core::util::exp_required_for_next;
 
-/// 1.7.5: 描画スレッド用スナップショット。
-/// read ロック解放後に renderer に渡して使用する。
-#[derive(Clone)]
-pub struct RenderSnapshot {
-    /// スプライト描画用 (x, y, kind, anim_frame)
-    pub render_data:   Vec<(f32, f32, u8, u8)>,
-    /// パーティクル (x, y, r, g, b, alpha, size)
-    pub particle_data: Vec<(f32, f32, f32, f32, f32, f32, f32)>,
-    /// アイテム (x, y, kind)
-    pub item_data:     Vec<(f32, f32, u8)>,
-    /// 障害物 (x, y, radius, kind)
-    pub obstacle_data: Vec<(f32, f32, f32, u8)>,
-    /// カメラオフセット（プレイヤー追従）
-    pub camera_offset: (f32, f32),
-    /// HUD 用メタデータ（egui 描画）
-    pub hud:           HudData,
-}
-
 /// GameWorldInner から RenderSnapshot を構築する。
 /// get_render_data / get_particle_data / get_item_data / get_frame_metadata 相当のロジックを集約。
-pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
+pub fn build_render_frame(w: &GameWorldInner) -> RenderFrame {
     // 1. スプライト（player, boss, enemies, bullets）
     let anim_frame = ((w.frame_id / 4) % 4) as u8;
     let mut render_data = Vec::with_capacity(
@@ -159,7 +141,7 @@ pub fn build_render_snapshot(w: &GameWorldInner) -> RenderSnapshot {
         kill_count:       w.kill_count,
     };
 
-    RenderSnapshot {
+    RenderFrame {
         render_data,
         particle_data,
         item_data,
