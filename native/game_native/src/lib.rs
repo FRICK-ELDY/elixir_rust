@@ -41,16 +41,18 @@ rustler::atoms! {
 mod asset;
 mod audio;
 mod game_logic;
+mod lock_metrics;
 mod nif;
 mod render_bridge;
 mod render_snapshot;
 mod world;
 
 pub use asset::{AssetId, AssetLoader};
-pub use audio::AudioManager;
+pub use audio::{start_audio_thread, AudioCommand, AudioCommandSender, AudioManager};
 pub use game_logic::{
     find_nearest_enemy, find_nearest_enemy_excluding, find_nearest_enemy_spatial,
-    find_nearest_enemy_spatial_excluding, update_chase_ai, update_chase_ai_simd,
+    find_nearest_enemy_spatial_excluding, run_physics_step_for_bench, update_chase_ai,
+    update_chase_ai_simd,
 };
 pub use game_render::{BossHudInfo, GamePhase, HudData, RenderFrame};
 pub use nif::{SaveSnapshot, WeaponSlotSave};

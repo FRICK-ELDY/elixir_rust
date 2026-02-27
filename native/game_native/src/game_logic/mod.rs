@@ -13,3 +13,10 @@ pub use chase_ai::{
 pub(crate) use events::drain_frame_events_inner;
 pub(crate) use physics_step::physics_step_inner;
 pub(crate) use systems::spawn::get_spawn_positions_around_player;
+
+/// ベンチマーク用の physics_step 実行ヘルパー。
+///
+/// NIF 境界を通さずに GameWorldInner へ直接ステップを適用する。
+pub fn run_physics_step_for_bench(world: &mut crate::world::GameWorldInner, delta_ms: f64) {
+    physics_step_inner(world, delta_ms);
+}

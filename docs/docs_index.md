@@ -60,6 +60,7 @@
 | [WHY_RUST/WHY_WGPU/WHY_image.md](./03_tech_decisions/WHY_RUST/WHY_WGPU/WHY_image.md) | image の選定理由 | アーキテクチャ理解時 |
 | [WHY_RUST/WHY_RAYON.md](./03_tech_decisions/WHY_RUST/WHY_RAYON.md) | Chase AI の並列化に rayon を採用した理由。Work-Stealing、SoA との相乗効果、実測結果、他ライブラリとの比較 | パフォーマンス理解時 |
 | [ELIXIR_RUST_DIVISION.md](./03_tech_decisions/ELIXIR_RUST_DIVISION.md) | **Elixir/Rust 役割分担方針**。「苦手なものは Rust に投げる」。タイミング精度、将来の拡張、スコープ外・サポートしない項目 | アーキテクチャ理解時 |
+| [ADR_SHARED_MEMORY_THREAD_POLICY.md](./03_tech_decisions/ADR_SHARED_MEMORY_THREAD_POLICY.md) | **共有メモリ + スレッド責務 ADR**。Resource 参照中心のゼロコピー定義、`control/query_light/snapshot_heavy` の NIF 境界、`C_pragmatic` スレッドモデルを固定 | 実装判断・レビュー時 |
 
 ---
 
@@ -165,7 +166,8 @@ docs/
 │   │   └── WHY_RAYON.md
 │   ├── WHY_Rustler.md
 │   ├── WHY_xtask.md
-│   └── ELIXIR_RUST_DIVISION.md
+│   ├── ELIXIR_RUST_DIVISION.md
+│   └── ADR_SHARED_MEMORY_THREAD_POLICY.md
 ├── 04_roadmap/            実装ロードマップ
 │   └── PRIORITY_STEPS.md
 ├── 05_steps/              ステップガイド
