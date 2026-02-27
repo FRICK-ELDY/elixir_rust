@@ -239,13 +239,17 @@ end
 
 ## 1.10.5 Push 型同期 NIF の実装
 
-**目標**: 旧 `physics_step` NIF を Push 型（`push_snapshot` / `physics_result`）に置き換える。
+**目標**: 旧 `physics_step` NIF を Push 型（`push_tick` / `physics_result`）に置き換える。
 
 ### NIF API 変更
 
 | 旧 API | 新 API | 区分 |
 |--------|--------|------|
-| `physics_step(world, input)` → `{:ok, frame_events}` | `push_snapshot(world, snapshot)` → `{:ok, physics_result}` | `control` |
+| `physics_step(world, input)` → `{:ok, frame_events}` | `push_tick(world, inputs, commands)` → `{:ok, physics_result}` | `control` |
+
+- `inputs`: プレイヤー入力・移動方向など（軽量・毎 tick 送る）
+- `commands`: `spawn_enemy` / `pause` / `resume` など制御コマンド（必要時のみ）
+- `physics_result`: 変化したエンティティの delta のみ（全量ではない）
 
 ### Elixir 側の tick フロー（`Engine.GameEvents`）
 
@@ -254,12 +258,14 @@ defp handle_tick(state) do
   # 1. ゲームロジック更新
   state = update_game_logic(state)
 
-  # 2. スナップショット push（control NIF）
-  snapshot = build_snapshot(state)
-  {:ok, physics_result} = Engine.Commands.push_snapshot(state.world, snapshot)
+  # 2. 入力・コマンドを Rust へ push（control NIF）
+  #    ※ 全エンティティの状態は送らない。入力と制御コマンドのみ。
+  inputs = collect_inputs(state)
+  commands = collect_commands(state)
+  {:ok, delta} = Engine.Commands.push_tick(state.world, inputs, commands)
 
-  # 3. SSOT を物理結果で更新
-  state = apply_physics_result(state, physics_result)
+  # 3. SSOT に delta を適用して更新
+  state = apply_delta(state, delta)
 
   # 4. 次の tick をスケジュール
   Process.send_after(self(), :tick, state.tick_interval_ms)
@@ -270,41 +276,63 @@ end
 ### Rust 側の NIF 実装（`game_native`）
 
 ```rust
-// push_snapshot: Elixir から状態を受け取り、物理計算して結果を返す
+// push_tick: Elixir から入力・コマンドを受け取り、物理計算して delta を返す
+// ※ 全状態の転送ではなく、入力と制御コマンドのみを受け取る
 #[rustler::nif]
-fn push_snapshot(
+fn push_tick(
     world: ResourceArc<RwLock<GameWorldInner>>,
-    snapshot: SnapshotTerm,
-) -> NifResult<PhysicsResultTerm> {
+    inputs: InputsTerm,
+    commands: CommandsTerm,
+) -> NifResult<DeltaTerm> {
     let mut w = world.write().map_err(|_| rustler::Error::Term(...))?;
-    // スナップショットを適用
-    w.apply_snapshot(snapshot);
-    // 物理計算（計算スレッドに委譲 or 同期実行）
-    let result = w.run_physics_step();
-    Ok(result.into_term())
+    // 入力・コマンドを適用
+    w.apply_inputs(inputs);
+    w.apply_commands(commands);
+    // 物理計算を 1 tick 分実行し、変化分（delta）のみを返す
+    let delta = w.run_physics_step();
+    Ok(delta.into_term())
 }
 ```
 
 ---
 
-## 1.10.6 Rust 計算・描画・音スレッドの 60Hz 独立化
+## 1.10.6 Rust 計算・描画・音スレッドの整理
 
-**目標**: 3 スレッドを `tick_hz` に依存しない独立した 60Hz ループに整理する。
+**目標**: 3 スレッドの駆動モデルを明確に分離し、`tick_hz` の変化に対して安定した動作を保証する。
+
+### 駆動モデルの違い
+
+3 スレッドは **駆動方式が異なる**。計算スレッドだけは Elixir の push に応じて動き、描画・音は独立した 60Hz ループで動く。
+
+| スレッド | 駆動方式 | 実行タイミング |
+|----------|---------|---------------|
+| 計算スレッド | **Push 駆動**（Elixir 起点） | `push_tick` NIF が呼ばれるたびに 1 回実行（`tick_hz` に従う） |
+| 描画スレッド | **自律ループ**（60Hz 固定） | 独立した 60Hz ループ。計算スレッドの完了を待たない |
+| 音スレッド | **自律ループ**（60Hz 固定） | 独立した 60Hz ループ。コマンドキューを消費 |
+
+> 計算スレッドは「60Hz で回る」のではなく、「Elixir が `push_tick` を呼ぶたびに 1 回物理計算を実行する」。  
+> 描画・音は Elixir の tick とは無関係に 60Hz で動き続け、計算結果を非同期に参照する。
 
 ### スレッド構成
 
 ```rust
-// game_native の起動時に 3 スレッドを spawn
-pub fn start_runtime(world: Arc<RwLock<GameWorldInner>>) {
-    // 計算スレッド: Elixir から push されたスナップショットを処理
+// game_native の起動時に spawn
+pub fn start_runtime(world: Arc<RwLock<GameWorldInner>>, calc_rx: Receiver<TickInput>) {
+    // 計算スレッド: push_tick NIF からチャネル経由で入力を受け取り、都度 1 回実行
     let calc_world = Arc::clone(&world);
-    std::thread::spawn(move || calc_loop(calc_world));
+    std::thread::spawn(move || {
+        for input in calc_rx {          // Elixir の push_tick ごとに 1 回ブロック解除
+            let mut w = calc_world.write().unwrap();
+            w.apply_inputs(input);
+            w.run_physics_step();       // 1 tick 分の物理計算
+        }
+    });
 
-    // 描画スレッド: 最新スナップショットを 60Hz で補間描画
+    // 描画スレッド: 独立した 60Hz ループ（計算スレッドと非同期）
     let render_world = Arc::clone(&world);
     std::thread::spawn(move || render_loop(render_world));
 
-    // 音スレッド: コマンドキューを 60Hz で処理
+    // 音スレッド: 独立した 60Hz ループ
     let audio_world = Arc::clone(&world);
     std::thread::spawn(move || audio_loop(audio_world));
 }
@@ -312,31 +340,37 @@ pub fn start_runtime(world: Arc<RwLock<GameWorldInner>>) {
 
 ### 各スレッドの役割
 
-| スレッド | ループ間隔 | 状態への関与 |
-|----------|-----------|-------------|
-| 計算スレッド | 60Hz（16.67ms） | push_snapshot で受け取ったデータを元に物理計算。結果を world に書き込む |
-| 描画スレッド | 60Hz（16.67ms） | world を read lock で読み、前回スナップショットとの補間でフレームを生成 |
-| 音スレッド | 60Hz（16.67ms） | コマンドキューを消費して rodio で再生。world を直接変更しない |
+| スレッド | 駆動方式 | 状態への関与 |
+|----------|---------|-------------|
+| 計算スレッド | Push 駆動（`push_tick` ごとに 1 回） | 入力・コマンドを適用し物理計算。結果（delta）を world に書き込む |
+| 描画スレッド | 自律 60Hz ループ | world を read lock で読み、前後フレームを補間して描画。状態を変更しない |
+| 音スレッド | 自律 60Hz ループ | コマンドキューを消費して rodio で再生。world を直接変更しない |
 
 ---
 
 ## 1.10.7 描画スレッドの補間実装
 
-**目標**: Elixir の `tick_hz`（10〜30Hz）スナップショットを 60Hz に補間して滑らかな描画を実現する。
+**目標**: 計算スレッドが `tick_hz`（10〜30Hz）で更新する world の状態を、描画スレッドが 60Hz に補間して滑らかな描画を実現する。
 
 ### 補間の仕組み
 
-```
-Elixir tick（20Hz = 50ms ごと）
-  → push_snapshot: {positions: [...], t: 1000}
+計算スレッドは `push_tick` のたびに world を更新し、更新時刻（タイムスタンプ）を記録する。  
+描画スレッドは独立した 60Hz ループで、直前の 2 つのタイムスタンプ間を補間してフレームを生成する。
 
-描画スレッド（60Hz = 16.67ms ごと）
-  → 前回スナップショット（t=950）と今回（t=1000）の間を alpha で補間
-  → alpha = (now_ms - last_snapshot_t) / (current_snapshot_t - last_snapshot_t)
+```
+計算スレッド（push_tick ごとに 1 回 = tick_hz に従う）
+  → world に delta を適用し、タイムスタンプ t=1000 を記録
+
+描画スレッド（自律 60Hz = 16.67ms ごと）
+  → world を read lock で読み、前回更新（t=950）と今回（t=1000）の間を alpha で補間
+  → alpha = (now_ms - prev_t) / (curr_t - prev_t)
   → 補間位置 = prev_pos + (curr_pos - prev_pos) * alpha
 ```
 
 ### Rust 実装イメージ
+
+ロック保持時間を最小化するため、**ロック内では補間に必要なデータのコピーのみ**を行い、  
+補間計算はロック解放後に実行する。
 
 ```rust
 fn render_loop(world: Arc<RwLock<GameWorldInner>>) {
@@ -346,11 +380,17 @@ fn render_loop(world: Arc<RwLock<GameWorldInner>>) {
     loop {
         let frame_start = Instant::now();
 
-        let frame = {
+        // Step 1: ロック内では補間に必要なデータだけを素早くコピーして即解放
+        //         build_interpolated_frame のような重い処理はロック内で行わない
+        let snapshot = {
             let w = world.read().unwrap();
-            // 前回・今回スナップショットと現在時刻から補間フレームを生成
-            w.build_interpolated_frame(Instant::now())
+            w.copy_interpolation_data() // prev_state / curr_state / タイムスタンプのみコピー
+            // ここでロック解放
         };
+
+        // Step 2: ロック外で補間計算（重い処理はここで行う）
+        let now = Instant::now();
+        let frame = build_interpolated_frame(&snapshot, now);
 
         renderer.render(frame);
 
@@ -362,6 +402,11 @@ fn render_loop(world: Arc<RwLock<GameWorldInner>>) {
     }
 }
 ```
+
+> **ロック設計の原則**（ADR §lock 競合メトリクス閾値 参照）  
+> - read lock 保持時間の警告閾値は **300µs**。  
+> - `copy_interpolation_data` はタイムスタンプと位置データの struct コピーのみとし、この閾値内に収める。  
+> - 補間計算・頂点バッファ構築など時間のかかる処理はすべてロック外で実行する。
 
 ---
 
@@ -505,7 +550,7 @@ config :game_network, GameNetwork.Endpoint,
 **ローカル起動**:
 - [ ] `iex -S mix` で Umbrella 全アプリが起動する
 - [ ] `tick_hz: 20` で GameEvents が 20Hz で tick する
-- [ ] `push_snapshot` → `physics_result` の往復が動作する
+- [ ] `push_tick` → `physics_result(delta)` の往復が動作する
 - [ ] 描画スレッドが 60Hz で補間描画する
 - [ ] ゲームが正常にプレイできる
 
