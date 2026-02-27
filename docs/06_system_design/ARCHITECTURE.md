@@ -1,12 +1,45 @@
 # システムアーキテクチャ（全体像）
 
-**根拠**: [SERVER_DESIGN.md](./SERVER_DESIGN.md)、[MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md)、[ENGINE_API.md](./ENGINE_API.md)
+**根拠**: [SERVER_DESIGN.md](./SERVER_DESIGN.md)、[MULTIPLAYER_PHOENIX_CHANNELS.md](./MULTIPLAYER_PHOENIX_CHANNELS.md)、[ENGINE_API.md](./ENGINE_API.md)  
+**適用状態**: 1.10 方針決定とアーキテクチャ再構築（Umbrella 化・Push 型同期・補間描画）完了後
 
 マルチプレイ・友達連携を視野に入れた、クライアント〜サーバー〜エンジンまでの全体アーキテクチャを定義する。
 
 ---
 
 ## 1. 全体構成
+
+### 1.1 Umbrella アプリ構成（1.10.2〜1.10.9）
+
+```
+elixir_rust/
+  umbrella/                    ← Umbrella ルート
+    mix.exs                    ← Umbrella 定義（apps_path: "apps"）
+    config/
+      config.exs               ← 共通設定（tick_hz: 20, headless: false）
+      prod.exs                 ← 本番設定（headless: true）
+    apps/
+      game_engine/             ← エンジンコア（SSOT・NIF・tick_hz・ルーム管理）
+      game_content/            ← ゲーム別コンテンツ（VampireSurvivor / MiniShooter）
+      game_network/            ← ネットワーク汎用層（Phoenix Socket/Channel・Presence）
+      game_server/             ← 本番デプロイ用エントリ（ヘッドレス起動）
+  native/                      ← Rust クレート群（変更なし）
+    game_native/
+    game_core/
+    game_render/
+    game_window/
+
+[ローカル起動]
+  game_engine + game_content
+  └─ Rust NIF（計算・描画・音）をロード（headless: false）
+
+[サーバーデプロイ]
+  game_engine + game_content + game_network + game_server
+  └─ Rust NIF をロードしない（headless: true）
+  └─ Phoenix で WebSocket を受け付ける
+```
+
+### 1.2 ネットワーク層
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -16,7 +49,7 @@
 └───────────────────────────────┬─────────────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────────────────┐
-│ Phoenix サーバー（友達とつなぐ・マッチング・通知）                           │
+│ game_network（Phoenix サーバー）                                             │
 │                                                                             │
 │ 認証・識別     Socket connect で user_id を assigns、全 Channel で利用       │
 │ プレゼンス     Phoenix.Presence（lobby / room 単位）                         │
@@ -27,20 +60,20 @@
 │ Channel 構成:                                                                │
 │   "user:" <> user_id  … メッセージ・通知・フレンドイベント                    │
 │   "room:" <> room_id  … ゲームルーム（入力・状態同期）→ Engine 連携          │
-│   "lobby" / "presence:global" … プレゼンス（オンライン一覧）                  │
+│   "lobby"             … プレゼンス（オンライン一覧）                          │
 └───────────────────────────────┬─────────────────────────────────────────────┘
-                                │ RoomChannel join → Engine.start_room
+                                │ RoomChannel join → GameEngine.start_room
                                 │ handle_in("input", ...) → GameEvents
 ┌───────────────────────────────▼─────────────────────────────────────────────┐
-│ 同一 Phoenix アプリ内: Engine（Elixir + Rust NIF）                           │
+│ game_engine（エンジンコア）                                                  │
 │                                                                             │
-│ RoomSupervisor / RoomRegistry  … ルーム ID ごとに GameEvents + GameWorld       │
-│ GameEvents GenServer             … frame_events 受信・フェーズ管理・NIF 呼び出し │
-│ Engine.Commands / Engine.Queries … command/query 境界で NIF 呼び出しを集約     │
-│ Rust NIF (game_native)         … ResourceArc<RwLock<GameWorld>>             │
-│ Rust Window (game_window)      … winit EventLoop・入力・リサイズ             │
-│ Rust Render (game_render)      … wgpu Renderer・render(frame)               │
-│ Rust Core (game_core)          … 共通定数・物理・敵/武器ロジック               │
+│ GameEngine.RoomSupervisor / RoomRegistry … ルーム ID ごとに GameEvents + GameWorld │
+│ GameEngine.GameEvents GenServer          … frame_events 受信・フェーズ管理・NIF 呼び出し │
+│ GameEngine.Commands / Queries            … command/query 境界で NIF 呼び出しを集約 │
+│ Rust NIF (game_native)                   … ResourceArc<RwLock<GameWorld>>   │
+│ Rust Window (game_window)                … winit EventLoop・入力・リサイズ  │
+│ Rust Render (game_render)                … wgpu Renderer・render(frame)     │
+│ Rust Core (game_core)                    … 共通定数・物理・敵/武器ロジック    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -109,6 +142,16 @@ flowchart LR
 - Rust 側は `game_native/src/game_logic/systems` で処理を機能分割し、`physics_step.rs` はオーケストレーション中心の薄い層になった。
 - `systems` には `spawn` / `leveling` / `collision` / `effects` / `items` / `projectiles` / `boss` / `weapons` が配置される。
 - 旧描画取得 NIF API（`get_render_data` / `get_particle_data` / `get_item_data`）は削除済みで、描画は Rust 内部完結を前提とする。
+
+### 3.3 1.10 アーキテクチャ再構築の反映点
+
+- **Umbrella 化**: `umbrella/` ディレクトリに Elixir アプリを集約。`game_engine` / `game_content` / `game_network` / `game_server` の 4 アプリ構成。
+- **Elixir SSOT**: `GameEngine` モジュールが公開 API となり、`GameEngine.Commands` / `GameEngine.Queries` / `GameEngine.Snapshots` の 3 境界で NIF を集約。
+- **Push 型同期**: `push_tick` NIF で Elixir が入力を Rust に送り、delta のみを受け取る。
+- **tick_hz 可変**: `Application.get_env(:game_engine, :tick_hz, 20)` で設定可能。
+- **ヘッドレス対応**: `headless: true` 設定で Rust NIF（描画・音）をロードしない。
+- **補間描画**: `render_bridge.rs` の `next_frame()` が `prev_player_x/y` と `curr_player_x/y` を線形補間し、60Hz 描画でも滑らかに見える。
+- **モジュール名変更**: `Engine.*` → `GameEngine.*`、`Game.*` → `GameContent.*`、`App.NifBridge` → `GameEngine.NifBridge`。
 
 ---
 

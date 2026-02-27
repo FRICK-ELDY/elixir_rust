@@ -1,0 +1,1 @@
+{application,game_server,[{modules,['Elixir.GameServer.Application']},{optional_applications,[]},{applications,[kernel,stdlib,elixir,logger,game_engine,game_content,game_network]},{description,"game_server"},{registered,[]},{vsn,"0.1.0"},{mod,{'Elixir.GameServer.Application',[]}}]}.

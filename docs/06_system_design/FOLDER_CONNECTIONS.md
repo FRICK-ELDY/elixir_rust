@@ -1,26 +1,27 @@
-# フォルダ単位 接続関係図解（1.8 描画責務分離後）
+# フォルダ単位 接続関係図解（1.10 Umbrella 化後）
 
 **根拠**: [ARCHITECTURE.md](./ARCHITECTURE.md)、[ENGINE_API.md](./ENGINE_API.md)、[WorkspaceLayout.md](../../WorkspaceLayout.md)  
-**適用状態**: `STEPS_RENDER_SEPARATION.md` の 1.8.6 完了後
+**適用状態**: `STEPS_ARCH_REDESIGN.md` の 1.10 完了後
 
-`lib/app`、`lib/engine`、`lib/games`、`native/game_native`、`native/game_window`、`native/game_render`、`native/game_core` の接続関係を、責務分離後の実装に合わせて整理する。
+`umbrella/apps/` 配下の Elixir アプリと `native/` 配下の Rust クレートの接続関係を整理する。
 
 ---
 
-## 1. 全体アーキテクチャ（分離後）
+## 1. 全体アーキテクチャ（Umbrella 化後）
 
 ```mermaid
 flowchart TB
-    subgraph Elixir [Elixir 系統]
-        lib_app[lib/app]
-        lib_engine[lib/engine]
-        engine_boundary[engine/commands + engine/queries]
-        lib_games[lib/games]
+    subgraph Umbrella [umbrella/apps/]
+        game_server[game_server\n本番デプロイ用エントリ]
+        game_network[game_network\nPhoenix Socket/Channel/Presence]
+        game_content[game_content\nVampireSurvivor / MiniShooter]
+        game_engine[game_engine\nエンジンコア・NIF・tick_hz]
+        engine_boundary[GameEngine.Commands\nGameEngine.Queries\nGameEngine.Snapshots]
     end
 
     subgraph NativeNif [native/game_native]
         native_lib[lib.rs / nif / game_logic / world]
-        bridge[render_bridge]
+        bridge[render_bridge\n補間描画]
     end
 
     subgraph NativeWindow [native/game_window]
@@ -35,12 +36,14 @@ flowchart TB
         game_core[native/game_core]
     end
 
-    lib_app --> lib_engine
-    lib_engine --> engine_boundary
+    game_server --> game_network
+    game_server --> game_content
+    game_server --> game_engine
+    game_network --> game_engine
+    game_content --> game_engine
+    game_engine --> engine_boundary
     engine_boundary -->|NifBridge 呼び出し集約| native_lib
-    lib_engine --> lib_games
-    lib_games --> lib_engine
-    lib_app -->|Rustler load| native_lib
+    game_engine -->|Rustler load\numbrella feature| native_lib
 
     native_lib --> bridge
     bridge -->|run_render_loop / RenderBridge| window_loop
@@ -56,12 +59,14 @@ flowchart TB
 
 | レイヤー | 主な責務 | 依存先 |
 |---|---|---|
-| `lib/app` | OTP 起動、NIF ロード、環境初期化 | `lib/engine`, `native/game_native` |
-| `lib/engine` | ゲーム進行制御、ルーム管理、イベント処理 | `lib/app`, `lib/games` |
-| `lib/engine/commands` | NIF command（更新系）呼び出しの集約 | `lib/app` |
-| `lib/engine/queries` | NIF query（取得系）呼び出しの集約 | `lib/app` |
-| `lib/games` | ゲーム別ロジック（シーン・スポーン等） | `lib/engine` |
-| `native/game_native` | NIF 境界、`GameWorld` 管理、RenderBridge 実装 | `game_core`, `game_window`, `game_render` |
+| `umbrella/apps/game_engine` | OTP 起動、NIF ロード、tick_hz・headless 設定、ルーム管理 | `native/game_native` |
+| `GameEngine.Commands` | NIF command（更新系）呼び出しの集約 | `GameEngine.NifBridge` |
+| `GameEngine.Queries` | NIF query（取得系）呼び出しの集約 | `GameEngine.NifBridge` |
+| `GameEngine.Snapshots` | snapshot_heavy（セーブ/ロード）の集約 | `GameEngine.NifBridge` |
+| `umbrella/apps/game_content` | ゲーム別ロジック（シーン・スポーン等） | `game_engine` |
+| `umbrella/apps/game_network` | Phoenix Socket/Channel・Presence・認証 | `game_engine` |
+| `umbrella/apps/game_server` | 本番デプロイ用エントリ（headless: true） | 全アプリ |
+| `native/game_native` | NIF 境界、`GameWorld` 管理、RenderBridge 実装（補間対応） | `game_core`, `game_window`, `game_render` |
 | `native/game_window` | `winit` EventLoop、入力イベント・リサイズ管理 | `game_render` |
 | `native/game_render` | `wgpu` 描画パイプライン、`render/resize`、HUD | `game_core` |
 | `native/game_core` | 物理・敵・武器・定数など共通ロジック | 依存なし（下位共通） |
@@ -91,21 +96,27 @@ flowchart LR
 
 ---
 
-## 4. フレームと入力のデータフロー
+## 4. フレームと入力のデータフロー（Push 型同期・補間描画）
 
 ```mermaid
 sequenceDiagram
-    participant E as Elixir(GameEvents)
+    participant E as Elixir(GameEngine.GameEvents)
     participant N as game_native
     participant W as game_window
     participant R as game_render
 
-    E->>N: NIF (create_world / physics_step)
+    Note over E,N: Push 型同期（1.10.5）
+    E->>N: push_tick(dx, dy, delta_ms)
+    N->>E: (ok, frame_id, player_x, player_y, hp, enemy_count, physics_ms)
+    E->>N: spawn_enemies / add_weapon / etc.
+
+    Note over N,R: 独立 60Hz 描画（1.10.6・1.10.7）
     W->>N: next_frame()
-    N->>W: RenderFrame
+    N-->>N: calc_interpolation_alpha(now_ms)
+    N-->>N: interpolate_player_pos(alpha)
+    N->>W: RenderFrame（補間済み）
     W->>R: render(frame)
     W->>N: on_move_input(dx, dy)
-    R->>W: String
     W->>N: on_ui_action(action)
     N->>E: pending_ui_action / frame_events
 ```
@@ -116,12 +127,13 @@ sequenceDiagram
 
 | 起点 | 接続先 | 接続種別 |
 |---|---|---|
-| `lib/app` | `lib/engine` | Application 起動（Supervisor） |
-| `lib/app` | `native/game_native` | Rustler による NIF ロード |
-| `lib/engine` | `lib/engine/commands` | 更新系 command の呼び出し |
-| `lib/engine` | `lib/engine/queries` | 取得系 query の呼び出し |
-| `lib/engine/commands,queries` | `lib/app/nif_bridge.ex` | NIF 境界呼び出し |
-| `lib/engine` | `lib/games` | シーン更新・ゲーム設定参照 |
+| `game_engine` | `native/game_native` | Rustler による NIF ロード（umbrella feature） |
+| `GameEngine.Commands` | `GameEngine.NifBridge` | 更新系 command の呼び出し |
+| `GameEngine.Queries` | `GameEngine.NifBridge` | 取得系 query の呼び出し |
+| `GameEngine.Snapshots` | `GameEngine.NifBridge` | snapshot_heavy（セーブ/ロード） |
+| `game_content` | `game_engine` | シーン更新・ゲーム設定参照 |
+| `game_network` | `game_engine` | RoomChannel → GameEngine.start_room |
+| `game_server` | 全アプリ | 本番デプロイ用エントリ（headless: true） |
 | `native/game_native` | `native/game_window` | `run_render_loop` 呼び出し |
 | `native/game_window` | `native/game_render` | `Renderer::new / render / resize` |
 | `native/game_native` | `native/game_render` | `RenderFrame` 型共有 |
@@ -137,3 +149,5 @@ sequenceDiagram
 - `game_native` は `GameWorld` の読み取りスナップショット生成と入力・UI の橋渡しに限定する。
 - Windows は `with_any_thread(true)` を使い、NIF spawn スレッド上の EventLoop 実行を許可する。
 - 旧描画取得 NIF API（`get_render_data` / `get_particle_data` / `get_item_data`）は廃止し、描画データ転送の主経路にしない。
+- Umbrella 側の `GameEngine.NifBridge` は `features: ["umbrella"]` を指定し、`rustler::init!` が `Elixir.GameEngine.NifBridge` として登録されるようにする。
+- 既存の `lib/` 配下のコードは `App.NifBridge` を使い続ける（後方互換）。

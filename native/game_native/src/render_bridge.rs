@@ -3,7 +3,9 @@
 
 use crate::asset::AssetLoader;
 use crate::lock_metrics::{record_read_wait, record_write_wait};
-use crate::render_snapshot::build_render_frame;
+use crate::render_snapshot::{
+    build_render_frame, calc_interpolation_alpha, copy_interpolation_data, interpolate_player_pos,
+};
 use crate::world::GameWorld;
 use game_core::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use game_render::RenderFrame;
@@ -36,18 +38,47 @@ struct NativeRenderBridge {
 impl RenderBridge for NativeRenderBridge {
     fn next_frame(&self) -> RenderFrame {
         let wait_start = Instant::now();
-        match self.world.0.read() {
+
+        // 1.10.7: Step 1 - ロック内では補間データのみをコピーして即解放
+        let (interp_data, mut frame) = match self.world.0.read() {
             Ok(guard) => {
                 record_read_wait("render.next_frame", wait_start.elapsed());
-                build_render_frame(&guard)
+                let interp = copy_interpolation_data(&guard);
+                let frame = build_render_frame(&guard);
+                (interp, frame)
             }
             Err(e) => {
                 log::error!("Render bridge: read lock poisoned in next_frame: {e:?}");
                 let guard = e.into_inner();
                 record_read_wait("render.next_frame_poisoned", wait_start.elapsed());
-                build_render_frame(&guard)
+                let interp = copy_interpolation_data(&guard);
+                let frame = build_render_frame(&guard);
+                (interp, frame)
             }
+        };
+
+        // 1.10.7: Step 2 - ロック解放後に補間計算（重い処理はここで行う）
+        if interp_data.curr_tick_ms > 0 {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let alpha = calc_interpolation_alpha(&interp_data, now_ms);
+            let (interp_x, interp_y) = interpolate_player_pos(&interp_data, alpha);
+
+            // プレイヤーのスプライト位置を補間値で上書き
+            if let Some(first) = frame.render_data.first_mut() {
+                first.0 = interp_x;
+                first.1 = interp_y;
+            }
+            // カメラオフセットも補間位置に合わせて更新
+            use game_core::constants::{PLAYER_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT};
+            let cam_x = interp_x + PLAYER_SIZE / 2.0 - SCREEN_WIDTH / 2.0;
+            let cam_y = interp_y + PLAYER_SIZE / 2.0 - SCREEN_HEIGHT / 2.0;
+            frame.camera_offset = (cam_x, cam_y);
         }
+
+        frame
     }
 
     fn on_move_input(&self, dx: f32, dy: f32) {

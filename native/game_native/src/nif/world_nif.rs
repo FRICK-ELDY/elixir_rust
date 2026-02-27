@@ -54,6 +54,10 @@ pub fn create_world() -> ResourceArc<GameWorld> {
         weapon_choices:     Vec::new(),
         score_popups:       Vec::new(),
         kill_count:         0,
+        prev_player_x:      SCREEN_WIDTH  / 2.0 - PLAYER_SIZE / 2.0,
+        prev_player_y:      SCREEN_HEIGHT / 2.0 - PLAYER_SIZE / 2.0,
+        prev_tick_ms:       0,
+        curr_tick_ms:       0,
     })))
 }
 

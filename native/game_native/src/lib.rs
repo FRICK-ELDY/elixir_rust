@@ -63,4 +63,10 @@ pub use world::{
     BULLET_KIND_WHIP,
 };
 
+// Umbrella 構成では GameEngine.NifBridge、既存構成では App.NifBridge として登録。
+// umbrella feature が有効な場合は GameEngine.NifBridge を使用する。
+#[cfg(feature = "umbrella")]
+rustler::init!("Elixir.GameEngine.NifBridge", load = nif::load);
+
+#[cfg(not(feature = "umbrella"))]
 rustler::init!("Elixir.App.NifBridge", load = nif::load);
