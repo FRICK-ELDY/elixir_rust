@@ -54,6 +54,13 @@ pub struct GameWorldInner {
     pub score_popups:       Vec<(f32, f32, u32, f32)>,
     /// 1.7.5: 撃破数（ゲームオーバー画面等に表示）
     pub kill_count:         u32,
+    /// 1.10.7: 補間用 - 前フレームのプレイヤー位置
+    pub prev_player_x:      f32,
+    pub prev_player_y:      f32,
+    /// 1.10.7: 補間用 - 前フレームの更新タイムスタンプ（ms）
+    pub prev_tick_ms:       u64,
+    /// 1.10.7: 補間用 - 現在フレームの更新タイムスタンプ（ms）
+    pub curr_tick_ms:       u64,
 }
 
 impl GameWorldInner {

@@ -3,6 +3,10 @@ name = "game_native"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# umbrella 構成では GameEngine.NifBridge として NIF を登録する
+umbrella = []
+
 [lib]
 name = "game_native"
 crate-type = ["cdylib", "rlib"]  # cdylib: Rustler NIF 用, rlib: ベンチ・テスト用

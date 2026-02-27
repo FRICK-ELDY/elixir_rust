@@ -147,6 +147,48 @@ pub fn build_render_frame(w: &GameWorldInner) -> RenderFrame {
         item_data,
         obstacle_data,
         camera_offset,
+        player_pos: (w.player.x, w.player.y),
         hud,
     }
+}
+
+/// 1.10.7: 補間用データ（ロック内で素早くコピーするための最小構造体）
+pub struct InterpolationData {
+    pub prev_player_x: f32,
+    pub prev_player_y: f32,
+    pub curr_player_x: f32,
+    pub curr_player_y: f32,
+    pub prev_tick_ms: u64,
+    pub curr_tick_ms: u64,
+}
+
+/// 1.10.7: ロック内で補間に必要なデータのみをコピーして即解放するためのヘルパー
+/// ロック保持時間を最小化し、補間計算はロック解放後に実行する。
+pub fn copy_interpolation_data(w: &GameWorldInner) -> InterpolationData {
+    InterpolationData {
+        prev_player_x: w.prev_player_x,
+        prev_player_y: w.prev_player_y,
+        curr_player_x: w.player.x,
+        curr_player_y: w.player.y,
+        prev_tick_ms: w.prev_tick_ms,
+        curr_tick_ms: w.curr_tick_ms,
+    }
+}
+
+/// 1.10.7: 補間 alpha を計算する（0.0 = prev, 1.0 = curr）
+/// now_ms: 現在時刻（ms）
+pub fn calc_interpolation_alpha(data: &InterpolationData, now_ms: u64) -> f32 {
+    let tick_duration = data.curr_tick_ms.saturating_sub(data.prev_tick_ms);
+    if tick_duration == 0 {
+        return 1.0;
+    }
+    let elapsed = now_ms.saturating_sub(data.prev_tick_ms);
+    (elapsed as f32 / tick_duration as f32).clamp(0.0, 1.0)
+}
+
+/// 1.10.7: 補間されたプレイヤー位置を返す
+pub fn interpolate_player_pos(data: &InterpolationData, alpha: f32) -> (f32, f32) {
+    let x = data.prev_player_x + (data.curr_player_x - data.prev_player_x) * alpha;
+    let y = data.prev_player_y + (data.curr_player_y - data.prev_player_y) * alpha;
+    (x, y)
 }

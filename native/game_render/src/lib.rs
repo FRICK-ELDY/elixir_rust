@@ -38,6 +38,9 @@ pub struct RenderFrame {
     pub item_data: Vec<(f32, f32, u8)>,
     pub obstacle_data: Vec<(f32, f32, f32, u8)>,
     pub camera_offset: (f32, f32),
+    /// プレイヤーのスプライト位置（補間後に上書きされる専用フィールド）。
+    /// render_data[0] への暗黙的な依存を排除するために独立させている。
+    pub player_pos: (f32, f32),
     pub hud: HudData,
 }
 
