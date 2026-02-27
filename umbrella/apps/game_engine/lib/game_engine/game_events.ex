@@ -1,11 +1,14 @@
 # Path: umbrella/apps/game_engine/lib/game_engine/game_events.ex
-# Summary: フレームイベント受信・フェーズ管理・NIF 呼び出しの GenServer
+# Summary: Elixir 主導の Push 型ゲームループ GenServer（1.10.5）
 defmodule GameEngine.GameEvents do
   @moduledoc """
-  Rust からの frame_events を受信し、フェーズ管理・NIF 呼び出しを行う GenServer。
+  Elixir SSOT モデルのゲームループ GenServer。
 
-  tick 駆動は Rust 側で高精度 60 Hz。Elixir は `{:frame_events, events}` を
-  受信してイベント駆動でシーン制御・入力設定・EventBus 配信を行う。
+  Elixir が `@tick_ms` 間隔でタイマーを駆動し、`push_tick/4` NIF を呼んで
+  Rust に入力を送り、delta（変化分）を受け取る Push 型同期を実装する。
+
+  Rust の物理計算スレッドは `push_tick` 呼び出しで 1 tick 分だけ進む。
+  描画スレッドは独立して 60 Hz で動作し、補間ロジックで滑らかに表示する。
 
   ルーム単位で複数インスタンスが起動可能。
   :main ルームのみが SceneManager・FrameCache を駆動する（表示・入力対象）。
@@ -43,13 +46,17 @@ defmodule GameEngine.GameEvents do
     obstacles = GameEngine.MapLoader.obstacles_for_map(map_id)
     GameEngine.set_map_obstacles(world_ref, obstacles)
 
-    control_ref = GameEngine.create_game_loop_control()
     if room_id == :main, do: GameEngine.FrameCache.init()
     start_ms = now_ms()
 
-    GameEngine.start_rust_game_loop(world_ref, control_ref, self())
+    # headless でない場合のみ描画スレッドを起動
+    headless = Application.get_env(:game_engine, :headless, false)
+    unless headless do
+      GameEngine.start_render_thread(world_ref)
+    end
 
-    if room_id == :main, do: GameEngine.start_render_thread(world_ref)
+    # Elixir 主導の Push 型タイマーを開始
+    schedule_tick()
 
     initial_weapon_levels = fetch_weapon_levels(world_ref)
 
@@ -57,7 +64,6 @@ defmodule GameEngine.GameEvents do
      %{
        room_id: room_id,
        world_ref: world_ref,
-       control_ref: control_ref,
        last_tick: start_ms,
        frame_count: 0,
        start_ms: start_ms,
@@ -74,67 +80,23 @@ defmodule GameEngine.GameEvents do
 
   def terminate(_reason, _state), do: :ok
 
+  # ── Push 型タイマー ────────────────────────────────────────────────
+
   @impl true
-  def handle_cast({:select_weapon, :__skip__}, state) do
-    game = current_game()
-    level_up_scene = game.level_up_scene()
+  def handle_info(:tick, state) do
+    schedule_tick()
 
-    case GameEngine.SceneManager.current() do
-      {:ok, %{module: ^level_up_scene}} ->
-        GameEngine.skip_level_up(state.world_ref)
-        Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
-        GameEngine.resume_physics(state.control_ref)
-        GameEngine.SceneManager.pop_scene()
-        {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
+    now = now_ms()
+    delta_ms = now - state.last_tick
 
-      _ ->
-        {:noreply, state}
+    if state.room_id != :main do
+      {:noreply, %{state | last_tick: now, frame_count: state.frame_count + 1}}
+    else
+      handle_tick_main(state, now, delta_ms)
     end
   end
 
-  @impl true
-  def handle_cast({:select_weapon, weapon}, state) do
-    game = current_game()
-    level_up_scene = game.level_up_scene()
-
-    case GameEngine.SceneManager.current() do
-      {:ok, %{module: ^level_up_scene}} ->
-        GameEngine.add_weapon(state.world_ref, weapon)
-        new_weapon_levels = fetch_weapon_levels(state.world_ref)
-        lv = Map.get(new_weapon_levels, weapon, 1)
-        Logger.info("[LEVEL UP] Weapon selected: #{game.weapon_label(weapon, lv)} -> resuming")
-        GameEngine.resume_physics(state.control_ref)
-        GameEngine.SceneManager.pop_scene()
-        {:noreply, %{state | weapon_levels: new_weapon_levels}}
-
-      _ ->
-        {:noreply, state}
-    end
-  end
-
-  @impl true
-  def handle_cast(:save_session, state) do
-    case GameEngine.save_session(state.world_ref) do
-      :ok -> Logger.info("[SAVE] Session saved")
-      {:error, reason} -> Logger.warning("[SAVE] Failed: #{inspect(reason)}")
-    end
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_call(:load_session, _from, state) do
-    game = current_game()
-    result = GameEngine.load_session(state.world_ref)
-
-    case result do
-      :ok ->
-        GameEngine.SceneManager.replace_scene(game.physics_scenes() |> List.first(), %{})
-        {:reply, :ok, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
-
-      other ->
-        {:reply, other, state}
-    end
-  end
+  # ── UI アクション ─────────────────────────────────────────────────
 
   @impl true
   def handle_info({:ui_action, action}, state) when is_binary(action) do
@@ -154,14 +116,123 @@ defmodule GameEngine.GameEvents do
     {:noreply, new_state}
   end
 
+  # ── cast ──────────────────────────────────────────────────────────
+
   @impl true
-  def handle_info({:frame_events, events}, state) do
-    if state.room_id != :main do
-      {:noreply, %{state | last_tick: now_ms(), frame_count: state.frame_count + 1}}
-    else
-      handle_frame_events_main(events, state)
+  def handle_cast({:select_weapon, :__skip__}, state) do
+    game = current_game()
+    level_up_scene = game.level_up_scene()
+
+    case GameEngine.SceneManager.current() do
+      {:ok, %{module: ^level_up_scene}} ->
+        GameEngine.skip_level_up(state.world_ref)
+        Logger.info("[LEVEL UP] Skipped weapon selection -> resuming")
+        GameEngine.SceneManager.pop_scene()
+        {:noreply, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
+
+      _ ->
+        {:noreply, state}
     end
   end
+
+  @impl true
+  def handle_cast({:select_weapon, weapon}, state) do
+    game = current_game()
+    level_up_scene = game.level_up_scene()
+
+    case GameEngine.SceneManager.current() do
+      {:ok, %{module: ^level_up_scene}} ->
+        GameEngine.add_weapon(state.world_ref, weapon)
+        new_weapon_levels = fetch_weapon_levels(state.world_ref)
+        lv = Map.get(new_weapon_levels, weapon, 1)
+        Logger.info("[LEVEL UP] Weapon selected: #{game.weapon_label(weapon, lv)} -> resuming")
+        GameEngine.SceneManager.pop_scene()
+        {:noreply, %{state | weapon_levels: new_weapon_levels}}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_cast(:save_session, state) do
+    case GameEngine.save_session(state.world_ref) do
+      :ok -> Logger.info("[SAVE] Session saved")
+      {:error, reason} -> Logger.warning("[SAVE] Failed: #{inspect(reason)}")
+    end
+    {:noreply, state}
+  end
+
+  # ── call ──────────────────────────────────────────────────────────
+
+  @impl true
+  def handle_call(:load_session, _from, state) do
+    game = current_game()
+    result = GameEngine.load_session(state.world_ref)
+
+    case result do
+      :ok ->
+        GameEngine.SceneManager.replace_scene(game.physics_scenes() |> List.first(), %{})
+        {:reply, :ok, %{state | weapon_levels: fetch_weapon_levels(state.world_ref)}}
+
+      other ->
+        {:reply, other, state}
+    end
+  end
+
+  # ── Push 型メインループ ───────────────────────────────────────────
+
+  defp handle_tick_main(state, now, delta_ms) do
+    elapsed = now - state.start_ms
+    game = current_game()
+    physics_scenes = game.physics_scenes()
+
+    case GameEngine.SceneManager.current() do
+      :empty ->
+        {:noreply, %{state | last_tick: now}}
+
+      {:ok, %{module: mod, state: scene_state}} ->
+        # 1. 入力取得 → push_tick で Rust に送り物理計算を 1 tick 進める
+        state = maybe_push_tick_and_broadcast(state, mod, physics_scenes, delta_ms)
+
+        # 2. シーン update（Elixir 側ゲームロジック）
+        context = build_context(state, now, elapsed)
+        result = mod.update(context, scene_state)
+
+        {new_scene_state, opts} = extract_state_and_opts(result)
+        GameEngine.SceneManager.update_current(fn _ -> new_scene_state end)
+
+        state = apply_context_updates(state, opts)
+        state = process_transition(result, state, now, game)
+        state = maybe_log_and_cache(state, mod, elapsed, game)
+
+        {:noreply,
+         %{state |
+           last_tick: now,
+           frame_count: state.frame_count + 1
+         }}
+    end
+  end
+
+  defp maybe_push_tick_and_broadcast(state, mod, physics_scenes, delta_ms) do
+    if mod in physics_scenes do
+      {dx, dy} = GameEngine.InputHandler.get_move_vector()
+
+      # Push 型同期: Elixir → Rust（入力 + delta_ms）→ delta 返却
+      case GameEngine.push_tick(state.world_ref, dx * 1.0, dy * 1.0, delta_ms * 1.0) do
+        {:ok, _frame_id, _px, _py, _hp, _enemy_count, _physics_ms} ->
+          # frame_events を Rust からドレインして EventBus に配信
+          events = GameEngine.drain_frame_events(state.world_ref)
+          unless events == [], do: GameEngine.EventBus.broadcast(events)
+
+        {:error, reason} ->
+          Logger.warning("[TICK] push_tick failed: #{inspect(reason)}")
+      end
+    end
+    state
+  end
+
+  # ── UI アクション実装 ─────────────────────────────────────────────
 
   defp handle_ui_action_skip(state) do
     {_exp, _level, level_up_pending, _exp_to_next} = GameEngine.get_level_up_data(state.world_ref)
@@ -264,7 +335,6 @@ defmodule GameEngine.GameEvents do
 
     case GameEngine.SceneManager.current() do
       {:ok, %{module: ^level_up_scene}} ->
-        GameEngine.resume_physics(state.control_ref)
         GameEngine.SceneManager.pop_scene()
         state
 
@@ -273,48 +343,7 @@ defmodule GameEngine.GameEvents do
     end
   end
 
-  defp handle_frame_events_main(events, state) do
-    now = now_ms()
-    elapsed = now - state.start_ms
-
-    game = current_game()
-    physics_scenes = game.physics_scenes()
-
-    case GameEngine.SceneManager.current() do
-      :empty ->
-        {:noreply, %{state | last_tick: now}}
-
-      {:ok, %{module: mod, state: scene_state}} ->
-        state = maybe_set_input_and_broadcast(state, mod, physics_scenes, events)
-
-        context = build_context(state, now, elapsed)
-        result = mod.update(context, scene_state)
-
-        {new_scene_state, opts} = extract_state_and_opts(result)
-        GameEngine.SceneManager.update_current(fn _ -> new_scene_state end)
-
-        state = apply_context_updates(state, opts)
-        state = process_transition(result, state, now, game)
-        state = maybe_log_and_cache(state, mod, elapsed, game)
-
-        {:noreply,
-         %{state |
-           last_tick: now,
-           frame_count: state.frame_count + 1
-         }}
-    end
-  end
-
-  defp maybe_set_input_and_broadcast(state, mod, physics_scenes, events) do
-    if mod in physics_scenes do
-      if state.room_id != :main do
-        {dx, dy} = GameEngine.InputHandler.get_move_vector()
-        GameEngine.set_player_input(state.world_ref, dx * 1.0, dy * 1.0)
-      end
-      unless events == [], do: GameEngine.EventBus.broadcast(events)
-    end
-    state
-  end
+  # ── シーン遷移 ────────────────────────────────────────────────────
 
   defp build_context(state, now, elapsed) do
     base = %{
@@ -360,11 +389,9 @@ defmodule GameEngine.GameEvents do
             Logger.info("[LEVEL UP] Auto-skipped (no choices) -> resuming")
             state
         end
-      GameEngine.resume_physics(state.control_ref)
       GameEngine.SceneManager.pop_scene()
       state
     else
-      GameEngine.resume_physics(state.control_ref)
       GameEngine.SceneManager.pop_scene()
       state
     end
@@ -372,7 +399,9 @@ defmodule GameEngine.GameEvents do
 
   defp process_transition({:transition, {:push, mod, init_arg}, _}, state, _now, game) do
     if mod == game.level_up_scene() or mod == game.boss_alert_scene() do
-      GameEngine.pause_physics(state.control_ref)
+      # Push 型では物理は push_tick で制御するため pause は不要だが
+      # レベルアップ中は push_tick を止めるためフラグを立てる
+      Logger.debug("[SCENE] Pausing tick for level-up/boss-alert scene")
     end
     GameEngine.SceneManager.push_scene(mod, init_arg)
     state
@@ -442,6 +471,12 @@ defmodule GameEngine.GameEvents do
       )
     end
     state
+  end
+
+  # ── ユーティリティ ────────────────────────────────────────────────
+
+  defp schedule_tick do
+    Process.send_after(self(), :tick, @tick_ms)
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)

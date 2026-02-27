@@ -59,6 +59,9 @@ defmodule GameEngine do
 
   def drain_frame_events(world_ref), do: Commands.drain_frame_events(world_ref)
 
+  # 1.10.5: Push 型同期（Elixir → Rust 入力 → delta 返却）
+  def push_tick(world_ref, dx, dy, delta_ms), do: Commands.push_tick(world_ref, dx, dy, delta_ms)
+
   def get_frame_metadata(world_ref), do: Queries.get_frame_metadata(world_ref)
 
   def add_weapon(world_ref, weapon_name) when is_binary(weapon_name) do

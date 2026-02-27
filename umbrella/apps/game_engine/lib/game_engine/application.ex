@@ -17,7 +17,7 @@ defmodule GameEngine.Application do
     opts = [strategy: :one_for_one, name: GameEngine.Supervisor]
     result = Supervisor.start_link(children, opts)
 
-    # ヘッドレスでない場合は :main ルームを起動（Rust NIF が必要なため Application 起動後に実行）
+    # :main ルームを起動（Rust NIF が必要なため Application 起動後に実行）
     if result != {:error, :already_started} do
       Task.start(fn ->
         Process.sleep(100)

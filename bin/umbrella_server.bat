@@ -1,4 +1,5 @@
 @echo off
+setlocal
 rem ============================================================
 rem  umbrella_server.bat
 rem  Umbrella サーバー起動（headless: true・Rust 描画/音なし）

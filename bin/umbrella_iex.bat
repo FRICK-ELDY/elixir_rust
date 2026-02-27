@@ -1,4 +1,5 @@
 @echo off
+setlocal
 rem ============================================================
 rem  umbrella_iex.bat
 rem  Umbrella ローカル起動（ゲーム画面あり・headless: false）

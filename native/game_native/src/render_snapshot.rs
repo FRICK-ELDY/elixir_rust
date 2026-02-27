@@ -147,6 +147,7 @@ pub fn build_render_frame(w: &GameWorldInner) -> RenderFrame {
         item_data,
         obstacle_data,
         camera_offset,
+        player_pos: (w.player.x, w.player.y),
         hud,
     }
 }

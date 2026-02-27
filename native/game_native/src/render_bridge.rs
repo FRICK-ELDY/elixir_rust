@@ -66,10 +66,14 @@ impl RenderBridge for NativeRenderBridge {
             let alpha = calc_interpolation_alpha(&interp_data, now_ms);
             let (interp_x, interp_y) = interpolate_player_pos(&interp_data, alpha);
 
-            // プレイヤーのスプライト位置を補間値で上書き
-            if let Some(first) = frame.render_data.first_mut() {
-                first.0 = interp_x;
-                first.1 = interp_y;
+            // プレイヤーのスプライト位置を補間値で上書き（専用フィールドで安全に更新）
+            frame.player_pos = (interp_x, interp_y);
+            // render_data[0] はプレイヤーエントリ。player_pos と同期させる。
+            // render_snapshot::build_render_frame が先頭にプレイヤーを push する仕様は
+            // player_pos フィールドのコメントで明記されており、ここでは player_pos を正とする。
+            if let Some(entry) = frame.render_data.first_mut() {
+                entry.0 = interp_x;
+                entry.1 = interp_y;
             }
             // カメラオフセットも補間位置に合わせて更新
             use game_core::constants::{PLAYER_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT};

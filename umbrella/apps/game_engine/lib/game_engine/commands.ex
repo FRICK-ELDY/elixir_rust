@@ -23,6 +23,9 @@ defmodule GameEngine.Commands do
   def set_player_input(world_ref, dx, dy), do: NifBridge.set_player_input(world_ref, dx, dy)
   def drain_frame_events(world_ref), do: NifBridge.drain_frame_events(world_ref)
 
+  # 1.10.5: Push 型同期
+  def push_tick(world_ref, dx, dy, delta_ms), do: NifBridge.push_tick(world_ref, dx, dy, delta_ms)
+
   def spawn_enemies(world_ref, kind_id, count), do: NifBridge.spawn_enemies(world_ref, kind_id, count)
   def spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier),
     do: NifBridge.spawn_elite_enemy(world_ref, kind_id, count, hp_multiplier)

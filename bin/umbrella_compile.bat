@@ -1,4 +1,5 @@
 @echo off
+setlocal
 rem ============================================================
 rem  umbrella_compile.bat
 rem  Umbrella コンパイル（Elixir + Rust NIF ビルド）
