@@ -5,7 +5,7 @@
 
 **構成**:
 
-- **1. エンジン構築**: 1.1 基礎〜1.12 Slot・コンポーネントまで、ゲームエンジン本体の実装
+- **1. エンジン構築**: 1.1 基礎〜1.13 Slot・コンポーネントまで、ゲームエンジン本体の実装
 - **2. エディタ構築**: ビジュアルエディタの実装（詳細は今後決める）
 - **3. サーバー構築**: Elixir/Phoenix バックエンド・EOS 等のオンライン化（詳細は今後決める）
 
@@ -27,9 +27,10 @@
 |               | 7. 描画統合（game_window → game_native） | 全8項 | game_window 廃止・game_native へ統合。NIF が描画スレッド spawn、iex -S mix 単一プロセスで wgpu 描画。まずは Windows（[STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)） |
 |               | 8. 描画責務分離（game_native → game_window / game_render） | 全6項 | ウィンドウ管理（winit）と描画コア（wgpu）を分離し、`game_native` を NIF 境界に専念させる（[STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)） |
 |               | 9. アーキテクチャ改善     | 全5項 | Rust/Elixir 境界と責務を整理し、`physics_step`・`renderer/mod.rs`・NIF 契約を段階的に改善（[ARCHITECTURE_IMPROVEMENT.md](../06_system_design/ARCHITECTURE_IMPROVEMENT.md)） |
-|               | 10. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
-|               | 11. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
-|               | 12. Slot・コンポーネント  | 全7項  | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)）      |
+|               | 10. 方針決定とアーキテクチャ再構築 | 全10項 | Elixir SSOT・Push 型同期・tick_hz 可変・Umbrella 化・game_network 分離（[STEPS_ARCH_REDESIGN.md](./01_engine/STEPS_ARCH_REDESIGN.md)） |
+|               | 11. EOS 実装         | —    | 友達・ロビー・セッションを EOS で実装（[EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)）                      |
+|               | 12. 3D・三人称FPS      | 全7項  | **据え置き**。WGPU 3D 基盤・カメラ・メッシュ・プレイヤー制御・射撃・敵AI・UI（[STEPS_3D.md](./01_engine/STEPS_3D.md)）                             |
+|               | 13. Slot・コンポーネント  | 全7項  | **据え置き**。シーングラフ（Slot）と Component を Elixir で管理（[STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)）      |
 | **2. エディタ構築** | —                 | —    | ビジュアルエディタの実装。項は今後決める                                                                                               |
 | **3. サーバー構築** | —                 | —    | Elixir/Phoenix バックエンド・オンライン化。項は今後決める                                                                               |
 
@@ -38,7 +39,7 @@
 
 ## 1. エンジン構築
 
-1.1.1〜1.12.7 を、1. 基礎〜12. Slot・コンポーネントの**項**として配置する。
+1.1.1〜1.13.7 を、1. 基礎〜13. Slot・コンポーネントの**項**として配置する。
 
 ---
 
@@ -222,17 +223,40 @@
 
 ---
 
-### 1.10 EOS 実装
+### 1.10  方針決定とアーキテクチャ再構築（全10項）
 
-1.9 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
+| 項      | 目標                                                                 | 備考 |
+|---------|----------------------------------------------------------------------|------|
+| 1.10.1  | 設計方針の確定と ADR 更新（Elixir SSOT・Push 型同期・tick_hz 可変）  | ADR_SHARED_MEMORY_THREAD_POLICY.md / ELIXIR_RUST_DIVISION.md 更新済み |
+| 1.10.2  | Umbrella プロジェクト化（ルート mix.exs 作成・apps/ 配置）           | 現 `:game` アプリを `apps/game_engine` へ移動 |
+| 1.10.3  | `game_engine` アプリ整備（NIF ロード・tick_hz 設定・ヘッドレス対応） | `Application.get_env(:game_engine, :tick_hz, 20)` で可変化 |
+| 1.10.4  | `game_content` アプリ分離（`lib/games` → `apps/game_content`）      | `game_engine` への依存のみ。ゲーム別ロジックを隔離 |
+| 1.10.5  | Push 型同期 NIF の実装（`push_snapshot` / `physics_result`）         | 旧 `physics_step` NIF を Push 型に置き換え |
+| 1.10.6  | Rust 計算スレッド・描画スレッド・音スレッドの 60Hz 独立化            | 各スレッドを `tick_hz` に依存しない構成に整理 |
+| 1.10.7  | 描画スレッドの補間実装（スナップショット → 60Hz 補間描画）            | スナップショット間を線形補間してフレームを生成 |
+| 1.10.8  | `game_network` アプリ新規作成（Phoenix Socket / Channel・認証・Presence） | ネットワーク汎用層を `game_engine` から分離 |
+| 1.10.9  | `game_server` アプリ新規作成（本番デプロイ用エントリ・設定集約）      | サーバー起動時は Rust スレッドをロードしない（ヘッドレス） |
+| 1.10.10 | 動作確認・設計文書更新（ARCHITECTURE.md / FOLDER_CONNECTIONS.md）    | ローカル起動・サーバー起動の両方で動作確認 |
+
+1.9 完了後、エンジンの設計方針を Elixir SSOT + Push 型同期に切り替え、Umbrella 構成でスケーラブルな Elixir 側を構築する。ネットワーク層（`game_network`）を汎用アプリとして独立させ、ローカルクライアントとサーバーデプロイを同一コードベースで切り替えられる構成を目指す。
+
+**詳細**: [STEPS_ARCH_REDESIGN.md](./01_engine/STEPS_ARCH_REDESIGN.md)  
+**参照 ADR**: [ADR_SHARED_MEMORY_THREAD_POLICY.md](../03_tech_decisions/ADR_SHARED_MEMORY_THREAD_POLICY.md)  
+**参照設計**: [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md)
+
+---
+
+### 1.11 EOS 実装
+
+1.10 完了後、友達・ロビー・セッションを EOS で実装する。項は今後決める。
 
 **詳細**: [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md)
 
 ---
 
-### 1.11  3D・三人称 FPS（全7項・据え置き）
+### 1.12  3D・三人称 FPS（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。1.6〜1.10 の後に再検討する。
+> **据え置き**: 本節は当面保留。1.6〜1.11 の後に再検討する。
 
 
 | 項   | 目標               | 備考                               |
@@ -250,9 +274,9 @@
 
 ---
 
-### 1.12 Slot・コンポーネント（全7項・据え置き）
+### 1.13 Slot・コンポーネント（全7項・据え置き）
 
-> **据え置き**: 本節は当面保留。1.11 完了後に実施する。
+> **据え置き**: 本節は当面保留。1.12 完了後に実施する。
 
 
 | 項   | 目標                              | 備考                                            |
@@ -294,9 +318,10 @@
 - **1.7**: 1.6 完了後。描画統合（game_window → game_native）、iex -S mix 単一プロセスで wgpu 描画
 - **1.8**: 1.7 完了後。描画責務分離（`game_native` → `game_window` / `game_render`）
 - **1.9**: 1.8 完了後。アーキテクチャ改善（`physics_step` 分割・`renderer` 分割・NIF 契約整理）
-- **1.10**: 1.9 完了後。EOS で友達・ロビー・セッションを実装
-- **1.11（据え置き）**: 上記が一区切りついた後に再検討
-- **1.12（据え置き）**: 1.11 完了後
+- **1.10**: 1.9 完了後。方針決定とアーキテクチャ再構築（Elixir SSOT・Push 型・Umbrella 化・game_network 分離）
+- **1.11**: 1.10 完了後。EOS で友達・ロビー・セッションを実装
+- **1.12（据え置き）**: 上記が一区切りついた後に再検討
+- **1.13（据え置き）**: 1.12 完了後
 - **2. エディタ構築**: 1章完了後
 - **3. サーバー構築**: 1章完了後
 
@@ -319,8 +344,9 @@
 | [STEPS_RENDER_INTEGRATION.md](./01_engine/STEPS_RENDER_INTEGRATION.md)     | 1.7 描画統合（game_window → game_native）の詳細 |
 | [STEPS_RENDER_SEPARATION.md](./01_engine/STEPS_RENDER_SEPARATION.md)       | 1.8 描画責務分離（game_native → game_window / game_render）の詳細 |
 | [STEPS_ARCHITECTURE_IMPROVEMENT.md](./01_engine/STEPS_ARCHITECTURE_IMPROVEMENT.md) | 1.9 アーキテクチャ改善（実施ステップ）の詳細 |
-| [STEPS_3D.md](./01_engine/STEPS_3D.md)                                     | 1.11（全7項）3D・三人称 FPS の詳細（**据え置き**）   |
-| [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)             | 1.12（全7項）Slot・コンポーネントの詳細（**据え置き**） |
+| [STEPS_ARCH_REDESIGN.md](./01_engine/STEPS_ARCH_REDESIGN.md)               | 1.10 方針決定とアーキテクチャ再構築（全10項）の詳細 |
+| [STEPS_3D.md](./01_engine/STEPS_3D.md)                                     | 1.12（全7項）3D・三人称 FPS の詳細（**据え置き**）   |
+| [STEPS_SLOT_COMPONENT.md](./01_engine/STEPS_SLOT_COMPONENT.md)             | 1.13（全7項）Slot・コンポーネントの詳細（**据え置き**） |
 
 
 ### 他フォルダ
@@ -328,9 +354,9 @@
 
 | ドキュメント                                                                 | 用途                  |
 | ---------------------------------------------------------------------- | ------------------- |
-| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.10 EOS 実装          |
+| [EPIC_ONLINE_SERVICES.md](../06_system_design/EPIC_ONLINE_SERVICES.md) | 1.11 EOS 実装          |
 | [ARCHITECTURE_IMPROVEMENT.md](../06_system_design/ARCHITECTURE_IMPROVEMENT.md) | 1.9 改善アーキテクチャ設計 |
+| [ADR_SHARED_MEMORY_THREAD_POLICY.md](../03_tech_decisions/ADR_SHARED_MEMORY_THREAD_POLICY.md) | 1.10 設計方針 ADR |
+| [ELIXIR_RUST_DIVISION.md](../03_tech_decisions/ELIXIR_RUST_DIVISION.md) | 1.10 役割分担方針 |
 | [PRIORITY_STEPS.md](../04_roadmap/PRIORITY_STEPS.md)                   | 実施優先度（P1〜P7, G1〜G3） |
 | [SPEC.md](../01_setup/SPEC.md)                                         | ゲーム仕様・技術仕様          |
-
-

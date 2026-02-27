@@ -38,10 +38,25 @@
 
 ### 現状の分担
 
+> **方針（2026-02-27 更新）**: Elixir を SSOT（Single Source of Truth）とし、設定可能なティックレート（10 / 20 / 30Hz）でゲーム状態を管理する。  
+> Rust は計算・描画・音の実行エンジンとして 60Hz で動作し、状態の実体を持たない。  
+> 詳細は [ADR_SHARED_MEMORY_THREAD_POLICY.md](./ADR_SHARED_MEMORY_THREAD_POLICY.md) を参照。
+
 | 担当 | 内容 |
 |------|------|
-| **Rust** | 物理演算、描画、音声、入力ポーリング、空間ハッシュ、SIMD、フリーリスト |
-| **Elixir** | ゲームループ orchestration、ウェーブ制御、ボス管理、シーン管理、EventBus、Stats、Telemetry |
+| **Rust** | 物理演算（計算スレッド 60Hz）、描画（描画スレッド 60Hz・補間）、音声（音スレッド 60Hz）、空間ハッシュ、SIMD、フリーリスト |
+| **Elixir** | ゲーム状態の SSOT（`tick_hz`: 10 / 20 / 30、デフォルト 20Hz）、ゲームロジック・状態遷移、ウェーブ制御、ボス管理、シーン管理、EventBus、Stats、Telemetry、ルーム管理、監視・復旧 |
+
+**同期フロー（`tick_hz` ごと）**:
+
+```
+Elixir (SSOT, tick_hz: 10 / 20 / 30Hz)
+  → push_snapshot(state)  ← control NIF（Elixir → Rust の一方向）
+  ← physics_result(delta) ← 物理計算結果を受け取り SSOT を更新
+
+Rust 描画スレッド (60Hz・固定)
+  → 最新スナップショットを 60Hz に補間して描画（tick_hz に依存しない）
+```
 
 ---
 
@@ -49,10 +64,11 @@
 
 ### 3.1 現状のジッター（±数 ms）の扱い
 
-**60Hz ゲームループ**において、`Process.send_after/3` による ±数 ms のジッターは、**バレットヘル・サバイバー系では許容範囲**とする。
+**Elixir ゲームループ（`tick_hz`: 10 / 20 / 30Hz）**において、`Process.send_after/3` による ±数 ms のジッターは、**バレットヘル・サバイバー系では許容範囲**とする。
 
 - プレイヤーの体感としては問題になりにくい
 - ヒット判定の精度は「数フレーム分のずれ」で十分
+- 描画は Rust 側で 60Hz 補間するため、`tick_hz` が低くても見た目は滑らか
 
 ### 3.2 ジッターが許容できないケース
 
@@ -69,8 +85,8 @@
 
 上記のケースに対応する場合、**タイミングクリティカルなパスを Rust に移す**。
 
-- **現状**: Elixir が tick を開始（`Process.send_after` → `:tick` → `physics_step` NIF）
-- **将来**: Rust が tick を主導（Rust 内で高精度タイマー、固定間隔で physics、イベントを Elixir に送信）
+- **現状**: Elixir が 20Hz で tick を開始し、Rust に push_snapshot → physics_result を往復する
+- **将来（リズム等）**: Rust が tick を主導（Rust 内で高精度タイマー、固定間隔で physics、イベントを Elixir に送信）
 
 `main.rs` にスタンドアロン版があるため、そのループを拡張して Rust 主導モードを実装する形で対応可能。
 
@@ -105,8 +121,8 @@
 **タイミングクリティカルなパスは Rust 内に閉じる**
 
 ```
-【現在】 Elixir が tick を開始
-  Process.send_after → :tick → physics_step NIF
+【現在】 Elixir が 20Hz で tick を開始（SSOT）
+  Process.send_after → :tick → push_snapshot NIF → physics_result
 
 【将来・リズム等】 Rust が tick を主導
   Rust 内ループ → 固定間隔で physics → イベントを Elixir に送信
@@ -154,17 +170,23 @@
 
 ## 6. 設計上の原則
 
-1. **タイミングクリティカルなパスは Rust 内に閉じる**
-   - ゲームループ tick、physics、描画、音声の同期は Rust が担当
+1. **Elixir を SSOT とし、設定可能なティックレート（10 / 20 / 30Hz）でゲーム状態を管理する**
+   - ゲーム状態の「正」は Elixir が持つ。Rust は実行エンジンとして動作し、状態の実体を持たない。
+   - `tick_hz` はデフォルト 20Hz。サーバー負荷・ゲームジャンルに応じて 10Hz / 30Hz に変更できる。
+   - Elixir 部分のみをサーバーにデプロイできる構造を維持する。
 
-2. **Elixir は orchestration とロジックに専念**
-   - ウェーブ、ボス、シーン遷移、EventBus、Stats、Telemetry など
+2. **タイミングクリティカルなパスは Rust 内に閉じる**
+   - physics、描画（60Hz 補間）、音声の同期は Rust が担当。
+   - NIF 境界の `control` は Elixir → Rust の一方向に統一する。
 
-3. **将来の拡張は Rust 主導モードの追加で対応**
-   - 現状の Elixir 主導モードは維持しつつ、必要になったら Rust 主導の「精度モード」を追加
+3. **Elixir は SSOT・orchestration・運用制御に専念**
+   - ウェーブ、ボス、シーン遷移、EventBus、Stats、Telemetry、ルーム管理、監視・復旧など。
 
-4. **スコープ外・サポートしないと判断したものは手を入れない**
-   - 実害が出るまで対応しない。将来の要件で必要になったら再検討する（スコープ外項目）
+4. **将来の拡張は Rust 主導モードの追加で対応**
+   - 現状の Elixir 主導（20Hz SSOT）モードは維持しつつ、リズムゲーム等では Rust 主導の「精度モード」を追加する。
+
+5. **スコープ外・サポートしないと判断したものは手を入れない**
+   - 実害が出るまで対応しない。将来の要件で必要になったら再検討する（スコープ外項目）。
 
 ---
 
